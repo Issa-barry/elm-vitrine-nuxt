@@ -2,17 +2,10 @@
 definePageMeta({ layout: "client" });
 useHead({ title: "Tableau de bord — Eau La Maman" });
 
-const deliveries = [
-  { reference: "CMD-2847", destination: "Boulogne-Billancourt", vehicle: "Renault Master", amount: "48,00 €", status: "En cours" },
-  { reference: "CMD-2841", destination: "Paris 15e", vehicle: "Peugeot Expert", amount: "62,50 €", status: "Livrée" },
-  { reference: "CMD-2839", destination: "Neuilly-sur-Seine", vehicle: "Renault Master", amount: "55,00 €", status: "Livrée" },
-  { reference: "CMD-2832", destination: "Issy-les-Moulineaux", vehicle: "Citroën Jumpy", amount: "44,00 €", status: "À vérifier" },
-];
-
 const vehicles = [
-  { name: "Renault Master", value: 82, color: "bg-orange-500", text: "text-orange-500" },
-  { name: "Peugeot Expert", value: 64, color: "bg-cyan-500", text: "text-cyan-500" },
-  { name: "Citroën Jumpy", value: 48, color: "bg-purple-500", text: "text-purple-500" },
+  { id: "ou3859", name: "ABARRY", registration: "OU3859", commission: "2 380 000 GNF", status: "En activité" },
+  { id: "ou4217", name: "ABARRY 2", registration: "OU4217", commission: "1 950 000 GNF", status: "En activité" },
+  { id: "ou7712", name: "ABARRY 3", registration: "OU7712", commission: "1 420 000 GNF", status: "En activité" },
 ];
 
 const notifications = [
@@ -21,20 +14,10 @@ const notifications = [
   { icon: "pi pi-wallet", background: "bg-green-100 dark:bg-green-400/10", iconColor: "text-green-500", title: "Versement validé", detail: "Montant de 542,80 €" },
 ];
 
-const severity = (status: string) => status === "Livrée" ? "success" : status === "En cours" ? "info" : "warn";
 </script>
 
 <template>
   <div class="grid grid-cols-12 gap-8">
-    <div class="col-span-12 lg:col-span-6 xl:col-span-3">
-      <div class="card !mb-0">
-        <div class="flex justify-between mb-4">
-          <div><span class="block text-muted-color font-medium mb-4">Livraisons</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">48</div></div>
-          <div class="flex items-center justify-center bg-blue-100 dark:bg-blue-400/10 rounded-border w-10 h-10"><i class="pi pi-truck text-blue-500 !text-xl" /></div>
-        </div>
-        <span class="text-primary font-medium">12 nouvelles </span><span class="text-muted-color">ce mois-ci</span>
-      </div>
-    </div>
     <div class="col-span-12 lg:col-span-6 xl:col-span-3">
       <div class="card !mb-0">
         <div class="flex justify-between mb-4">
@@ -47,55 +30,63 @@ const severity = (status: string) => status === "Livrée" ? "success" : status =
     <div class="col-span-12 lg:col-span-6 xl:col-span-3">
       <div class="card !mb-0">
         <div class="flex justify-between mb-4">
-          <div><span class="block text-muted-color font-medium mb-4">Véhicules</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">3 actifs</div></div>
-          <div class="flex items-center justify-center bg-cyan-100 dark:bg-cyan-400/10 rounded-border w-10 h-10"><i class="pi pi-car text-cyan-500 !text-xl" /></div>
-        </div>
-        <span class="text-primary font-medium">100 % </span><span class="text-muted-color">disponibles</span>
-      </div>
-    </div>
-    <div class="col-span-12 lg:col-span-6 xl:col-span-3">
-      <div class="card !mb-0">
-        <div class="flex justify-between mb-4">
           <div><span class="block text-muted-color font-medium mb-4">Dépenses</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">614,20 €</div></div>
           <div class="flex items-center justify-center bg-purple-100 dark:bg-purple-400/10 rounded-border w-10 h-10"><i class="pi pi-wallet text-purple-500 !text-xl" /></div>
         </div>
         <span class="text-primary font-medium">26 % </span><span class="text-muted-color">des revenus</span>
       </div>
     </div>
-
-    <div class="col-span-12 xl:col-span-6">
-      <div class="card">
-        <div class="font-semibold text-xl mb-4">Livraisons récentes</div>
-        <DataTable :value="deliveries" :rows="5" responsive-layout="scroll">
-          <Column field="reference" header="Commande" />
-          <Column field="destination" header="Destination" />
-          <Column field="amount" header="Commission" />
-          <Column header="Statut"><template #body="{ data }"><Tag :value="data.status" :severity="severity(data.status)" /></template></Column>
-          <Column header="Voir"><template #body><Button icon="pi pi-search" type="button" text /></template></Column>
-        </DataTable>
+    <div class="col-span-12 lg:col-span-6 xl:col-span-3">
+      <div class="card !mb-0">
+        <div class="flex justify-between mb-4">
+          <div><span class="block text-muted-color font-medium mb-4">Déjà payé</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">1 580,00 €</div></div>
+          <div class="flex items-center justify-center bg-green-100 dark:bg-green-400/10 rounded-border w-10 h-10"><i class="pi pi-check-circle text-green-500 !text-xl" /></div>
+        </div>
+        <span class="text-primary font-medium">Commissions </span><span class="text-muted-color">déjà versées</span>
       </div>
-
-      <div class="card">
-        <div class="flex justify-between items-center mb-6"><div class="font-semibold text-xl">Activité des véhicules</div><Button icon="pi pi-ellipsis-v" text rounded severity="secondary" /></div>
-        <ul class="list-none p-0 m-0">
-          <li v-for="vehicle in vehicles" :key="vehicle.name" class="flex flex-col md:flex-row md:items-center md:justify-between mb-6 last:mb-0">
-            <div><span class="text-surface-900 dark:text-surface-0 font-medium">{{ vehicle.name }}</span><div class="mt-1 text-muted-color">Taux d’utilisation</div></div>
-            <div class="mt-2 md:mt-0 flex items-center"><div class="bg-surface-300 dark:bg-surface-500 rounded-border overflow-hidden w-40 lg:w-24 h-2"><div :class="vehicle.color" class="h-full" :style="{ width: `${vehicle.value}%` }" /></div><span :class="vehicle.text" class="ml-4 font-medium">{{ vehicle.value }} %</span></div>
-          </li>
-        </ul>
+    </div>
+    <div class="col-span-12 lg:col-span-6 xl:col-span-3">
+      <div class="card !mb-0">
+        <div class="flex justify-between mb-4">
+          <div><span class="block text-muted-color font-medium mb-4">Véhicules actifs</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">3</div></div>
+          <div class="flex items-center justify-center bg-cyan-100 dark:bg-cyan-400/10 rounded-border w-10 h-10"><i class="pi pi-car text-cyan-500 !text-xl" /></div>
+        </div>
+        <span class="text-primary font-medium">100 % </span><span class="text-muted-color">disponibles</span>
       </div>
     </div>
 
     <div class="col-span-12 xl:col-span-6">
+
       <div class="card">
-        <div class="font-semibold text-xl mb-4">Prochain versement</div>
-        <div class="flex items-center justify-between py-4">
-          <div><span class="block text-muted-color mb-2">Montant estimé</span><strong class="text-surface-900 dark:text-surface-0 text-3xl">1 726,60 €</strong><span class="block text-muted-color mt-2">Prévu le 31 août 2026</span></div>
-          <i class="pi pi-chart-line text-primary text-5xl" />
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <div class="font-semibold text-xl">Solde par véhicule</div>
+            <span class="text-muted-color">Total des commissions générées</span>
+          </div>
+          <NuxtLink to="/espace-client/vehicules" class="flex items-center gap-2 text-primary font-medium hover:underline">
+            Tout voir
+            <i class="pi pi-arrow-right text-sm" />
+          </NuxtLink>
         </div>
-        <Button label="Voir le détail" icon="pi pi-arrow-right" icon-pos="right" class="mt-4" />
+        <ul class="list-none p-0 m-0">
+          <li v-for="vehicle in vehicles" :key="vehicle.registration" class="border-b border-surface last:border-b-0">
+            <NuxtLink :to="`/espace-client/vehicules/${vehicle.id}`" class="flex items-center justify-between gap-4 py-4 group">
+              <div class="min-w-0">
+                <span class="block text-surface-900 dark:text-surface-0 font-semibold group-hover:text-primary">{{ vehicle.name }}</span>
+                <span class="block text-muted-color text-sm mt-1">{{ vehicle.registration }}</span>
+              </div>
+              <div class="shrink-0 text-right">
+                <strong class="block text-surface-900 dark:text-surface-0">{{ vehicle.commission }}</strong>
+                <span class="block text-green-500 text-sm mt-1">{{ vehicle.status }}</span>
+              </div>
+            </NuxtLink>
+          </li>
+        </ul>
       </div>
 
+    </div>
+
+    <div class="col-span-12 xl:col-span-6">
       <div class="card">
         <div class="flex items-center justify-between mb-6"><div class="font-semibold text-xl">Notifications</div><Button icon="pi pi-ellipsis-v" text rounded severity="secondary" /></div>
         <span class="block text-muted-color font-medium mb-4">AUJOURD’HUI</span>

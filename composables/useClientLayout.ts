@@ -1,6 +1,9 @@
 type ClientMenuMode = "static" | "overlay";
 
 type ClientLayoutConfig = {
+  preset: "Aura" | "Lara" | "Nora";
+  primary: string;
+  surface: string | null;
   darkTheme: boolean;
   menuMode: ClientMenuMode;
 };
@@ -15,6 +18,9 @@ type ClientLayoutState = {
 
 export function useClientLayout() {
   const config = useState<ClientLayoutConfig>("elm-client-config", () => ({
+    preset: "Aura",
+    primary: "emerald",
+    surface: null,
     darkTheme: false,
     menuMode: "static",
   }));
@@ -44,8 +50,27 @@ export function useClientLayout() {
     state.value.staticMenuInactive = !state.value.staticMenuInactive;
   };
 
-  const toggleDarkMode = () => {
+  const executeDarkModeToggle = () => {
     config.value.darkTheme = !config.value.darkTheme;
+
+    if (import.meta.client) {
+      document.documentElement.classList.toggle("app-dark", config.value.darkTheme);
+    }
+  };
+
+  const toggleDarkMode = () => {
+    if (!import.meta.client) return;
+
+    const transitionDocument = document as Document & {
+      startViewTransition?: (callback: () => void) => unknown;
+    };
+
+    if (!transitionDocument.startViewTransition) {
+      executeDarkModeToggle();
+      return;
+    }
+
+    transitionDocument.startViewTransition(executeDarkModeToggle);
   };
 
   const toggleConfigMenu = () => {

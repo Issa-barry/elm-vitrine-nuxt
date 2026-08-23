@@ -2,6 +2,14 @@
 const route = useRoute();
 const { config, state, closeOverlays } = useClientLayout();
 
+onMounted(() => {
+  document.documentElement.classList.toggle("app-dark", config.value.darkTheme);
+});
+
+onBeforeUnmount(() => {
+  document.documentElement.classList.remove("app-dark");
+});
+
 watch(
   () => route.path,
   () => closeOverlays(),
@@ -13,7 +21,6 @@ const containerClass = computed(() => ({
   "layout-overlay-active": state.value.overlayMenuActive,
   "layout-static-inactive": state.value.staticMenuInactive,
   "layout-mobile-active": state.value.mobileMenuActive,
-  "app-dark": config.value.darkTheme,
 }));
 </script>
 

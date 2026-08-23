@@ -25,7 +25,7 @@ export default defineNuxtConfig({
       theme: {
         preset: ElmPreset,
         options: {
-          darkModeSelector: ".elm-client-shell.app-dark",
+          darkModeSelector: ".app-dark",
           cssLayer: false,
         },
       },
