@@ -25,6 +25,7 @@
     "@primeuix/themes": "^2.0.0",
     "@primevue/nuxt-module": "^4.5.4",
     "primeicons": "^7.0.0",
-    "primevue": "^4.5.4"
+    "primevue": "^4.5.4",
+    "qrcode.vue": "^3.10.0"
   }
 }

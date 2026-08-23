@@ -26,14 +26,18 @@ const containerClass = computed(() => ({
 
 <template>
   <div class="elm-client-shell layout-wrapper" :class="containerClass">
-    <ClientLayoutClientTopbar />
-    <ClientLayoutClientSidebar />
+    <div class="client-desktop-chrome">
+      <ClientLayoutClientTopbar />
+      <ClientLayoutClientSidebar />
+    </div>
+    <ClientMobileTopbar />
     <div class="layout-main-container">
       <main class="layout-main">
         <slot />
       </main>
       <ClientLayoutClientFooter />
     </div>
+    <ClientMobileBottomNav />
     <button class="layout-mask" type="button" aria-label="Fermer le menu" @click="closeOverlays" />
   </div>
 </template>

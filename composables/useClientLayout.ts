@@ -19,7 +19,7 @@ type ClientLayoutState = {
 export function useClientLayout() {
   const config = useState<ClientLayoutConfig>("elm-client-config", () => ({
     preset: "Aura",
-    primary: "emerald",
+    primary: "blue",
     surface: null,
     darkTheme: false,
     menuMode: "static",
