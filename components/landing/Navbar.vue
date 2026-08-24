@@ -25,10 +25,9 @@ const open = ref(false);
   <LandingContainer>
     <header class="flex flex-col lg:flex-row justify-between items-center my-5">
       <div class="flex w-full lg:w-auto items-center justify-between">
-        <a href="/" class="text-lg"
-          ><span class="font-bold text-slate-800">Eau La</span
-          ><span class="text-slate-500"> Maman</span>
-        </a>
+        <NuxtLink to="/" aria-label="Accueil Eau La Maman">
+          <BrandMark class="w-12 h-12" />
+        </NuxtLink>
         <div class="block lg:hidden">
           <button @click="open = !open" class="text-gray-800">
             <svg

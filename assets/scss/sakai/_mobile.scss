@@ -25,16 +25,25 @@
       z-index: 1000;
       top: 0;
       left: 0;
-      display: grid;
-      grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+      display: flex;
       align-items: center;
+      justify-content: space-between;
       width: 100%;
       height: calc(var(--client-mobile-bar-height) + env(safe-area-inset-top));
-      padding: env(safe-area-inset-top) 0.9rem 0;
+      padding: env(safe-area-inset-top) 0.75rem 0;
       background: color-mix(in srgb, var(--surface-card) 94%, transparent);
       border-bottom: 1px solid var(--surface-border);
       box-shadow: 0 0.35rem 1.6rem rgba(15, 23, 42, 0.06);
       backdrop-filter: blur(18px);
+    }
+
+    .client-mobile-topbar-side {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 0.35rem;
     }
 
     .client-mobile-avatar,
@@ -42,8 +51,8 @@
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 2.5rem;
-      height: 2.5rem;
+      width: 2.75rem;
+      height: 2.75rem;
       border-radius: 50%;
     }
 
@@ -54,46 +63,38 @@
     }
 
     .client-mobile-topbar .layout-topbar-logo {
-      justify-self: center;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      z-index: 0;
+      display: flex;
       gap: 0.35rem;
       color: var(--text-color);
       font-size: 0.86rem;
       font-weight: 800;
       letter-spacing: 0.035em;
+      transform: translate(-50%, -50%);
     }
 
-    .client-mobile-topbar .layout-topbar-logo svg {
+    .client-mobile-topbar .layout-topbar-logo-mark {
       width: 2.25rem;
       height: 2.25rem;
-    }
-
-    .client-mobile-topbar-actions {
-      display: flex;
-      align-items: center;
-      gap: 0.2rem;
     }
 
     .client-mobile-icon-button {
       position: relative;
       cursor: pointer;
+      color: inherit;
       font-size: 1.08rem;
+      text-decoration: none;
     }
 
     .client-mobile-icon-button:active,
     .client-mobile-nav-item:active,
-    .client-mobile-qr-trigger:active {
+    .client-mobile-identity-trigger:active,
+    .client-mobile-summary-card:active,
+    .client-mobile-vehicle-row:active {
       transform: scale(0.96);
-    }
-
-    .client-mobile-notification-dot {
-      position: absolute;
-      top: 0.45rem;
-      right: 0.45rem;
-      width: 0.45rem;
-      height: 0.45rem;
-      background: var(--p-red-500);
-      border: 2px solid var(--surface-card);
-      border-radius: 50%;
     }
 
     .client-mobile-theme-button {
@@ -201,48 +202,68 @@
     }
 
     .client-mobile-identity-card {
-      padding: 1rem;
-      text-align: center;
+      padding: 0.85rem;
     }
 
-    .client-mobile-identity-heading {
+    .client-mobile-identity-trigger {
       display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 0.75rem;
-      text-align: left;
-    }
-
-    .client-mobile-identity-heading > div {
-      display: flex;
-      align-items: flex-start;
-      flex-direction: column;
-      gap: 0.45rem;
-    }
-
-    .client-mobile-eyebrow,
-    .client-mobile-secure-label {
-      color: var(--text-color-secondary);
-      font-size: 0.72rem;
-      font-weight: 700;
-    }
-
-    .client-mobile-secure-label {
-      display: inline-flex;
       align-items: center;
-      gap: 0.3rem;
-      color: var(--p-green-600);
+      gap: 0.85rem;
+      width: 100%;
+      color: inherit;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .client-mobile-identity-qr {
+      display: inline-flex;
+      flex: 0 0 auto;
+      align-items: center;
+      justify-content: center;
+      padding: 0.3rem;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 0.85rem;
+      box-shadow: 0 0.5rem 1.25rem rgba(15, 23, 42, 0.1);
+    }
+
+    .client-mobile-identity-info {
+      display: flex;
+      flex: 1 1 auto;
+      min-width: 0;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .client-mobile-identity-info strong {
+      overflow: hidden;
+      color: var(--text-color);
+      font-size: 1rem;
+      text-overflow: ellipsis;
       white-space: nowrap;
     }
 
-    .client-mobile-qr-trigger {
-      display: inline-flex;
-      align-items: center;
+    .client-mobile-identity-meta {
+      overflow: hidden;
+      color: var(--text-color-secondary);
+      font-size: 0.78rem;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .client-mobile-identity-expand {
+      display: flex;
+      flex: 0 0 auto;
       flex-direction: column;
-      gap: 0.55rem;
-      margin: 0.5rem auto 0;
-      cursor: pointer;
-      transition: transform 0.15s ease;
+      align-items: center;
+      gap: 0.2rem;
+      color: var(--primary-color);
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    .client-mobile-identity-expand i {
+      font-size: 1.15rem;
     }
 
     .client-mobile-qr-frame {
@@ -260,40 +281,12 @@
       padding: 0.85rem;
     }
 
-    .client-mobile-qr-hint {
-      display: inline-flex;
-      align-items: center;
-      gap: 0.35rem;
-      color: var(--primary-color);
-      font-size: 0.72rem;
-      font-weight: 700;
-    }
-
-    .client-mobile-owner-copy h1 {
-      margin: 0.6rem 0 0.2rem;
-      color: var(--text-color);
-      font-size: 1.25rem;
-    }
-
-    .client-mobile-owner-copy p {
-      margin: 0;
-      color: var(--text-color-secondary);
-      font-weight: 700;
-    }
-
-    .client-mobile-owner-copy > span {
-      display: block;
-      max-width: 18rem;
-      margin: 0.55rem auto 0;
-      color: var(--text-color-secondary);
-      font-size: 0.75rem;
-      line-height: 1.45;
-    }
-
     .client-mobile-balance-card {
       position: relative;
+      display: flex;
+      align-items: center;
       min-height: 12.5rem;
-      margin-top: 1.5rem;
+      margin-top: 1rem;
       padding: 1.25rem;
       overflow: hidden;
       color: var(--primary-contrast-color);
@@ -313,6 +306,7 @@
     .client-mobile-balance-content {
       position: relative;
       z-index: 1;
+      width: 100%;
     }
 
     .client-mobile-balance-label {
@@ -320,7 +314,15 @@
       margin-bottom: 0.65rem;
       font-size: 0.82rem;
       font-weight: 700;
-      opacity: 0.82;
+      opacity: 0.94;
+    }
+
+    .client-mobile-balance-empty {
+      margin: 0;
+      font-size: 0.9rem;
+      font-weight: 600;
+      line-height: 1.5;
+      opacity: 0.94;
     }
 
     .client-mobile-balance-amount {
@@ -348,12 +350,12 @@
     }
 
     .client-mobile-balance-meta span {
-      font-size: 0.7rem;
-      opacity: 0.76;
+      font-size: 0.85rem;
+      opacity: 0.9;
     }
 
     .client-mobile-balance-meta strong {
-      font-size: 0.95rem;
+      font-size: 1.15rem;
     }
 
     .client-mobile-summary-grid {
@@ -368,6 +370,9 @@
       align-items: center;
       gap: 0.75rem;
       padding: 1.1rem;
+      color: inherit;
+      text-decoration: none;
+      cursor: pointer;
     }
 
     .client-mobile-summary-card:only-child {
@@ -388,13 +393,14 @@
     }
 
     .client-mobile-summary-card div {
+      flex: 1;
       min-width: 0;
     }
 
     .client-mobile-summary-card span {
       display: block;
       color: var(--text-color-secondary);
-      font-size: 0.68rem;
+      font-size: 0.75rem;
       white-space: nowrap;
     }
 
@@ -403,6 +409,12 @@
       margin-top: 0.2rem;
       color: var(--text-color);
       font-size: 0.92rem;
+    }
+
+    .client-mobile-summary-chevron {
+      flex: 0 0 auto;
+      color: var(--text-color-secondary);
+      font-size: 0.75rem;
     }
 
     .client-mobile-section-heading {
@@ -423,6 +435,8 @@
       display: inline-flex;
       align-items: center;
       gap: 0.35rem;
+      margin: -0.6rem -0.5rem;
+      padding: 0.6rem 0.5rem;
       color: var(--primary-color);
       font-size: 0.76rem;
       font-weight: 800;
@@ -464,7 +478,18 @@
     .client-mobile-vehicle-status {
       margin-top: 0.25rem;
       color: var(--text-color-secondary);
-      font-size: 0.72rem;
+      font-size: 0.75rem;
+    }
+
+    .client-mobile-empty-state {
+      margin: 0;
+      padding: 1.5rem 1.25rem;
+      color: var(--text-color-secondary);
+      font-size: 0.85rem;
+      text-align: center;
+      background: var(--surface-card);
+      border: 1px solid color-mix(in srgb, var(--surface-border) 72%, transparent);
+      border-radius: 1.35rem;
     }
 
     .client-mobile-vehicle-finance {

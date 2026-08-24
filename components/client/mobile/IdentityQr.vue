@@ -13,17 +13,27 @@ const qrValue = "ELM:IDENTITY:MOCK:OWNER:4F92C1";
 
 <template>
   <section class="client-mobile-identity-card" aria-labelledby="mobile-owner-name">
-    <button type="button" class="client-mobile-qr-trigger" aria-label="Agrandir mon QR code" @click="expanded = true">
-      <span class="client-mobile-qr-frame">
-        <QrcodeVue :value="qrValue" :size="112" level="M" render-as="svg" foreground="#111827" background="#ffffff" />
+    <button
+      type="button"
+      class="client-mobile-identity-trigger"
+      aria-haspopup="dialog"
+      :aria-label="`Identité ${name}, ${role}, ${phone}. Agrandir le QR code.`"
+      @click="expanded = true"
+    >
+      <span class="client-mobile-identity-qr">
+        <QrcodeVue :value="qrValue" :size="72" level="M" render-as="svg" foreground="#111827" background="#ffffff" />
       </span>
-      <span class="client-mobile-qr-hint"><i class="pi pi-expand" /> Appuyer pour agrandir</span>
-    </button>
 
-    <div class="client-mobile-owner-copy">
-      <h1 id="mobile-owner-name">{{ name }}</h1>
-      <p>{{ phone }}</p>
-    </div>
+      <span class="client-mobile-identity-info">
+        <strong id="mobile-owner-name">{{ name }}</strong>
+        <span class="client-mobile-identity-meta">{{ role }} · {{ phone }}</span>
+      </span>
+
+      <span class="client-mobile-identity-expand" aria-hidden="true">
+        <i class="pi pi-expand" />
+        <span>Agrandir</span>
+      </span>
+    </button>
 
     <Dialog v-model:visible="expanded" modal header="Mon QR Eau La Maman" class="client-mobile-qr-dialog" :style="{ width: 'min(92vw, 24rem)' }">
       <div class="client-mobile-qr-dialog-content">

@@ -32,27 +32,31 @@ const notifications = [
         <path d="M0 65 C105 18 174 38 260 70 C360 108 425 38 600 62 L600 180 L0 180 Z" fill="var(--p-primary-500)" />
       </svg>
       <div class="client-mobile-balance-content">
-        <span id="mobile-balance-title" class="client-mobile-balance-label">Commissions générées</span>
-        <strong class="client-mobile-balance-amount">{{ formatGnf(totals.generated) }}</strong>
-        <div class="client-mobile-balance-meta">
-          <div><span>Déjà payé</span><strong>{{ formatGnf(totals.paid) }}</strong></div>
-          <div><span>Reste à payer</span><strong>{{ formatGnf(totals.remaining) }}</strong></div>
-        </div>
+        <template v-if="totals.generated > 0">
+          <span id="mobile-balance-title" class="client-mobile-balance-label">Cumul des commissions</span>
+          <strong class="client-mobile-balance-amount">{{ formatGnf(totals.generated) }}</strong>
+          <div class="client-mobile-balance-meta">
+            <div><span>Déjà payé</span><strong>{{ formatGnf(totals.paid) }}</strong></div>
+            <div><span>Reste à payer</span><strong>{{ formatGnf(totals.remaining) }}</strong></div>
+          </div>
+        </template>
+        <p v-else id="mobile-balance-title" class="client-mobile-balance-empty">Aucune commission enregistrée pour le moment.</p>
       </div>
     </section>
 
     <div class="client-mobile-summary-grid">
-      <div class="client-mobile-summary-card">
+      <NuxtLink to="/espace-client/depenses" class="client-mobile-summary-card" aria-label="Voir le détail des dépenses">
         <span class="client-mobile-summary-icon"><i class="pi pi-wallet" /></span>
         <div><span>Dépenses</span><strong>614 200 GNF</strong></div>
-      </div>
+        <i class="pi pi-chevron-right client-mobile-summary-chevron" aria-hidden="true" />
+      </NuxtLink>
     </div>
 
     <div class="client-mobile-section-heading">
-      <h2>Solde par véhicule</h2>
+      <h2>Commissions par véhicule</h2>
       <NuxtLink to="/espace-client/vehicules">Tout voir <i class="pi pi-arrow-right" /></NuxtLink>
     </div>
-    <div class="client-mobile-vehicle-list">
+    <div v-if="vehicles.length" class="client-mobile-vehicle-list">
       <NuxtLink v-for="vehicle in vehicles" :key="vehicle.id" :to="`/espace-client/vehicules/${vehicle.id}`" class="client-mobile-vehicle-row">
         <div>
           <span class="client-mobile-vehicle-name">{{ vehicle.name }}</span>
@@ -65,6 +69,7 @@ const notifications = [
         <i class="pi pi-chevron-right" />
       </NuxtLink>
     </div>
+    <p v-else class="client-mobile-empty-state">Aucun véhicule associé pour le moment.</p>
   </div>
 
   <div class="client-desktop-dashboard grid grid-cols-12 gap-8">

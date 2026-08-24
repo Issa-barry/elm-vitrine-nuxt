@@ -6,7 +6,7 @@ export default defineNuxtConfig({
   app: {
     head: {
       link: [
-        { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+        { rel: "icon", type: "image/png", href: "/favicon.png" },
         { rel: "stylesheet", href: "https://fonts.cdnfonts.com/css/lato" },
       ],
     },

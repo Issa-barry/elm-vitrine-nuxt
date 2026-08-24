@@ -8,7 +8,7 @@ type Palette = Record<number, string>;
 type ColorOption = { name: string; palette: Palette };
 type PresetName = "Aura" | "Lara" | "Nora";
 
-const { config, isDarkTheme, changeMenuMode } = useClientLayout();
+const { config, isDarkTheme, changeMenuMode, toggleDarkMode } = useClientLayout();
 
 const presets = { Aura, Lara, Nora };
 const presetOptions: PresetName[] = ["Aura", "Lara", "Nora"];
@@ -57,6 +57,18 @@ const selectedMenuMode = computed<"static" | "overlay">({
   get: () => config.value.menuMode,
   set: (value) => changeMenuMode(value),
 });
+
+const selectedMode = computed<"light" | "dark">({
+  get: () => (isDarkTheme.value ? "dark" : "light"),
+  set: (value) => {
+    if ((value === "dark") !== isDarkTheme.value) toggleDarkMode();
+  },
+});
+
+const modeOptions = [
+  { label: "Clair", value: "light" },
+  { label: "Sombre", value: "dark" },
+];
 
 const getPresetExtension = () => {
   const color = primaryColors.find((item) => item.name === config.value.primary) ?? primaryColors[1];
@@ -110,6 +122,11 @@ const onPresetChange = () => {
 <template>
   <div class="config-panel absolute top-[3.25rem] right-0 w-64 p-4 bg-surface-0 dark:bg-surface-900 border border-surface rounded-border origin-top shadow-[0px_3px_5px_rgba(0,0,0,0.02),0px_0px_2px_rgba(0,0,0,0.05),0px_1px_4px_rgba(0,0,0,0.08)]">
     <div class="flex flex-col gap-4">
+      <div class="config-panel-settings">
+        <span class="config-panel-label">Apparence</span>
+        <SelectButton v-model="selectedMode" :options="modeOptions" option-label="label" option-value="value" :allow-empty="false" />
+      </div>
+
       <div>
         <span class="config-panel-label">Primaire</span>
         <div class="config-panel-colors">
