@@ -1,5 +1,7 @@
 <script setup>
-defineProps(["plan"]);
+defineProps({
+  plan: { type: Object, required: true },
+});
 </script>
 
 <template>
@@ -27,9 +29,10 @@ defineProps(["plan"]);
       <ul class="grid mt-8 text-left gap-y-4">
         <li
           v-for="item of plan.features"
+          :key="item"
           class="flex items-start gap-3 text-gray-800"
         >
-          <LandingTick className="w-6 h-6" />
+          <LandingTick class-name="w-6 h-6" />
           <span>{{ item }}</span>
         </li>
       </ul>
@@ -37,7 +40,7 @@ defineProps(["plan"]);
         <LandingLink
           :href="plan.button.link || '#'"
           block
-          :styleName="plan.popular ? 'primary' : 'outline'"
+          :style-name="plan.popular ? 'primary' : 'outline'"
         >
           {{ plan.button.text || "Get Started" }}
         </LandingLink>

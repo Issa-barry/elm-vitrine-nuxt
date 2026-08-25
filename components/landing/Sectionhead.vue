@@ -1,6 +1,7 @@
 <script setup>
 defineProps({
   align: {
+    type: String,
     default: "center",
   },
 });

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { $fetch as rawFetch, type IFetchError } from "ofetch";
+
 definePageMeta({ layout: false });
 
 useHead({
@@ -168,14 +170,29 @@ const validateSecurity = () => {
   return Object.keys(nextErrors).length === 0;
 };
 
-const getServerPayload = (error: any) => {
-  const outer = error?.data || {};
-  return outer?.data || outer;
+// Reproduit l'enveloppe d'erreur réelle : registrationProxy.ts (server/utils)
+// relaie l'erreur Laravel via createError({ data: upstreamData }), que h3
+// sérialise en imbriquant upstreamData sous "data" ; selon le point d'échec,
+// le payload utile se trouve donc soit directement sur l'erreur, soit un
+// niveau plus bas.
+interface RegistrationErrorPayload {
+  message?: string;
+  error?: string;
+  errors?: Record<string, string[]>;
+  data?: RegistrationErrorPayload;
+}
+
+const getServerPayload = (
+  error: IFetchError<RegistrationErrorPayload>,
+): RegistrationErrorPayload => {
+  const outer = error.data || {};
+  return outer.data || outer;
 };
 
-const applyServerError = (error: any) => {
-  const payload = getServerPayload(error);
-  const serverErrors = payload?.errors || {};
+const applyServerError = (error: unknown) => {
+  const fetchError = error as IFetchError<RegistrationErrorPayload>;
+  const payload = getServerPayload(fetchError);
+  const serverErrors = payload.errors || {};
   const mapped: Record<string, string> = {};
 
   Object.entries(serverErrors).forEach(([field, messages]) => {
@@ -186,9 +203,9 @@ const applyServerError = (error: any) => {
 
   errors.value = mapped;
   globalError.value =
-    payload?.message ||
-    payload?.error ||
-    error?.statusMessage ||
+    payload.message ||
+    payload.error ||
+    fetchError.statusMessage ||
     "Une erreur est survenue. Veuillez réessayer.";
 };
 
@@ -211,9 +228,20 @@ const checkPhone = async () => {
   globalError.value = "";
 
   try {
-    const response = await $fetch<{
+    // Contrat exact de check-phone.post.ts (CheckPhoneResponse). $fetch
+    // importé directement depuis "ofetch" (pas le $fetch global augmenté par
+    // Nitro) : une fois toutes les routes server/api/auth/password/*
+    // correctement typées, le "scoring" de route interne de Nitro (matching
+    // du chemin contre toutes les routes connues via des types gabarits
+    // récursifs) dépasse la profondeur de pile supportée par TypeScript sur
+    // cet appel précis (TS2321 "Excessive stack depth" — reproduit en
+    // environnement propre via npm ci isolé ; ni un cast du chemin en
+    // `string`, ni une assertion sur le résultat n'évitent le calcul, qui a
+    // lieu dès la résolution de l'appel). Le $fetch d'ofetch a un générique
+    // ordinaire, sans cette machinerie.
+    const response = await rawFetch<{
       status: "user_exists" | "prefill_available" | "not_found";
-      prefill?: { prenom: string; nom: string } | null;
+      prefill: { prenom: string; nom: string } | null;
     }>("/api/register/client/check-phone", {
       method: "POST",
       body: { telephone: telephone.value },

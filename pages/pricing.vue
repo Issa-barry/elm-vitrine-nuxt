@@ -66,14 +66,14 @@ const pricing = [
 <template>
   <LandingContainer>
     <LandingSectionhead>
-      <template v-slot:title>Pricing</template>
-      <template v-slot:desc
+      <template #title>Pricing</template>
+      <template #desc
         >Simple & Predictable pricing. No Surprises.</template
       >
     </LandingSectionhead>
 
     <div class="grid md:grid-cols-3 gap-10 mx-auto max-w-screen-lg mt-12">
-      <LandingPricing v-for="item of pricing" :plan="item" />
+      <LandingPricing v-for="item of pricing" :key="item.name" :plan="item" />
     </div>
   </LandingContainer>
 </template>
