@@ -4,12 +4,12 @@ interface Props {
   block?: boolean;
   styleName?: "outline" | "primary" | "inverted";
   className?: string;
-  [x: string]: any;
 }
 
 withDefaults(defineProps<Props>(), {
   size: "md",
   styleName: "primary",
+  className: "",
 });
 
 const sizes = {

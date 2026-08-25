@@ -7,8 +7,8 @@ definePageMeta({
 <template>
   <LandingContainer>
     <LandingSectionhead>
-      <template v-slot:title>Contact</template>
-      <template v-slot:desc>I am here to help.</template>
+      <template #title>Contact</template>
+      <template #desc>I am here to help.</template>
     </LandingSectionhead>
 
     <div class="grid md:grid-cols-2 gap-10 mx-auto max-w-4xl mt-16">

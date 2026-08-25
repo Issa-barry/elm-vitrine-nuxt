@@ -25,7 +25,7 @@ onMounted(() => {
       body: json,
     })
       .then(async (response) => {
-        let json = await response.json();
+        const json = await response.json();
         if (response.status == 200) {
           result.classList.add("text-green-500");
           result.innerHTML = json.message;
@@ -54,20 +54,20 @@ onMounted(() => {
   <!-- To make this contact form work, create your free access key from https://web3forms.com/
      Then you will get all form submissions in your email inbox. -->
   <form
+    id="form"
     action="https://api.web3forms.com/submit"
     method="POST"
-    id="form"
     class="needs-validation"
     novalidate
   >
-    <input type="hidden" name="access_key" value="YOUR_ACCESS_KEY_HERE" />
+    <input type="hidden" name="access_key" value="YOUR_ACCESS_KEY_HERE" >
     <!-- Create your free access key from https://web3forms.com/ -->
     <input
       type="checkbox"
       class="hidden"
       style="display: none"
       name="botcheck"
-    />
+    >
     <div class="mb-5">
       <input
         type="text"
@@ -75,7 +75,7 @@ onMounted(() => {
         required
         class="w-full px-4 py-3 border-2 placeholder:text-gray-800 rounded-md outline-none focus:ring-4 border-gray-300 focus:border-gray-600 ring-gray-100"
         name="name"
-      />
+      >
       <div class="empty-feedback invalid-feedback text-red-400 text-sm mt-1">
         Please provide your full name.
       </div>
@@ -89,7 +89,7 @@ onMounted(() => {
         name="email"
         required
         class="w-full px-4 py-3 border-2 placeholder:text-gray-800 rounded-md outline-none focus:ring-4 border-gray-300 focus:border-gray-600 ring-gray-100"
-      />
+      >
       <div class="empty-feedback text-red-400 text-sm mt-1">
         Please provide your email address.
       </div>
@@ -103,13 +103,13 @@ onMounted(() => {
         required
         placeholder="Your Message"
         class="w-full px-4 py-3 border-2 placeholder:text-gray-800 rounded-md outline-none h-36 focus:ring-4 border-gray-300 focus:border-gray-600 ring-gray-100"
-      ></textarea>
+      />
       <div class="empty-feedback invalid-feedback text-red-400 text-sm mt-1">
         Please enter your message.
       </div>
     </div>
     <LandingButton type="submit" size="lg" block>Send Message</LandingButton>
-    <div id="result" class="mt-3 text-center"></div>
+    <div id="result" class="mt-3 text-center"/>
   </form>
 </template>
 

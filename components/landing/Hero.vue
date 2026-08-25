@@ -9,7 +9,7 @@
         format="avif"
         width="512"
         height="512"
-      />
+      >
     </div>
 
     <div>
@@ -23,11 +23,11 @@
       <div class="mt-6 flex flex-col sm:flex-row gap-3">
         <LandingLink class="sm:hidden" href="/connexion">Connexion</LandingLink>
         <LandingLink class="hidden sm:inline-flex" href="/contact">Contactez-nous</LandingLink>
-        <LandingLink class="sm:hidden" size="lg" styleName="outline" href="/inscription">Inscription</LandingLink>
+        <LandingLink class="sm:hidden" size="lg" style-name="outline" href="/inscription">Inscription</LandingLink>
         <LandingLink
           class="hidden sm:inline-flex"
           size="lg"
-          styleName="outline"
+          style-name="outline"
           href="/contact"
         >Devenez partenaire</LandingLink>
       </div>

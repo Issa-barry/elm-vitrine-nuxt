@@ -1,10 +1,14 @@
 import type { H3Event } from "h3";
+import type { IFetchError } from "ofetch";
 
 export async function forwardRegistration(
   event: H3Event,
   path: string,
 ) {
-  const config = useRuntimeConfig(event);
+  // event omis : optionnel côté Nitro (nitropack/dist/runtime/config.d.ts),
+  // sans effet sur un preset Node classique — évite une collision de type
+  // avec le useRuntimeConfig() app-side (voir docs/environment.md).
+  const config = useRuntimeConfig();
   const baseUrl = String(config.monolithApiBase || config.public.apiBase || "")
     .trim()
     .replace(/\/$/, "");
@@ -26,9 +30,10 @@ export async function forwardRegistration(
       headers: { Accept: "application/json" },
       body: await readBody(event),
     });
-  } catch (error: any) {
-    const statusCode = Number(error?.response?.status || error?.statusCode || 502);
-    const upstreamData = error?.data || error?.response?._data || {};
+  } catch (error) {
+    const fetchError = error as IFetchError;
+    const statusCode = Number(fetchError.response?.status || fetchError.statusCode || 502);
+    const upstreamData = fetchError.data || fetchError.response?._data || {};
 
     throw createError({
       statusCode,

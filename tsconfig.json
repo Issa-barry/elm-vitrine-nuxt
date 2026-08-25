@@ -1,4 +1,16 @@
 {
   // https://nuxt.com/docs/guide/concepts/typescript
-  "extends": "./.nuxt/tsconfig.json"
+  "extends": "./.nuxt/tsconfig.json",
+  "compilerOptions": {
+    // .nuxt/tsconfig.json (généré par Nuxt 3.9) fixe encore
+    // moduleResolution=Node, qui ne comprend pas les cartes "exports" à
+    // sous-chemins (ex. @primeuix/themes/aura). "Bundler" correspond à la
+    // résolution réellement utilisée par Vite/Nuxt au runtime : c'est un
+    // alignement, pas un contournement. Voir docs/typecheck.md.
+    "moduleResolution": "Bundler"
+  },
+  // Projet vendored avec son propre node_modules (Vue/PrimeVue/Vite
+  // dupliqués) : à exclure pour ne pas polluer le typecheck de
+  // l'application avec les types d'un autre projet.
+  "exclude": ["_template"]
 }
