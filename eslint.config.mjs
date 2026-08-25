@@ -7,7 +7,18 @@ export default createConfigForNuxt({
   features: {
     stylistic: false,
   },
-}).append({
-  // Template de référence vendored (sakai-vue), pas du code applicatif.
-  ignores: ["_template/**"],
-});
+})
+  .append({
+    // Template de référence vendored (sakai-vue), pas du code applicatif.
+    ignores: ["_template/**"],
+  })
+  .append({
+    rules: {
+      // `@nuxt/eslint-config` 0.6.x active à tort `vue/no-multiple-template-root`
+      // (règle historique Vue 2, cf. eslint-plugin-vue/lib/configs/vue2-essential.js)
+      // alors que ce projet est en Vue 3 (multi-root <template> supporté nativement,
+      // utilisé volontairement dans layouts/landing.vue et plusieurs pages
+      // espace-client/*). Désactivé ici plutôt que de restructurer ces templates.
+      "vue/no-multiple-template-root": "off",
+    },
+  });
