@@ -29,7 +29,7 @@ const open = ref(false);
           <BrandMark class="w-12 h-12" />
         </NuxtLink>
         <div class="block lg:hidden">
-          <button @click="open = !open" class="text-gray-800">
+          <button class="text-gray-800" @click="open = !open">
             <svg
               fill="currentColor"
               class="w-4 h-4"
@@ -42,12 +42,12 @@ const open = ref(false);
                 fill-rule="evenodd"
                 clip-rule="evenodd"
                 d="M18.278 16.864a1 1 0 01-1.414 1.414l-4.829-4.828-4.828 4.828a1 1 0 01-1.414-1.414l4.828-4.829-4.828-4.828a1 1 0 011.414-1.414l4.829 4.828 4.828-4.828a1 1 0 111.414 1.414l-4.828 4.829 4.828 4.828z"
-              ></path>
+              />
               <path
                 v-show="!open"
                 fill-rule="evenodd"
                 d="M4 5h16a1 1 0 010 2H4a1 1 0 110-2zm0 6h16a1 1 0 010 2H4a1 1 0 010-2zm0 6h16a1 1 0 010 2H4a1 1 0 010-2z"
-              ></path>
+              />
             </svg>
           </button>
         </div>
@@ -57,7 +57,7 @@ const open = ref(false);
         :class="{ block: open, hidden: !open }"
       >
         <ul class="flex flex-col lg:flex-row lg:gap-3">
-          <li v-for="item of menuitems">
+          <li v-for="item of menuitems" :key="item.path">
             <a
               :href="item.path"
               class="flex lg:px-3 py-2 text-gray-600 hover:text-gray-900"
@@ -67,7 +67,7 @@ const open = ref(false);
           </li>
         </ul>
         <div class="lg:hidden flex items-center mt-3 gap-4">
-          <LandingLink href="/connexion" styleName="muted" block size="md"
+          <LandingLink href="/connexion" style-name="muted" block size="md"
             >Connexion</LandingLink
           >
           <LandingLink href="/inscription" size="md" block>Inscription</LandingLink>

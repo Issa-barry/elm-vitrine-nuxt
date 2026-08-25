@@ -1,19 +1,14 @@
 import ElmPreset from "./themes/elm";
+import { runtimeConfigDefaults } from "./config/runtime";
 
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   devtools: { enabled: true },
-  runtimeConfig: {
-    // Utilisés uniquement par les routes serveur Nuxt qui relaient les
-    // inscriptions vers Laravel. Le jeton vitrine ne doit jamais être public.
-    monolithApiBase:
-      process.env.NUXT_MONOLITH_API_BASE ||
-      process.env.NUXT_PUBLIC_API_BASE ||
-      "",
-    public: {
-      apiBase: process.env.NUXT_PUBLIC_API_BASE || "",
-    },
-  },
+  // Valeurs par défaut uniquement : Nuxt les remplace automatiquement par
+  // les variables NUXT_* / NUXT_PUBLIC_* présentes dans l'environnement au
+  // démarrage (voir config/runtime.ts et docs/environment.md). Ne jamais
+  // coder d'URL métier en dur ici ni ailleurs dans le code applicatif.
+  runtimeConfig: runtimeConfigDefaults,
   app: {
     head: {
       title: "Eau La Maman",
@@ -30,7 +25,7 @@ export default defineNuxtConfig({
       autoprefixer: {},
     },
   },
-  modules: ["nuxt-icon", "@primevue/nuxt-module"],
+  modules: ["nuxt-icon", "@primevue/nuxt-module", "@nuxt/eslint"],
   primevue: {
     options: {
       ripple: true,

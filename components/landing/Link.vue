@@ -5,12 +5,12 @@ interface Props {
   block?: boolean;
   styleName?: "outline" | "primary" | "inverted" | "muted";
   className?: string;
-  [x: string]: any;
 }
 
 withDefaults(defineProps<Props>(), {
   size: "lg",
   styleName: "primary",
+  className: "",
 });
 
 const sizes = {
