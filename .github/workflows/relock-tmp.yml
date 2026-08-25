@@ -1,0 +1,27 @@
+name: relock-tmp
+
+# Workflow temporaire : régénère package-lock.json sur le même runner
+# (ubuntu-latest) que ci.yml, pour contourner le bug npm optional-deps
+# multi-plateforme (npm/cli#4828) qui fait disparaître les binaires natifs
+# Linux quand le lock est régénéré depuis Windows. Supprimé juste après usage.
+on:
+  workflow_dispatch:
+
+jobs:
+  relock:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - run: rm -f package-lock.json
+      - run: npm install --ignore-scripts
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: package-lock
+          path: package-lock.json
+          retention-days: 1
