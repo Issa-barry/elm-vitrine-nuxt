@@ -21,11 +21,11 @@
         La Maman.
       </p>
       <div class="mt-6 flex flex-col sm:flex-row gap-3">
-        <LandingLink class="sm:hidden" href="/connexion">Connexion</LandingLink>
-        <LandingLink class="hidden sm:inline-flex" href="/contact">Contactez-nous</LandingLink>
-        <LandingLink class="sm:hidden" size="lg" style-name="outline" href="/inscription">Inscription</LandingLink>
+        <LandingLink class="lg:hidden" href="/connexion">Connexion</LandingLink>
+        <LandingLink class="hidden lg:inline-flex" href="/contact">Contactez-nous</LandingLink>
+        <LandingLink class="lg:hidden" size="lg" style-name="outline" href="/inscription">Inscription</LandingLink>
         <LandingLink
-          class="hidden sm:inline-flex"
+          class="hidden lg:inline-flex"
           size="lg"
           style-name="outline"
           href="/contact"
