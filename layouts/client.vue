@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const route = useRoute();
 const { config, state, closeOverlays } = useClientLayout();
+const showMobileTopbar = computed(() => route.path.replace(/\/+$/, "") === "/espace-client");
 
 onMounted(() => {
   document.documentElement.classList.toggle("app-dark", config.value.darkTheme);
@@ -21,6 +22,7 @@ const containerClass = computed(() => ({
   "layout-overlay-active": state.value.overlayMenuActive,
   "layout-static-inactive": state.value.staticMenuInactive,
   "layout-mobile-active": state.value.mobileMenuActive,
+  "has-client-mobile-topbar": showMobileTopbar.value,
 }));
 </script>
 
@@ -30,7 +32,7 @@ const containerClass = computed(() => ({
       <ClientLayoutClientTopbar />
       <ClientLayoutClientSidebar />
     </div>
-    <ClientMobileTopbar />
+    <ClientMobileTopbar v-if="showMobileTopbar" />
     <div class="layout-main-container">
       <main class="layout-main">
         <slot />

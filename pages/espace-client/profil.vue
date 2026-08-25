@@ -16,6 +16,9 @@ const cities = ["Paris", "Boulogne-Billancourt", "Issy-les-Moulineaux", "Neuilly
 </script>
 
 <template>
+  <div class="client-mobile-profile-page">
+    <ClientMobilePageTopbar title="Profil" title-id="mobile-profile-title" back-to="/espace-client" back-label="Retour à l’accueil" />
+
   <div class="grid grid-cols-12 gap-8">
     <div class="col-span-12 xl:col-span-7">
       <div class="card">
@@ -53,5 +56,6 @@ const cities = ["Paris", "Boulogne-Billancourt", "Issy-les-Moulineaux", "Neuilly
         </div>
       </div>
     </div>
+  </div>
   </div>
 </template>

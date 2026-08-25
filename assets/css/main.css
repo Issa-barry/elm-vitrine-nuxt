@@ -1,3 +1,57 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer components {
+  .landing-theme-title {
+    color: var(--p-primary-color, #3b82f6);
+  }
+
+  .landing-theme-action {
+    border-color: transparent;
+  }
+
+  .landing-theme-action:focus-visible {
+    outline: 2px solid var(--p-primary-color, #3b82f6);
+    outline-offset: 2px;
+  }
+
+  .landing-theme-action--primary {
+    color: var(--p-primary-contrast-color, #ffffff);
+    background-color: var(--p-primary-color, #3b82f6);
+  }
+
+  .landing-theme-action--primary:hover {
+    background-color: var(--p-primary-hover-color, #2563eb);
+  }
+
+  .landing-theme-action--outline {
+    color: var(--p-primary-color, #3b82f6);
+    background-color: transparent;
+    border-color: var(--p-primary-color, #3b82f6);
+  }
+
+  .landing-theme-action--outline:hover {
+    color: var(--p-primary-hover-color, #2563eb);
+    background-color: color-mix(in srgb, var(--p-primary-color, #3b82f6) 8%, transparent);
+    border-color: var(--p-primary-hover-color, #2563eb);
+  }
+
+  .landing-theme-action--muted {
+    color: var(--p-primary-color, #3b82f6);
+    background-color: color-mix(in srgb, var(--p-primary-color, #3b82f6) 10%, transparent);
+  }
+
+  .landing-theme-action--muted:hover {
+    background-color: color-mix(in srgb, var(--p-primary-color, #3b82f6) 16%, transparent);
+  }
+
+  .landing-theme-action--inverted {
+    color: var(--p-primary-color, #3b82f6);
+    background-color: #ffffff;
+  }
+
+  .landing-theme-action--inverted:hover {
+    background-color: color-mix(in srgb, #ffffff 92%, var(--p-primary-color, #3b82f6));
+  }
+}

@@ -3,10 +3,22 @@ import ElmPreset from "./themes/elm";
 // https://nuxt.com/docs/api/configuration/nuxt-config
 export default defineNuxtConfig({
   devtools: { enabled: true },
+  runtimeConfig: {
+    // Utilisés uniquement par les routes serveur Nuxt qui relaient les
+    // inscriptions vers Laravel. Le jeton vitrine ne doit jamais être public.
+    monolithApiBase:
+      process.env.NUXT_MONOLITH_API_BASE ||
+      process.env.NUXT_PUBLIC_API_BASE ||
+      "",
+    public: {
+      apiBase: process.env.NUXT_PUBLIC_API_BASE || "",
+    },
+  },
   app: {
     head: {
+      title: "Eau La Maman",
       link: [
-        { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
+        { rel: "icon", type: "image/png", href: "/favicon.png" },
         { rel: "stylesheet", href: "https://fonts.cdnfonts.com/css/lato" },
       ],
     },
