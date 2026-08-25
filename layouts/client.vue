@@ -2,6 +2,14 @@
 const route = useRoute();
 const { config, state, closeOverlays } = useClientLayout();
 
+onMounted(() => {
+  document.documentElement.classList.toggle("app-dark", config.value.darkTheme);
+});
+
+onBeforeUnmount(() => {
+  document.documentElement.classList.remove("app-dark");
+});
+
 watch(
   () => route.path,
   () => closeOverlays(),
@@ -13,20 +21,23 @@ const containerClass = computed(() => ({
   "layout-overlay-active": state.value.overlayMenuActive,
   "layout-static-inactive": state.value.staticMenuInactive,
   "layout-mobile-active": state.value.mobileMenuActive,
-  "app-dark": config.value.darkTheme,
 }));
 </script>
 
 <template>
   <div class="elm-client-shell layout-wrapper" :class="containerClass">
-    <ClientLayoutClientTopbar />
-    <ClientLayoutClientSidebar />
+    <div class="client-desktop-chrome">
+      <ClientLayoutClientTopbar />
+      <ClientLayoutClientSidebar />
+    </div>
+    <ClientMobileTopbar />
     <div class="layout-main-container">
       <main class="layout-main">
         <slot />
       </main>
       <ClientLayoutClientFooter />
     </div>
+    <ClientMobileBottomNav />
     <button class="layout-mask" type="button" aria-label="Fermer le menu" @click="closeOverlays" />
   </div>
 </template>

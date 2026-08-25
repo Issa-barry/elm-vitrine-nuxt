@@ -3,10 +3,10 @@ definePageMeta({ layout: "client" });
 useHead({ title: "Mes dépenses — Eau La Maman" });
 
 const expenses = [
-  { label: "Carburant", vehicle: "Renault Master", date: "22 août 2026", amount: "68,40 €", icon: "pi pi-bolt", status: "Validée" },
-  { label: "Péage A13", vehicle: "Peugeot Expert", date: "21 août 2026", amount: "12,70 €", icon: "pi pi-ticket", status: "Validée" },
-  { label: "Entretien périodique", vehicle: "Citroën Jumpy", date: "20 août 2026", amount: "284,00 €", icon: "pi pi-wrench", status: "En attente" },
-  { label: "Carburant", vehicle: "Peugeot Expert", date: "18 août 2026", amount: "74,30 €", icon: "pi pi-bolt", status: "Validée" },
+  { label: "Carburant", vehicle: "ABARRY OU3859", date: "22 août 2026", amount: "68,40 €", icon: "pi pi-bolt", status: "Validée" },
+  { label: "Péage A13", vehicle: "ABARRY 2 OU4217", date: "21 août 2026", amount: "12,70 €", icon: "pi pi-ticket", status: "Validée" },
+  { label: "Entretien périodique", vehicle: "ABARRY 3 OU7712", date: "20 août 2026", amount: "284,00 €", icon: "pi pi-wrench", status: "En attente" },
+  { label: "Carburant", vehicle: "ABARRY 2 OU4217", date: "18 août 2026", amount: "74,30 €", icon: "pi pi-bolt", status: "Validée" },
 ];
 </script>
 
