@@ -39,7 +39,7 @@ version majeure dans ce fichier.
 | socks | 2.7.1 | 2.8.9 | (suit ip) | tooling proxy | Quasi nulle |
 | lodash | 4.17.21 | 4.18.1 | Code injection `_.template`, GHSA-r5fr-rjxr-66jc | vue-eslint-parser, archiver-utils | Dev/lint only |
 | flatted | 3.2.9 | 3.4.4 | Prototype pollution parse(), GHSA-rf6f-7fwh-wjgh | @nuxt/devtools, flat-cache | Build/dev only |
-| minimatch | 5.1.6 | 5.1.9 | ReDoS wildcards/GLOBSTAR, GHSA-3ppc-4f35-3m26 et autres | @eslint/config-array et al. | Dev/lint only |
+| ~~minimatch~~ | 5.1.6 | *(override retiré, voir note ci-dessous)* | ReDoS wildcards/GLOBSTAR, GHSA-3ppc-4f35-3m26 et autres | @eslint/config-array et al. | Dev/lint only |
 | picomatch | 2.3.1 | 2.3.2 | ReDoS extglob quantifiers, GHSA-c2c7-rcm5-vvqj | @parcel/watcher, @rollup/pluginutils | Dev/build only |
 | svgo | 3.2.0 | 3.3.5 | Billion Laughs DoS + removeScripts, GHSA-xpqw-6gx7-v673 / GHSA-2p49-hgcm-8545 | postcss-svgo | Build-time (assets SVG) |
 | undici | 5.28.2 | 5.28.5 | Random values / integrity / proxy-auth (fix partiel — voir note) | openapi-typescript (script, jamais exécuté en prod) | Aucune (tooling, pas le fetch runtime Node) |
@@ -53,6 +53,23 @@ aléatoires, intégrité, proxy-auth) sans changer de majeure. Le reste est
 documenté en dette ci-dessous — cette instance d'undici est une dépendance
 d'`openapi-typescript` (un script de génération, jamais exécuté en
 production), donc sans urgence.
+
+Note **minimatch** — override retiré après incident réel : appliqué
+initialement (5.1.6 → 5.1.9, même majeure, en apparence sans risque). Une
+fois combiné à la migration Nuxt 3.21 (branche séparée), cet override
+forçait **tous** les consommateurs de `minimatch` — y compris
+`eslint-plugin-import-x`, qui a besoin d'une version ≥9 exportant en ESM
+nommé — vers la 5.1.9 (CommonJS), cassant `npm run lint` et
+`npm run typecheck` (`SyntaxError: Named export 'minimatch' not found`).
+Constaté uniquement après rebase de la migration Nuxt sur ce Groupe A, pas
+en isolation. Correctif : retrait pur et simple de l'override — sans lui,
+npm résout naturellement chaque consommateur à sa propre version imbriquée
+(3.1.5 / 5.1.9 / 9.0.9 / 10.2.6 selon le besoin), **toutes déjà dans la
+plage sûre** une fois l'écosystème Nuxt à jour. Exactement le risque
+« override + incompatibilité subtile avec un parent » anticipé avant de
+lancer ce chantier — confirmé en pratique sur ce paquet précis. Les 14
+autres overrides de ce fichier n'ont pas montré ce comportement (revérifié
+lint/typecheck/test/build après le retrait).
 
 ## Explicitement écarté de ce chantier (nécessite une majeure ou une revue dédiée)
 
