@@ -13,27 +13,18 @@ const qrValue = "ELM:IDENTITY:MOCK:OWNER:4F92C1";
 
 <template>
   <section class="client-mobile-identity-card" aria-labelledby="mobile-owner-name">
-    <button
-      type="button"
-      class="client-mobile-identity-trigger"
-      aria-haspopup="dialog"
-      :aria-label="`Identité ${name}, ${role}, ${phone}. Agrandir le QR code.`"
-      @click="expanded = true"
-    >
+    <button type="button" class="client-mobile-identity-qr-trigger" aria-label="Agrandir mon QR code" aria-haspopup="dialog" @click="expanded = true">
       <span class="client-mobile-identity-qr">
         <QrcodeVue :value="qrValue" :size="72" level="M" render-as="svg" foreground="#111827" background="#ffffff" />
+        <i class="pi pi-expand client-mobile-identity-qr-badge" aria-hidden="true" />
       </span>
-
-      <span class="client-mobile-identity-info">
-        <strong id="mobile-owner-name">{{ name }}</strong>
-        <span class="client-mobile-identity-meta">{{ role }} · {{ phone }}</span>
-      </span>
-
-      <span class="client-mobile-identity-expand" aria-hidden="true">
-        <i class="pi pi-expand" />
-        <span>Agrandir</span>
-      </span>
+      <span class="client-mobile-identity-expand-label" aria-hidden="true">Agrandir</span>
     </button>
+
+    <div class="client-mobile-identity-info">
+      <strong id="mobile-owner-name">{{ name }}</strong>
+      <span class="client-mobile-identity-meta">{{ role }} · {{ phone }}</span>
+    </div>
 
     <Dialog v-model:visible="expanded" modal header="Mon QR Eau La Maman" class="client-mobile-qr-dialog" :style="{ width: 'min(92vw, 24rem)' }">
       <div class="client-mobile-qr-dialog-content">

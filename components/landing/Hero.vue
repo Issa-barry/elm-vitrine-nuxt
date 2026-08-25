@@ -13,7 +13,7 @@
     </div>
 
     <div>
-      <h1 class="text-5xl lg:text-6xl xl:text-7xl font-bold lg:tracking-tight">
+      <h1 class="landing-theme-title text-5xl lg:text-6xl xl:text-7xl font-bold lg:tracking-tight">
         Eau La Maman
       </h1>
       <p class="text-lg mt-4 text-slate-600 max-w-xl">
@@ -21,16 +21,15 @@
         La Maman.
       </p>
       <div class="mt-6 flex flex-col sm:flex-row gap-3">
+        <LandingLink class="sm:hidden" href="/connexion">Connexion</LandingLink>
+        <LandingLink class="hidden sm:inline-flex" href="/contact">Contactez-nous</LandingLink>
+        <LandingLink class="sm:hidden" size="lg" styleName="outline" href="/inscription">Inscription</LandingLink>
         <LandingLink
-          href="/contact"
-          >Contactez-nous</LandingLink
-        >
-        <LandingLink
+          class="hidden sm:inline-flex"
           size="lg"
           styleName="outline"
           href="/contact"
-          >Devenez partenaire</LandingLink
-        >
+        >Devenez partenaire</LandingLink>
       </div>
     </div>
   </main>

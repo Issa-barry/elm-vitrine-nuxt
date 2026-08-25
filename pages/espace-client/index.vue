@@ -57,7 +57,14 @@ const notifications = [
       <NuxtLink to="/espace-client/vehicules">Tout voir <i class="pi pi-arrow-right" /></NuxtLink>
     </div>
     <div v-if="vehicles.length" class="client-mobile-vehicle-list">
-      <NuxtLink v-for="vehicle in vehicles" :key="vehicle.id" :to="`/espace-client/vehicules/${vehicle.id}`" class="client-mobile-vehicle-row">
+      <NuxtLink
+        v-for="vehicle in vehicles"
+        :key="vehicle.id"
+        :to="`/espace-client/vehicules/${vehicle.id}`"
+        external
+        class="client-mobile-vehicle-row"
+        :aria-label="`Voir les détails de ${vehicle.name}`"
+      >
         <div>
           <span class="client-mobile-vehicle-name">{{ vehicle.name }}</span>
           <span class="client-mobile-vehicle-registration">{{ vehicle.registration }}</span>
@@ -118,7 +125,7 @@ const notifications = [
         </div>
         <ul class="list-none p-0 m-0">
           <li v-for="vehicle in vehicles" :key="vehicle.registration" class="border-b border-surface last:border-b-0">
-            <NuxtLink :to="`/espace-client/vehicules/${vehicle.id}`" class="flex items-center justify-between gap-4 py-4 group">
+            <NuxtLink :to="`/espace-client/vehicules/${vehicle.id}`" external class="flex items-center justify-between gap-4 py-4 group">
               <div class="min-w-0"><span class="block text-surface-900 dark:text-surface-0 font-semibold group-hover:text-primary">{{ vehicle.name }}</span><span class="block text-muted-color text-sm mt-1">{{ vehicle.registration }}</span></div>
               <div class="shrink-0 text-right"><strong class="block text-surface-900 dark:text-surface-0">{{ formatGnf(vehicle.commission) }}</strong><span class="block text-green-500 text-sm mt-1">{{ vehicle.status }}</span></div>
             </NuxtLink>

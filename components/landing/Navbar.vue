@@ -67,16 +67,16 @@ const open = ref(false);
           </li>
         </ul>
         <div class="lg:hidden flex items-center mt-3 gap-4">
-          <LandingLink href="/espace-client" styleName="muted" block size="md"
+          <LandingLink href="/connexion" styleName="muted" block size="md"
             >Connexion</LandingLink
           >
-          <LandingLink href="#" size="md" block>Inscription</LandingLink>
+          <LandingLink href="/inscription" size="md" block>Inscription</LandingLink>
         </div>
       </nav>
       <div>
         <div class="hidden lg:flex items-center gap-4">
-          <NuxtLink href="/espace-client">Connexion</NuxtLink>
-          <LandingLink href="#" size="md">Inscription</LandingLink>
+          <NuxtLink href="/connexion">Connexion</NuxtLink>
+          <LandingLink href="/inscription" size="md">Inscription</LandingLink>
         </div>
       </div>
     </header>
