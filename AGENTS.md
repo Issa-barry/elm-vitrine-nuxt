@@ -73,18 +73,40 @@ Règles pour tout agent IA intervenant sur ce dépôt :
    les valeurs sensibles vivent uniquement dans les secrets GitHub Actions
    ou le panneau Hostinger de l'environnement concerné (voir
    [`docs/environment.md`](docs/environment.md)).
+6. Ne pas faire travailler simultanément plusieurs agents sur les mêmes
+   fichiers ou le même chantier sans coordination : ça écrase ou annule des
+   modifications concurrentes (vécu en pratique — un fichier réédité 3 fois
+   avant de tenir, un correctif `$fetch` refait en double). Quand un agent
+   détecte des modifications concurrentes sur les fichiers qu'il s'apprête
+   à toucher (diff qui change entre deux lectures, fichier revenu à un état
+   antérieur sans action de sa part), il doit arrêter de réécrire ces
+   fichiers et signaler le conflit de périmètre plutôt que de retenter en
+   boucle.
 
-### Dette connue : `package-lock.json` et `npm ci`
+### Historique : incident `package-lock.json` / `npm ci` (résolu)
 
-`ci.yml` utilise `npm install` plutôt que `npm ci` : le lock file a une
-incohérence préexistante sur une dépendance optionnelle transitive
-(`@emnapi/core`, via `unrs-resolver` ← `eslint-plugin-import-x` ←
-`@nuxt/eslint-config`) qui fait échouer `npm ci` en installation stricte.
-Une régénération complète du lock (`rm package-lock.json && npm install`)
-« corrige » ça mais fait sauter tout l'arbre en cascade vers des versions
-majeures plus récentes (`nuxt` 3.9 → 3.21, `@nuxt/schema` 4.x, `vite` 5 → 7…)
-côté npm 10/11 comme sur `ubuntu-latest` — inacceptable sans une vraie
-campagne de tests de non-régression. Ne pas tenter de « corriger » ça par un
-`rm package-lock.json && npm install` sans validation complète ; une
-resynchronisation ciblée (bump précis de la seule dépendance en cause)
-reste à faire.
+`npm ci` a échoué un temps avec `Missing: @emnapi/core@1.11.3 from lock
+file`. Cause exacte (tracée via le log verbeux npm, cf. `placeDep ROOT`) :
+`@napi-rs/wasm-runtime@1.2.3` (dépendance de
+`@unrs/resolver-binding-wasm32-wasi`, lui-même dépendance optionnelle de
+`unrs-resolver` ← `eslint-plugin-import-x` ← `@nuxt/eslint-config`) déclare
+`@emnapi/core`/`@emnapi/runtime` en **peerDependencies non optionnelles** —
+npm les place donc à la racine (`node_modules/@emnapi/*`), mais ces deux
+entrées manquaient du lock, en plus d'un flag `"peer": true` resté
+incorrectement collé sur ~20 paquets sans rapport (nuxt, vite, vue,
+typescript, esbuild, rollup, tailwindcss...). Une régénération complète
+(`rm package-lock.json && npm install`) « corrige » ça mais fait sauter tout
+l'arbre en cascade vers des versions majeures plus récentes (`nuxt` 3.9 →
+3.21, `@nuxt/schema` 4.x, `vite` 5 → 7) — **rejeté**, jamais committé.
+
+Correctif réellement appliqué, sans aucun changement de version : `npm
+install --package-lock-only` (sans supprimer le lock au préalable) avec le
+Node 22/npm 10 embarqué par Laragon (`bin/nodejs/node-v22`, même version que
+`ci.yml`) — npm a alors ajouté les 2 entrées manquantes et retiré les flags
+`"peer"` erronés sans toucher une seule version résolue (diff de 46 lignes,
+vérifié paquet par paquet). `ci.yml` est donc bien sur `npm ci`.
+
+Si `npm ci` recasse un jour pour une raison similaire : ne jamais supprimer
+`package-lock.json` avant d'avoir tenté `npm install --package-lock-only`
+seul (sans suppression) — c'est la commande qui répare une incohérence
+ciblée sans réengager toute la résolution depuis zéro.
