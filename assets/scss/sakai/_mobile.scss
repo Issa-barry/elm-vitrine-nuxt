@@ -11,29 +11,23 @@
   }
 }
 
-@media (max-width: 767px) {
+// Tablet portrait (~768–1024px, orientation: portrait) is treated as
+// "mobile with more room to breathe": the CONTENT block below reuses this
+// file's existing mobile markup/density via $bp-mobile-or-tablet-portrait.
+// The chrome (tablet topbar/sidebar, mobile bottom nav) stays governed by
+// $bp-mobile only, in its own block right after — so the current tablet
+// topbar and the mobile bottom nav are both completely unaffected by this.
+// Tablet LANDSCAPE is intentionally out of scope here (separate task).
+$bp-mobile: "(max-width: 767px)";
+$bp-tablet-portrait: "(min-width: 768px) and (max-width: 1024px) and (orientation: portrait)";
+$bp-mobile-or-tablet-portrait: "#{$bp-mobile}, #{$bp-tablet-portrait}";
+
+// --- Chrome: tablet topbar/sidebar hide, mobile topbar, mobile bottom nav —
+// phone only. Never extended to tablet portrait: the existing tablet topbar
+// must stay exactly as it is today.
+@media #{$bp-mobile} {
   .elm-client-shell {
-    --client-mobile-bar-height: 4.5rem;
-    --client-mobile-nav-height: 5.25rem;
-    --client-mobile-content-top: env(safe-area-inset-top);
-    --client-mobile-content-height-offset: 0rem;
-    width: 100%;
-    max-width: 100%;
-    min-height: 100dvh;
-    overflow-x: clip;
-    background: var(--surface-ground);
-
-    &.has-client-mobile-topbar {
-      --client-mobile-content-top: calc(var(--client-mobile-bar-height) + env(safe-area-inset-top));
-      --client-mobile-content-height-offset: var(--client-mobile-bar-height);
-    }
-
     .client-desktop-chrome,
-    .client-desktop-dashboard,
-    .client-desktop-deliveries,
-    .client-desktop-expenses,
-    .client-desktop-vehicles,
-    .client-desktop-vehicle-detail,
     .layout-footer,
     > .layout-mask {
       display: none;
@@ -54,6 +48,145 @@
       border-bottom: 1px solid var(--surface-border);
       box-shadow: 0 0.35rem 1.6rem rgba(15, 23, 42, 0.06);
       backdrop-filter: blur(18px);
+    }
+
+    .client-mobile-topbar-side {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex: 0 0 auto;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .client-mobile-avatar,
+    .client-mobile-icon-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2.75rem;
+      height: 2.75rem;
+      border-radius: 50%;
+    }
+
+    .client-mobile-avatar {
+      color: var(--primary-contrast-color);
+      background: var(--primary-color);
+      font-size: 1.1rem;
+    }
+
+    .client-mobile-icon-button {
+      position: relative;
+      cursor: pointer;
+      color: inherit;
+      font-size: 1.08rem;
+      text-decoration: none;
+    }
+
+    .client-mobile-icon-button:active,
+    .client-mobile-nav-item:active {
+      transform: scale(0.96);
+    }
+
+    .client-mobile-theme-button {
+      color: var(--primary-contrast-color);
+      background: var(--primary-color);
+    }
+
+    .client-mobile-config-wrapper {
+      position: relative;
+    }
+
+    .client-mobile-config-wrapper .config-panel {
+      position: fixed !important;
+      top: calc(var(--client-mobile-bar-height) + env(safe-area-inset-top) - 0.25rem) !important;
+      right: 0.75rem !important;
+      left: 0.75rem !important;
+      width: auto !important;
+      max-height: calc(100dvh - var(--client-mobile-bar-height) - 1.5rem);
+      overflow-y: auto;
+    }
+
+    .layout-main-container {
+      min-height: 100dvh;
+      margin: 0;
+      padding: var(--client-mobile-content-top) 0 calc(var(--client-mobile-nav-height) + env(safe-area-inset-bottom));
+    }
+
+    .layout-main {
+      width: 100%;
+      padding: 0;
+    }
+
+    .client-mobile-bottom-nav {
+      position: fixed;
+      z-index: 999;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      min-height: calc(var(--client-mobile-nav-height) + env(safe-area-inset-bottom));
+      padding: 0.55rem 0.75rem calc(0.45rem + env(safe-area-inset-bottom));
+      background: color-mix(in srgb, var(--surface-card) 96%, transparent);
+      border-top: 1px solid var(--surface-border);
+      box-shadow: 0 -0.5rem 1.75rem rgba(15, 23, 42, 0.07);
+      backdrop-filter: blur(20px);
+    }
+
+    .client-mobile-nav-item {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 0.35rem;
+      min-height: 3.5rem;
+      color: var(--text-color-secondary);
+      border-radius: 1rem;
+      font-size: 0.71rem;
+      font-weight: 700;
+      transition: color 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
+    }
+
+    .client-mobile-nav-item i {
+      font-size: 1.35rem;
+    }
+
+    .client-mobile-nav-item.is-active {
+      color: var(--primary-color);
+      background: color-mix(in srgb, var(--primary-color) 10%, transparent);
+    }
+  }
+}
+
+// --- Content: dashboard, deliveries, expenses, vehicles, vehicle-detail ----
+// Phone AND tablet portrait: reuse the same markup/density everywhere so
+// tablet portrait reads as "mobile with more room to breathe", not a
+// shrunk desktop. True desktop and tablet LANDSCAPE (separate task) keep
+// the .client-desktop-* markup untouched.
+@media #{$bp-mobile-or-tablet-portrait} {
+  .elm-client-shell {
+    --client-mobile-bar-height: 4.5rem;
+    --client-mobile-nav-height: 5.25rem;
+    --client-mobile-content-top: env(safe-area-inset-top);
+    --client-mobile-content-height-offset: 0rem;
+    width: 100%;
+    max-width: 100%;
+    min-height: 100dvh;
+    overflow-x: clip;
+    background: var(--surface-ground);
+
+    &.has-client-mobile-topbar {
+      --client-mobile-content-top: calc(var(--client-mobile-bar-height) + env(safe-area-inset-top));
+      --client-mobile-content-height-offset: var(--client-mobile-bar-height);
+    }
+
+    .client-desktop-dashboard,
+    .client-desktop-deliveries,
+    .client-desktop-expenses,
+    .client-desktop-vehicles,
+    .client-desktop-vehicle-detail {
+      display: none;
     }
 
     .client-mobile-page-topbar {
@@ -179,114 +312,10 @@
       line-height: 1.45;
     }
 
-    .client-mobile-topbar-side {
-      position: relative;
-      z-index: 1;
-      display: flex;
-      flex: 0 0 auto;
-      align-items: center;
-      gap: 0.35rem;
-    }
-
-    .client-mobile-avatar,
-    .client-mobile-icon-button {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 2.75rem;
-      height: 2.75rem;
-      border-radius: 50%;
-    }
-
-    .client-mobile-avatar {
-      color: var(--primary-contrast-color);
-      background: var(--primary-color);
-      font-size: 1.1rem;
-    }
-
-    .client-mobile-icon-button {
-      position: relative;
-      cursor: pointer;
-      color: inherit;
-      font-size: 1.08rem;
-      text-decoration: none;
-    }
-
-    .client-mobile-icon-button:active,
-    .client-mobile-nav-item:active,
     .client-mobile-identity-qr-trigger:active,
     .client-mobile-summary-card:active,
     .client-mobile-vehicle-row:active {
       transform: scale(0.96);
-    }
-
-    .client-mobile-theme-button {
-      color: var(--primary-contrast-color);
-      background: var(--primary-color);
-    }
-
-    .client-mobile-config-wrapper {
-      position: relative;
-    }
-
-    .client-mobile-config-wrapper .config-panel {
-      position: fixed !important;
-      top: calc(var(--client-mobile-bar-height) + env(safe-area-inset-top) - 0.25rem) !important;
-      right: 0.75rem !important;
-      left: 0.75rem !important;
-      width: auto !important;
-      max-height: calc(100dvh - var(--client-mobile-bar-height) - 1.5rem);
-      overflow-y: auto;
-    }
-
-    .layout-main-container {
-      min-height: 100dvh;
-      margin: 0;
-      padding: var(--client-mobile-content-top) 0 calc(var(--client-mobile-nav-height) + env(safe-area-inset-bottom));
-    }
-
-    .layout-main {
-      width: 100%;
-      padding: 0;
-    }
-
-    .client-mobile-bottom-nav {
-      position: fixed;
-      z-index: 999;
-      right: 0;
-      bottom: 0;
-      left: 0;
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      min-height: calc(var(--client-mobile-nav-height) + env(safe-area-inset-bottom));
-      padding: 0.55rem 0.75rem calc(0.45rem + env(safe-area-inset-bottom));
-      background: color-mix(in srgb, var(--surface-card) 96%, transparent);
-      border-top: 1px solid var(--surface-border);
-      box-shadow: 0 -0.5rem 1.75rem rgba(15, 23, 42, 0.07);
-      backdrop-filter: blur(20px);
-    }
-
-    .client-mobile-nav-item {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-direction: column;
-      gap: 0.35rem;
-      min-height: 3.5rem;
-      color: var(--text-color-secondary);
-      border-radius: 1rem;
-      font-size: 0.71rem;
-      font-weight: 700;
-      transition: color 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
-    }
-
-    .client-mobile-nav-item i {
-      font-size: 1.35rem;
-    }
-
-    .client-mobile-nav-item.is-active {
-      color: var(--primary-color);
-      background: color-mix(in srgb, var(--primary-color) 10%, transparent);
     }
 
     .client-mobile-dashboard {
@@ -2020,6 +2049,44 @@
       font-size: 0.8rem;
       font-weight: 800;
       cursor: pointer;
+    }
+  }
+}
+
+// --- Tablet portrait only: refine the reused mobile content -----------------
+// No fixed mobile topbar / bottom nav exist at this breakpoint (the tablet
+// topbar/sidebar chrome stays exactly as today, see the phone-only block
+// above), so the height variables they normally reserve must collapse to 0
+// here — otherwise dashboard/deliveries/expenses/vehicles/vehicle-detail
+// would keep a dead gap sized for chrome that isn't rendered. Content also
+// gets a comfortable centered max-width instead of stretching edge to edge,
+// plus a modest (not doubled) padding bump vs phone.
+@media #{$bp-tablet-portrait} {
+  .elm-client-shell {
+    --client-mobile-nav-height: 0rem;
+    --client-mobile-content-top: env(safe-area-inset-top);
+    --client-mobile-content-height-offset: 0rem;
+
+    .client-mobile-dashboard,
+    .client-mobile-deliveries,
+    .client-mobile-expenses,
+    .client-mobile-vehicles-page,
+    .client-mobile-vehicle-detail {
+      max-width: 42rem;
+      margin-inline: auto;
+      padding-inline: 1.75rem;
+    }
+
+    // The sticky in-page header normally "bleeds" past its container by
+    // exactly the container's own horizontal padding (1rem on phone) so it
+    // spans full-width under the tablet topbar too; keep that math correct
+    // now that the container's padding-inline is 1.75rem here.
+    .client-mobile-deliveries > .client-mobile-page-topbar,
+    .client-mobile-expenses > .client-mobile-page-topbar,
+    .client-mobile-vehicles-page > .client-mobile-page-topbar,
+    .client-mobile-vehicle-detail > .client-mobile-page-topbar {
+      width: calc(100% + 3.5rem);
+      margin-inline: -1.75rem;
     }
   }
 }

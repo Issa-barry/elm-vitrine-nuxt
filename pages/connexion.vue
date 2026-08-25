@@ -551,4 +551,15 @@ onBeforeUnmount(() => {
   font-weight: 800;
   text-decoration: none;
 }
+
+// Tablette portrait uniquement (~768–1024px) : cette carte n'a pas le bug de
+// hauteur forcée des écrans inscription/mot-de-passe-oublié (elle suit déjà
+// sa propre hauteur), mais reste cohérente avec eux niveau largeur — un peu
+// plus large que le point de rupture desktop (24rem) pour ne pas paraître
+// trop étroite sur iPad. Le paysage tablette et le desktop gardent 24rem.
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
+  .connexion-card {
+    max-width: 28rem;
+  }
+}
 </style>
