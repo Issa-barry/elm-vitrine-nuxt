@@ -1,5 +1,15 @@
 import { defineConfig, devices } from "@playwright/test";
 
+// Base E2E volontairement pas encore câblée dans ci.yml (pas de job bloquant
+// sur les PR) : sur la machine de dev où cette suite a été écrite, 1-2 tests
+// sur 16 sont parfois flaky à cause du compile à la volée de Vite (nuxt dev)
+// sous charge — comportement machine-dépendant, pas un bug d'app ni de
+// sélecteur (vérifié en isolant l'interaction dans un script direct, qui
+// réussit systématiquement). `retries: 1` en CI (plus bas) devrait absorber
+// ça sur un runner dédié, mais ça n'a pas encore été confirmé en conditions
+// CI réelles avant d'en faire un check obligatoire. Lancer manuellement via
+// `npm run test:e2e` pour l'instant.
+//
 // Cible `nuxt dev` (pas un build) : plusieurs pages (inscription,
 // mot-de-passe-oublie) ont un mode `isUiPreview = import.meta.dev` qui
 // simule les réponses backend sans appel réseau réel — indispensable ici

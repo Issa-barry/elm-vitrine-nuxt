@@ -19,7 +19,9 @@ test.describe("Inscription", () => {
 
     // Étape 2 : identité. "Nom" en exact:true : sinon getByLabel("Nom") matche
     // aussi "Prénom", qui contient littéralement "nom" comme sous-chaîne.
-    await expect(page.getByRole("heading", { name: "Comment vous appelez-vous ?" })).toBeVisible({ timeout: 10_000 });
+    // Timeout généreux : première visite de /inscription dans la suite,
+    // donc premier compile à la volée de cette route par Vite (dev only).
+    await expect(page.getByRole("heading", { name: "Comment vous appelez-vous ?" })).toBeVisible({ timeout: 20_000 });
     await page.getByLabel("Prénom").fill("Moussa");
     await page.getByLabel("Nom", { exact: true }).fill("Camara");
     await page.getByRole("button", { name: "Continuer" }).click();
