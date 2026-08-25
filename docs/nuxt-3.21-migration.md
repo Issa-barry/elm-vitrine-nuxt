@@ -102,6 +102,26 @@ dépendances) :
   - `robots.txt` : `Disallow: /` en `NUXT_PUBLIC_ENVIRONMENT=local`, `Allow: /` en `production` — logique noindex intacte
 - Contrôle visuel (Playwright + Chromium headless, `chrome-win64` déjà en cache local) sur les 8 pages ci-dessus × 3 largeurs (390/768/1440 px) : 24 captures, **0 erreur console**, thème PrimeVue ELM et mise en page responsive visuellement intacts sur l'échantillon inspecté (landing, connexion, tableau de bord, véhicules mobile)
 
+## Suivi : peut-on retirer `--legacy-peer-deps` ?
+
+Vérifié le 2026-08-25 : `@nuxt/devtools@3.4.2` est déjà le dernier patch de
+la ligne 3.4.x (compatible Nuxt 3 — la suite 4.0.0-alpha.* est réservée à
+Nuxt 4, hors périmètre). `vite-plugin-vue-tracer@1.5.0` (déjà résolu dans
+notre arbre) est aussi sa dernière version publiée, et déclare toujours
+`vite: "^6.0.0 || ^7.0.0 || ^8.0.0-0"` en peerDependency — aucune version
+plus récente ne change cette plage. Le conflit qui fait planter npm 10 en
+résolution stricte (bug Arborist `edgesOut`) n'est donc pas un simple
+retard de version corrigible par un bump : c'est soit un bug npm en
+attente de correctif upstream, soit une incohérence de peerDependencies
+qui ne se résoudra que par une évolution de `@nuxt/devtools` lui-même.
+
+**Conclusion : ne pas retirer `--legacy-peer-deps` maintenant.** Rien à
+mettre à jour côté projet sans une migration Nuxt 4 (hors périmètre, cf.
+plus haut). À revérifier périodiquement (`npm view @nuxt/devtools
+versions`) — si une 3.4.3+ ou une nouvelle version de
+`vite-plugin-vue-tracer` assouplit sa plage `vite`, retester `npm ci` sans
+le flag avant de le retirer de `ci.yml`.
+
 ## PWA (`@vite-pwa/nuxt`) — note pour plus tard
 
 Pas de contrainte de version explicite trouvée dans les `peerDependencies`
