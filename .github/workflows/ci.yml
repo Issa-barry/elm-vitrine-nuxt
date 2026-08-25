@@ -25,8 +25,17 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
+      # --legacy-peer-deps nécessaire depuis Nuxt 3.21.x : le sous-arbre
+      # @nuxt/devtools -> vite-plugin-vue-tracer déclare des peerDependencies
+      # sur vite conflictuelles avec @nuxt/vite-builder (versions différentes
+      # de vite selon le consommateur). En résolution stricte, npm 10 plante
+      # avec « Cannot read properties of null (reading 'edgesOut') » — bug
+      # d'Arborist reproduit à la fois sur Windows et sur ubuntu-latest, pas
+      # un problème d'environnement. Le lock a été généré avec le même flag
+      # (voir docs/nuxt-3.21-migration.md) ; sans lui, `npm ci` refuserait le
+      # lock (résolution stricte ≠ résolution ayant produit le lock).
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --legacy-peer-deps
 
       - name: Lint (ESLint)
         run: npm run lint
