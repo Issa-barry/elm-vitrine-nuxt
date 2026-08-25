@@ -1,0 +1,115 @@
+@use "mixins" as *;
+
+.elm-client-shell {
+  .layout-sidebar {
+    position: fixed;
+    top: 6rem;
+    left: 2rem;
+    z-index: 999;
+    width: 20rem;
+    height: calc(100vh - 8rem);
+    padding: 0.5rem 1.5rem;
+    overflow-y: auto;
+    user-select: none;
+    background-color: var(--surface-overlay);
+    border-radius: var(--content-border-radius);
+    transition: transform var(--layout-section-transition-duration), left var(--layout-section-transition-duration);
+  }
+
+  .layout-menu {
+    padding: 0;
+    margin: 0;
+    list-style: none;
+
+    .layout-root-menuitem {
+      > .layout-menuitem-root-text {
+        margin: 0.75rem 0;
+        color: var(--text-color);
+        font-size: 0.857rem;
+        font-weight: 700;
+        text-transform: uppercase;
+      }
+
+      > .layout-menuitem-link {
+        display: none;
+      }
+    }
+
+    ul {
+      padding: 0;
+      margin: 0;
+      list-style: none;
+
+      .layout-menuitem-link {
+        position: relative;
+        display: flex;
+        align-items: center;
+        width: 100%;
+        padding: 0.75rem 1rem;
+        color: var(--text-color);
+        text-align: left;
+        border-radius: var(--content-border-radius);
+        cursor: pointer;
+        user-select: none;
+        outline: 0;
+        transition: box-shadow var(--element-transition-duration);
+
+        .layout-menuitem-icon {
+          margin-right: 0.5rem;
+        }
+
+        .layout-submenu-toggler {
+          margin-left: auto;
+          font-size: 75%;
+          transition: transform var(--element-transition-duration);
+        }
+
+        &.active-route {
+          color: var(--primary-color);
+          font-weight: 700;
+        }
+
+        &:hover {
+          background-color: var(--surface-hover);
+        }
+
+        &:focus-visible {
+          @include focused-inset();
+        }
+      }
+
+      ul {
+        overflow: hidden;
+        border-radius: var(--content-border-radius);
+
+        .layout-menuitem-link {
+          margin-left: 1rem;
+        }
+      }
+    }
+
+    li.active-menuitem > .layout-menuitem-link .layout-submenu-toggler {
+      transform: rotate(-180deg);
+    }
+  }
+
+  .layout-submenu-enter-from,
+  .layout-submenu-leave-to {
+    max-height: 0;
+  }
+
+  .layout-submenu-enter-to,
+  .layout-submenu-leave-from {
+    max-height: 1000px;
+  }
+
+  .layout-submenu-leave-active {
+    overflow: hidden;
+    transition: max-height 0.45s cubic-bezier(0, 1, 0, 1);
+  }
+
+  .layout-submenu-enter-active {
+    overflow: hidden;
+    transition: max-height 1s ease-in-out;
+  }
+}

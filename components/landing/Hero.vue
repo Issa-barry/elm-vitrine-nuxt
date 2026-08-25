@@ -13,29 +13,23 @@
     </div>
 
     <div>
-      <h1 class="text-5xl lg:text-6xl xl:text-7xl font-bold lg:tracking-tight">
-        Marketing website done with Nuxt
+      <h1 class="landing-theme-title text-5xl lg:text-6xl xl:text-7xl font-bold lg:tracking-tight">
+        Eau La Maman
       </h1>
       <p class="text-lg mt-4 text-slate-600 max-w-xl">
-        Nuxtship is a starter template for startups, marketing websites &
-        landing pages.<wbr /> Built with Nuxt & TailwindCSS. You can quickly
-        create any website with this starter.
+        Gérez simplement vos livraisons, vos véhicules et vos revenus avec Eau
+        La Maman.
       </p>
       <div class="mt-6 flex flex-col sm:flex-row gap-3">
+        <LandingLink class="sm:hidden" href="/connexion">Connexion</LandingLink>
+        <LandingLink class="hidden sm:inline-flex" href="/contact">Contactez-nous</LandingLink>
+        <LandingLink class="sm:hidden" size="lg" styleName="outline" href="/inscription">Inscription</LandingLink>
         <LandingLink
-          href="https://github.com/Gr33nW33n/nuxtship-template"
-          target="_blank"
-          rel="noopener"
-          >Get Started</LandingLink
-        >
-        <LandingLink
+          class="hidden sm:inline-flex"
           size="lg"
           styleName="outline"
-          rel="noopener"
-          href="https://github.com/Gr33nW33n/nuxtship-template"
-          target="_blank"
-          >View Repo</LandingLink
-        >
+          href="/contact"
+        >Devenez partenaire</LandingLink>
       </div>
     </div>
   </main>

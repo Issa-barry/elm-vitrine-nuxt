@@ -19,10 +19,10 @@ const sizes = {
 };
 
 const styles = {
-  outline: "bg-white border-2 border-black hover:bg-gray-100 text-black",
-  primary: "bg-black text-white hover:bg-gray-800  border-2 border-transparent",
-  inverted: "bg-white text-black border-2 border-transparent",
-  muted: "bg-gray-100 hover:bg-gray-200 border-2 border-transparent",
+  outline: "landing-theme-action--outline border-2",
+  primary: "landing-theme-action--primary border-2",
+  inverted: "landing-theme-action--inverted border-2",
+  muted: "landing-theme-action--muted border-2",
 };
 </script>
 
@@ -30,7 +30,7 @@ const styles = {
   <NuxtLink
     :href="href"
     :class="[
-      'rounded text-center transition focus-visible:ring-2 ring-offset-2 ring-gray-200',
+      'landing-theme-action rounded text-center transition',
       block && 'w-full',
       sizes[size],
       styles[styleName],
