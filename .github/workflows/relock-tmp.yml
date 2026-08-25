@@ -5,7 +5,11 @@ name: relock-tmp
 # multi-plateforme (npm/cli#4828) qui fait disparaître les binaires natifs
 # Linux quand le lock est régénéré depuis Windows. Supprimé juste après usage.
 on:
-  workflow_dispatch:
+  push:
+    branches:
+      - dev
+    paths:
+      - '.github/workflows/relock-tmp.yml'
 
 jobs:
   relock:
