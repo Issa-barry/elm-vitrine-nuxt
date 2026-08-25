@@ -83,6 +83,33 @@ Règles pour tout agent IA intervenant sur ce dépôt :
    fichiers et signaler le conflit de périmètre plutôt que de retenter en
    boucle.
 
+## PWA
+
+Voir [`docs/pwa.md`](docs/pwa.md) pour le détail (manifest, service worker,
+icônes, mise à jour, environnements). Règles pour tout agent IA :
+
+1. Aucune API métier (Laravel, `/api/*` proxy Nitro compris) en `CacheFirst`
+   ou toute autre stratégie de cache dans le service worker — `NetworkOnly`
+   uniquement (voir `nuxt.config.ts`, clé `pwa.workbox.runtimeCaching`).
+2. Aucune donnée privée (commandes, véhicules, dépenses, gains/commissions,
+   profil) ne doit être mise en cache par le service worker, ni stockée en
+   IndexedDB/localStorage par lui.
+3. Aucun secret dans le manifest (`server/routes/manifest.webmanifest.ts`)
+   ou le service worker — mêmes règles que la section
+   [Variables d'environnement](#variables-denvironnement) ci-dessus.
+4. Ne jamais définir `ssr: false`, même partiellement, pour les besoins de la
+   PWA. Le SSR/SEO de la vitrine publique est non négociable.
+5. Pas d'offline métier (cache de données, IndexedDB métier, Background
+   Sync, file d'attente offline, notifications push) sans décision explicite
+   de l'utilisateur — l'absence de ces fonctionnalités en V1 est un choix de
+   portée assumé, pas un oubli à combler spontanément.
+6. Le manifest est généré à la requête (`server/routes/manifest.webmanifest.ts`),
+   pas au build (`pwa.manifest: false` dans `nuxt.config.ts`) : le même
+   artefact `.output` peut tourner sur plusieurs environnements Hostinger, le
+   nom affiché doit donc rester dynamique (`runtimeConfig.public.appName`).
+   Ne pas réactiver la génération statique du module sans re-vérifier ce
+   point.
+
 ### Historique : incident `package-lock.json` / `npm ci` (résolu)
 
 `npm ci` a échoué un temps avec `Missing: @emnapi/core@1.11.3 from lock

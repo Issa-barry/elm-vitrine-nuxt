@@ -899,8 +899,14 @@ const back = () => {
     padding: 2rem;
   }
 
+  // La carte suit désormais la hauteur de son contenu (formulaire court) au
+  // lieu d'un min-height artificiel (min(45rem, ...)) qui laissait un grand
+  // vide sous le bouton sur tablette/desktop. margin-top la place dans le
+  // tiers supérieur de l'écran plutôt que collée en haut ou centrée pile au
+  // milieu (ce qui paraît trop bas sur les grands écrans).
   .forgot-shell {
-    min-height: min(45rem, calc(100dvh - 4rem));
+    min-height: 0;
+    margin: min(8dvh, 4rem) auto 3rem;
     overflow: hidden;
     border: 1px solid var(--p-content-border-color, #e2e8f0);
     border-radius: 1.5rem;
@@ -909,7 +915,17 @@ const back = () => {
 
   .forgot-content,
   .forgot-success {
-    min-height: calc(min(45rem, 100dvh - 4rem) - 72px);
+    min-height: 0;
+  }
+}
+
+// Tablette portrait uniquement (~768–1024px) : une carte nettement plus
+// large que le point de rupture desktop (30rem) ci-dessus, en restant à une
+// seule colonne — un formulaire pensé pour iPad, pas un écran téléphone
+// posé au centre. Le paysage tablette et le desktop gardent 30rem.
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
+  .forgot-shell {
+    max-width: 34rem;
   }
 }
 </style>

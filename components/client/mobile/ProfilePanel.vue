@@ -8,27 +8,38 @@ const name = "Issa M.";
 const role = "Propriétaire";
 const phone = "+224 622 60 26 93";
 
-type ProfileRow = { label: string; to?: string; action?: () => void };
+type ProfileRow = { label: string; icon: string; to?: string; action?: () => void };
 type ProfileGroup = { title: string; rows: ProfileRow[] };
 
 // Seules les lignes pointant vers une route réelle ou réutilisant un
 // mécanisme existant sont listées ici. Voir le récapitulatif fourni au
 // dernier message pour la liste des actions volontairement omises.
+// "Reconnaissance faciale" et "Modifier le mot de passe" n'ont pas encore de
+// destination réelle (pas de page dédiée côté app) : elles restent visibles
+// dans la liste, sans lien/action, plutôt que de pointer vers une route
+// inventée.
 const groups: ProfileGroup[] = [
   {
     title: "Profil",
-    rows: [{ label: "Modifier le profil", to: "/espace-client/profil" }],
+    rows: [{ label: "Modifier le profil", icon: "pi-user-edit", to: "/espace-client/profil" }],
   },
   {
     title: "Services",
     rows: [
-      { label: "Livraisons", to: "/espace-client/activite" },
-      { label: "Véhicules", to: "/espace-client/vehicules" },
+      { label: "Livraisons", icon: "pi-box", to: "/espace-client/activite" },
+      { label: "Véhicules", icon: "pi-car", to: "/espace-client/vehicules" },
+    ],
+  },
+  {
+    title: "Sécurité",
+    rows: [
+      { label: "Reconnaissance faciale", icon: "pi-face-smile" },
+      { label: "Modifier le mot de passe", icon: "pi-key" },
     ],
   },
   {
     title: "Paramètres",
-    rows: [{ label: "Apparence", action: () => toggleConfigMenu() }],
+    rows: [{ label: "Apparence", icon: "pi-palette", action: () => toggleConfigMenu() }],
   },
 ];
 
@@ -61,10 +72,12 @@ const confirmLogout = () => {
       <div class="client-mobile-profile-rows">
         <template v-for="row in group.rows" :key="row.label">
           <NuxtLink v-if="row.to" :to="row.to" class="client-mobile-profile-row">
+            <i :class="['pi', row.icon, 'client-mobile-profile-row-icon']" aria-hidden="true" />
             <span class="client-mobile-profile-row-label">{{ row.label }}</span>
             <i class="pi pi-chevron-right client-mobile-profile-row-chevron" aria-hidden="true" />
           </NuxtLink>
           <button v-else type="button" class="client-mobile-profile-row" @click="row.action?.()">
+            <i :class="['pi', row.icon, 'client-mobile-profile-row-icon']" aria-hidden="true" />
             <span class="client-mobile-profile-row-label">{{ row.label }}</span>
             <i class="pi pi-chevron-right client-mobile-profile-row-chevron" aria-hidden="true" />
           </button>

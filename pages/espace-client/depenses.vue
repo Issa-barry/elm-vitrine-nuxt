@@ -48,6 +48,7 @@ const expenseComparisonMax = computed(() => Math.max(...expenseComparison.value.
 </script>
 
 <template>
+  <div>
   <section class="client-mobile-expenses" aria-labelledby="mobile-expenses-title">
     <ClientMobilePageTopbar
       title="Dépenses"
@@ -170,6 +171,7 @@ const expenseComparisonMax = computed(() => Math.max(...expenseComparison.value.
         </DataTable>
       </div>
     </div>
+  </div>
   </div>
 
 </template>

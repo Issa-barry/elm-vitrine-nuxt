@@ -5,58 +5,42 @@ definePageMeta({
 
 const pricing = [
   {
-    name: "Personal",
-    price: "Free",
+    name: "Pack Bouteille de 350ml",
+    price: "20 000 GNF",
     popular: false,
-    features: [
-      "Lifetime free",
-      "Up to 3 users",
-      "Unlimited Pages",
-      "Nuxt Sub domain",
-      "Basic Integrations",
-      "Community Support",
-    ],
+    features: ["Pack de 15 bouteilles"],
     button: {
-      text: "Get Started",
-      link: "/",
+      text: "Nous contacter",
+      link: "/contact",
     },
   },
   {
-    name: "Startup",
-    price: {
-      monthly: "$19",
-      annual: "$16",
-      discount: "10%",
-      original: "$24",
-    },
-    popular: true,
-    features: [
-      "All Free Features",
-      "Up to 20 users",
-      "20 Custom domains",
-      "Unlimited Collaborators",
-      "Advanced Integrations",
-      "Priority Support",
-    ],
+    name: "Pack Bouteille de 500ml",
+    price: "20 000 GNF",
+    popular: false,
+    features: ["Pack de 12 bouteilles"],
     button: {
-      text: "Get Started",
-      link: "#",
+      text: "Nous contacter",
+      link: "/contact",
     },
   },
   {
-    name: "Enterprise",
-    price: "Custom",
+    name: "Pack Bouteille de 1500ml",
+    price: "25 000 GNF",
     popular: false,
-    features: [
-      "All Pro Features",
-      "Unlimited Custom domains",
-      "99.99% Uptime SLA",
-      "SAML & SSO Integration",
-      "Dedicated Account Manager",
-      "24/7 Phone Support",
-    ],
+    features: ["Pack de 6 bouteilles"],
     button: {
-      text: "Contact us",
+      text: "Nous contacter",
+      link: "/contact",
+    },
+  },
+  {
+    name: "Pack de 25 Sachets",
+    price: "6 000 GNF",
+    popular: false,
+    features: ["Pack de 25 sachets"],
+    button: {
+      text: "Nous contacter",
       link: "/contact",
     },
   },
@@ -66,13 +50,13 @@ const pricing = [
 <template>
   <LandingContainer>
     <LandingSectionhead>
-      <template #title>Pricing</template>
+      <template #title>Nos prix</template>
       <template #desc
-        >Simple & Predictable pricing. No Surprises.</template
+        >Des prix simples et transparents, sans surprise.</template
       >
     </LandingSectionhead>
 
-    <div class="grid md:grid-cols-3 gap-10 mx-auto max-w-screen-lg mt-12">
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-8 mx-auto max-w-6xl mt-12">
       <LandingPricing v-for="item of pricing" :key="item.name" :plan="item" />
     </div>
   </LandingContainer>
