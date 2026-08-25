@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { IFetchError } from "ofetch";
+import { $fetch as rawFetch, type IFetchError } from "ofetch";
 
 definePageMeta({ layout: false });
 
@@ -228,11 +228,21 @@ const checkPhone = async () => {
   globalError.value = "";
 
   try {
-    // Type inféré automatiquement par Nuxt depuis check-phone.post.ts
-    // (CheckPhoneResponse) — pas de générique explicite : cette route est
-    // connue littéralement par le $fetch typé de Nuxt, qui n'accepte pas de
-    // paramètre de type pour les chemins reconnus.
-    const response = await $fetch("/api/register/client/check-phone", {
+    // Contrat exact de check-phone.post.ts (CheckPhoneResponse). $fetch
+    // importé directement depuis "ofetch" (pas le $fetch global augmenté par
+    // Nitro) : une fois toutes les routes server/api/auth/password/*
+    // correctement typées, le "scoring" de route interne de Nitro (matching
+    // du chemin contre toutes les routes connues via des types gabarits
+    // récursifs) dépasse la profondeur de pile supportée par TypeScript sur
+    // cet appel précis (TS2321 "Excessive stack depth" — reproduit en
+    // environnement propre via npm ci isolé ; ni un cast du chemin en
+    // `string`, ni une assertion sur le résultat n'évitent le calcul, qui a
+    // lieu dès la résolution de l'appel). Le $fetch d'ofetch a un générique
+    // ordinaire, sans cette machinerie.
+    const response = await rawFetch<{
+      status: "user_exists" | "prefill_available" | "not_found";
+      prefill: { prenom: string; nom: string } | null;
+    }>("/api/register/client/check-phone", {
       method: "POST",
       body: { telephone: telephone.value },
     });
