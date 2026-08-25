@@ -1022,8 +1022,14 @@ const actionLabel = computed(() =>
     padding: 2rem;
   }
 
+  // La carte suit désormais la hauteur de son contenu (formulaire par étape)
+  // au lieu d'un min-height artificiel (min(50rem, ...)) qui laissait un
+  // grand vide sous les actions sur tablette/desktop. margin-top la place
+  // dans le tiers supérieur de l'écran plutôt que collée en haut ou centrée
+  // pile au milieu (ce qui paraît trop bas sur les grands écrans).
   .registration-shell {
-    min-height: min(50rem, calc(100dvh - 4rem));
+    min-height: 0;
+    margin: min(8dvh, 4rem) auto 3rem;
     overflow: hidden;
     border: 1px solid var(--p-content-border-color, #e2e8f0);
     border-radius: 1.5rem;
@@ -1031,11 +1037,23 @@ const actionLabel = computed(() =>
   }
 
   .registration-content {
-    min-height: calc(min(50rem, 100dvh - 4rem) - 75px);
+    min-height: 0;
   }
 
   .registration-success {
     min-height: calc(100dvh - 4rem);
+  }
+}
+
+// Tablette portrait uniquement (~768–1024px) : une carte nettement plus
+// large que le point de rupture desktop (30rem) ci-dessus, en restant à une
+// seule colonne — un formulaire pensé pour iPad, pas un écran téléphone
+// posé au centre. Le paysage tablette et le desktop gardent 30rem. L'écran
+// de succès (centré plein écran, sans vide "en dessous d'un bouton") n'a
+// pas ce défaut et reste inchangé.
+@media (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
+  .registration-shell {
+    max-width: 34rem;
   }
 }
 
