@@ -36,5 +36,22 @@
     "primeicons": "^7.0.0",
     "primevue": "^4.5.4",
     "qrcode.vue": "^3.10.0"
+  },
+  "overrides": {
+    "tar": "6.2.1",
+    "shell-quote": "1.10.0",
+    "simple-git": "3.36.0",
+    "node-forge": "1.4.0",
+    "ip": "2.0.1",
+    "socks": "2.8.9",
+    "lodash": "4.18.1",
+    "flatted": "3.4.4",
+    "minimatch": "5.1.9",
+    "picomatch": "2.3.2",
+    "svgo": "3.3.5",
+    "undici": "5.28.5",
+    "yaml": "2.9.0",
+    "diff": "5.2.2",
+    "@babel/core": "7.26.10"
   }
 }
