@@ -24,6 +24,7 @@ const notifications = [
 </script>
 
 <template>
+  <div>
   <div class="client-mobile-dashboard">
     <ClientMobileIdentityQr name="Issa M." phone="+224 622 60 26 93" role="Propriétaire" />
 
@@ -146,5 +147,6 @@ const notifications = [
         </ul>
       </div>
     </div>
+  </div>
   </div>
 </template>

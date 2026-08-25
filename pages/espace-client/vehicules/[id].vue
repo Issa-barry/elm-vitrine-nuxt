@@ -232,6 +232,7 @@ const commissionStatusClass = (status: string) => ({
 </script>
 
 <template>
+  <div>
   <section class="client-mobile-vehicle-detail" aria-labelledby="mobile-vehicle-title">
     <ClientMobilePageTopbar
       :title="vehicle.name"
@@ -522,4 +523,5 @@ const commissionStatusClass = (status: string) => ({
       </div>
     </template>
   </Drawer>
+  </div>
 </template>
