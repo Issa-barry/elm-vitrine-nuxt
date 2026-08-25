@@ -81,41 +81,53 @@ const notifications = [
   </div>
 
   <div class="client-desktop-dashboard grid grid-cols-12 gap-8">
-    <div class="col-span-12 lg:col-span-6 xl:col-span-3">
-      <div class="card !mb-0">
-        <div class="flex justify-between mb-4">
-          <div><span class="block text-muted-color font-medium mb-4">Revenus</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ formatGnf(totals.generated) }}</div></div>
-          <div class="flex items-center justify-center bg-orange-100 dark:bg-orange-400/10 rounded-border w-10 h-10"><i class="pi pi-chart-line text-orange-500 !text-xl" /></div>
-        </div>
-        <span class="text-primary font-medium">+420 000 GNF </span><span class="text-muted-color">cette semaine</span>
+    <!--
+      KPI "commissions" : même trio que la carte solde mobile
+      (client-mobile-balance-card + son meta Déjà payé/Reste à payer),
+      recomposé en 3 cartes horizontales à partir de tablette paysage —
+      voir components/client/dashboard/KpiCard.vue. En dessous de lg (grille
+      encore trop étroite pour 3 cartes lisibles), 2 colonnes puis 1 sur la
+      ligne suivante ; à partir de lg, les 3 cartes tiennent sur une ligne.
+      "Cumul des commissions" reste le KPI dominant du dashboard (déjà mis en
+      avant côté mobile) : seule carte en variante "primary".
+    -->
+    <div class="col-span-12">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <ClientDashboardKpiCard
+          label="Cumul des commissions"
+          :amount="formatGnf(totals.generated)"
+          variant="primary"
+          secondary-label="Déjà payé"
+          :secondary-value="formatGnf(totals.paid)"
+        />
+        <ClientDashboardKpiCard
+          label="Déjà payé"
+          :amount="formatGnf(totals.paid)"
+          icon="pi pi-check-circle"
+          icon-background="bg-green-100 dark:bg-green-400/10"
+          icon-color="text-green-500"
+          secondary-label="Commissions déjà versées"
+        />
+        <ClientDashboardKpiCard
+          label="Reste à payer"
+          :amount="formatGnf(totals.remaining)"
+          icon="pi pi-clock"
+          icon-background="bg-orange-100 dark:bg-orange-400/10"
+          icon-color="text-orange-500"
+          secondary-label="Commissions en attente"
+        />
       </div>
     </div>
-    <div class="col-span-12 lg:col-span-6 xl:col-span-3">
-      <div class="card !mb-0">
-        <div class="flex justify-between mb-4">
-          <div><span class="block text-muted-color font-medium mb-4">Dépenses</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">614 200 GNF</div></div>
-          <div class="flex items-center justify-center bg-purple-100 dark:bg-purple-400/10 rounded-border w-10 h-10"><i class="pi pi-wallet text-purple-500 !text-xl" /></div>
+
+    <!-- Dépenses : carte compacte à part, comme sur mobile (client-mobile-summary-card), pas noyée dans la grille KPI. -->
+    <div class="col-span-12">
+      <NuxtLink to="/espace-client/depenses" class="card !mb-0 flex items-center justify-between gap-4 group">
+        <div class="flex items-center gap-4 min-w-0">
+          <div class="flex items-center justify-center bg-purple-100 dark:bg-purple-400/10 rounded-border w-10 h-10 shrink-0"><i class="pi pi-wallet text-purple-500 !text-xl" /></div>
+          <div class="min-w-0"><span class="block text-muted-color font-medium">Dépenses</span><strong class="block text-surface-900 dark:text-surface-0 font-medium text-xl">614 200 GNF</strong></div>
         </div>
-        <span class="text-primary font-medium">10,7 % </span><span class="text-muted-color">des revenus</span>
-      </div>
-    </div>
-    <div class="col-span-12 lg:col-span-6 xl:col-span-3">
-      <div class="card !mb-0">
-        <div class="flex justify-between mb-4">
-          <div><span class="block text-muted-color font-medium mb-4">Déjà payé</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ formatGnf(totals.paid) }}</div></div>
-          <div class="flex items-center justify-center bg-green-100 dark:bg-green-400/10 rounded-border w-10 h-10"><i class="pi pi-check-circle text-green-500 !text-xl" /></div>
-        </div>
-        <span class="text-primary font-medium">Commissions </span><span class="text-muted-color">déjà versées</span>
-      </div>
-    </div>
-    <div class="col-span-12 lg:col-span-6 xl:col-span-3">
-      <div class="card !mb-0">
-        <div class="flex justify-between mb-4">
-          <div><span class="block text-muted-color font-medium mb-4">Véhicules actifs</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">3</div></div>
-          <div class="flex items-center justify-center bg-cyan-100 dark:bg-cyan-400/10 rounded-border w-10 h-10"><i class="pi pi-car text-cyan-500 !text-xl" /></div>
-        </div>
-        <span class="text-primary font-medium">100 % </span><span class="text-muted-color">disponibles</span>
-      </div>
+        <i class="pi pi-arrow-right text-muted-color group-hover:text-primary shrink-0" aria-hidden="true" />
+      </NuxtLink>
     </div>
 
     <div class="col-span-12 xl:col-span-6">
