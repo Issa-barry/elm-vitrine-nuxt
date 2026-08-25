@@ -1,11 +1,20 @@
 name: branch-flow
 
-# Impose le flux de promotion dev -> pre-prod -> production -> main.
-# Inspiré de elm-monolith-vue/.github/workflows/branch-flow.yml (backend) —
-# même logique, dépôt-agnostique, copiée telle quelle.
+# Impose STRICTEMENT le flux de promotion dev -> pre-prod -> production -> main.
+# Seules ces 3 promotions sont autorisées :
+#   dev -> pre-prod
+#   pre-prod -> production
+#   production -> main
+# Toute autre combinaison est refusée explicitement, y compris les fusions
+# "vers l'arrière" (ex. pre-prod -> dev, main -> pre-prod) qui ne sont pas
+# couvertes par la version backend (elm-monolith-vue) dont ce fichier
+# s'inspire à l'origine — celle-ci ne déclenche pas sur `base: dev` et ne
+# bloque donc pas pre-prod/production/main -> dev. Volontairement plus
+# strict ici.
 on:
   pull_request:
     branches:
+      - dev
       - pre-prod
       - production
       - main
@@ -27,19 +36,34 @@ jobs:
 
           echo "PR flow: ${HEAD} -> ${BASE}"
 
-          if [ "$BASE" = "pre-prod" ] && [ "$HEAD" != "dev" ]; then
-            echo "Invalid flow: only 'dev' can be merged into 'pre-prod'."
-            exit 1
-          fi
-
-          if [ "$BASE" = "production" ] && [ "$HEAD" != "pre-prod" ]; then
-            echo "Invalid flow: only 'pre-prod' can be merged into 'production'."
-            exit 1
-          fi
-
-          if [ "$BASE" = "main" ] && [ "$HEAD" != "production" ]; then
-            echo "Invalid flow: only 'production' can be merged into 'main'."
-            exit 1
-          fi
+          case "$BASE" in
+            pre-prod)
+              if [ "$HEAD" != "dev" ]; then
+                echo "Invalid flow: only 'dev' can be merged into 'pre-prod'."
+                exit 1
+              fi
+              ;;
+            production)
+              if [ "$HEAD" != "pre-prod" ]; then
+                echo "Invalid flow: only 'pre-prod' can be merged into 'production'."
+                exit 1
+              fi
+              ;;
+            main)
+              if [ "$HEAD" != "production" ]; then
+                echo "Invalid flow: only 'production' can be merged into 'main'."
+                exit 1
+              fi
+              ;;
+            dev)
+              # dev reçoit normalement des branches de travail quelconques
+              # (feature/*, fix/*...) : seul un retour explicite d'une
+              # branche du flux de promotion est interdit.
+              if [ "$HEAD" = "pre-prod" ] || [ "$HEAD" = "production" ] || [ "$HEAD" = "main" ]; then
+                echo "Invalid flow: '$HEAD' cannot be merged back into 'dev'."
+                exit 1
+              fi
+              ;;
+          esac
 
           echo "Branch flow valid."
