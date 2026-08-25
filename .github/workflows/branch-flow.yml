@@ -1,0 +1,45 @@
+name: branch-flow
+
+# Impose le flux de promotion dev -> pre-prod -> production -> main.
+# Inspiré de elm-monolith-vue/.github/workflows/branch-flow.yml (backend) —
+# même logique, dépôt-agnostique, copiée telle quelle.
+on:
+  pull_request:
+    branches:
+      - pre-prod
+      - production
+      - main
+
+jobs:
+  enforce-flow:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Validate PR branch flow
+        env:
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+
+          BASE="$PR_BASE_REF"
+          HEAD="$PR_HEAD_REF"
+
+          echo "PR flow: ${HEAD} -> ${BASE}"
+
+          if [ "$BASE" = "pre-prod" ] && [ "$HEAD" != "dev" ]; then
+            echo "Invalid flow: only 'dev' can be merged into 'pre-prod'."
+            exit 1
+          fi
+
+          if [ "$BASE" = "production" ] && [ "$HEAD" != "pre-prod" ]; then
+            echo "Invalid flow: only 'pre-prod' can be merged into 'production'."
+            exit 1
+          fi
+
+          if [ "$BASE" = "main" ] && [ "$HEAD" != "production" ]; then
+            echo "Invalid flow: only 'production' can be merged into 'main'."
+            exit 1
+          fi
+
+          echo "Branch flow valid."
