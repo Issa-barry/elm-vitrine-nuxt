@@ -73,3 +73,18 @@ Règles pour tout agent IA intervenant sur ce dépôt :
    les valeurs sensibles vivent uniquement dans les secrets GitHub Actions
    ou le panneau Hostinger de l'environnement concerné (voir
    [`docs/environment.md`](docs/environment.md)).
+
+### Dette connue : `package-lock.json` et `npm ci`
+
+`ci.yml` utilise `npm install` plutôt que `npm ci` : le lock file a une
+incohérence préexistante sur une dépendance optionnelle transitive
+(`@emnapi/core`, via `unrs-resolver` ← `eslint-plugin-import-x` ←
+`@nuxt/eslint-config`) qui fait échouer `npm ci` en installation stricte.
+Une régénération complète du lock (`rm package-lock.json && npm install`)
+« corrige » ça mais fait sauter tout l'arbre en cascade vers des versions
+majeures plus récentes (`nuxt` 3.9 → 3.21, `@nuxt/schema` 4.x, `vite` 5 → 7…)
+côté npm 10/11 comme sur `ubuntu-latest` — inacceptable sans une vraie
+campagne de tests de non-régression. Ne pas tenter de « corriger » ça par un
+`rm package-lock.json && npm install` sans validation complète ; une
+resynchronisation ciblée (bump précis de la seule dépendance en cause)
+reste à faire.

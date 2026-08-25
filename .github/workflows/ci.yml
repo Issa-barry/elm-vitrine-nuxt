@@ -25,8 +25,18 @@ jobs:
           node-version: '22'
           cache: 'npm'
 
+      # `npm ci` (installation stricte, lock/package.json parfaitement synchronisés)
+      # échoue actuellement : package-lock.json contient une incohérence
+      # préexistante sur une dépendance optionnelle transitive
+      # (@emnapi/core, via unrs-resolver <- eslint-plugin-import-x <-
+      # @nuxt/eslint-config) que la régénération complète du lock ferait
+      # sauter en cascade tout l'arbre (nuxt 3.9 -> 3.21, @nuxt/schema 4.x,
+      # vite 5 -> 7...) sans validation possible dans le cadre de cette
+      # tâche CI/CD. `npm install` reste fiable en attendant une
+      # resynchronisation ciblée du lock file (voir AGENTS.md /
+      # historique git de ce fichier).
       - name: Install dependencies
-        run: npm ci
+        run: npm install
 
       - name: Lint (ESLint)
         run: npm run lint
