@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { IFetchError } from "ofetch";
+
 definePageMeta({ layout: false });
 
 useHead({
@@ -104,12 +106,22 @@ watch(selectedCode, () => {
   globalError.value = "";
 });
 
-const applyRequestError = (requestError: any, fallback: string) => {
-  const payload = requestError?.data?.data || requestError?.data || {};
+// Même enveloppe d'erreur que passwordResetProxy.ts (server/utils) : celui-ci
+// relaie l'erreur Laravel via createError({ data: upstreamData }), que h3
+// imbrique sous "data" à la sérialisation.
+interface PasswordResetErrorPayload {
+  message?: string;
+  error?: string;
+  data?: PasswordResetErrorPayload;
+}
+
+const applyRequestError = (requestError: unknown, fallback: string) => {
+  const fetchError = requestError as IFetchError<PasswordResetErrorPayload>;
+  const payload = fetchError.data?.data || fetchError.data || {};
   globalError.value =
-    payload?.error ||
-    payload?.message ||
-    requestError?.statusMessage ||
+    payload.error ||
+    payload.message ||
+    fetchError.statusMessage ||
     fallback;
 };
 
@@ -137,7 +149,12 @@ const submitPhone = async () => {
   isLoading.value = true;
 
   try {
-    const response = await $fetch<{ masked_email: string }>(
+    // Type inféré automatiquement par Nuxt depuis lookup.post.ts
+    // (PasswordLookupResponse) — pas de générique explicite : cette route est
+    // connue littéralement par le $fetch typé de Nuxt, qui n'accepte pas de
+    // paramètre de type pour les chemins reconnus (même pattern que
+    // pages/inscription.vue).
+    const response = await $fetch(
       "/api/auth/password/lookup",
       {
         method: "POST",
@@ -147,7 +164,7 @@ const submitPhone = async () => {
 
     maskedEmail.value = response.masked_email;
     step.value = "otp";
-  } catch (requestError: any) {
+  } catch (requestError) {
     applyRequestError(requestError, "Impossible d’envoyer le code pour le moment.");
   } finally {
     isLoading.value = false;
@@ -185,7 +202,7 @@ const submitOtp = async () => {
       body: { telephone: telephone.value, code: otp.value },
     });
     step.value = "password";
-  } catch (requestError: any) {
+  } catch (requestError) {
     applyRequestError(requestError, "Impossible de vérifier le code pour le moment.");
   } finally {
     isLoading.value = false;
@@ -223,7 +240,7 @@ const submitPassword = async () => {
       },
     });
     step.value = "done";
-  } catch (requestError: any) {
+  } catch (requestError) {
     applyRequestError(
       requestError,
       "Impossible de modifier le mot de passe pour le moment.",

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import type { IFetchError } from "ofetch";
+
 definePageMeta({ layout: false });
 
 useHead({
@@ -168,14 +170,29 @@ const validateSecurity = () => {
   return Object.keys(nextErrors).length === 0;
 };
 
-const getServerPayload = (error: any) => {
-  const outer = error?.data || {};
-  return outer?.data || outer;
+// Reproduit l'enveloppe d'erreur réelle : registrationProxy.ts (server/utils)
+// relaie l'erreur Laravel via createError({ data: upstreamData }), que h3
+// sérialise en imbriquant upstreamData sous "data" ; selon le point d'échec,
+// le payload utile se trouve donc soit directement sur l'erreur, soit un
+// niveau plus bas.
+interface RegistrationErrorPayload {
+  message?: string;
+  error?: string;
+  errors?: Record<string, string[]>;
+  data?: RegistrationErrorPayload;
+}
+
+const getServerPayload = (
+  error: IFetchError<RegistrationErrorPayload>,
+): RegistrationErrorPayload => {
+  const outer = error.data || {};
+  return outer.data || outer;
 };
 
-const applyServerError = (error: any) => {
-  const payload = getServerPayload(error);
-  const serverErrors = payload?.errors || {};
+const applyServerError = (error: unknown) => {
+  const fetchError = error as IFetchError<RegistrationErrorPayload>;
+  const payload = getServerPayload(fetchError);
+  const serverErrors = payload.errors || {};
   const mapped: Record<string, string> = {};
 
   Object.entries(serverErrors).forEach(([field, messages]) => {
@@ -186,9 +203,9 @@ const applyServerError = (error: any) => {
 
   errors.value = mapped;
   globalError.value =
-    payload?.message ||
-    payload?.error ||
-    error?.statusMessage ||
+    payload.message ||
+    payload.error ||
+    fetchError.statusMessage ||
     "Une erreur est survenue. Veuillez réessayer.";
 };
 
@@ -211,10 +228,11 @@ const checkPhone = async () => {
   globalError.value = "";
 
   try {
-    const response = await $fetch<{
-      status: "user_exists" | "prefill_available" | "not_found";
-      prefill?: { prenom: string; nom: string } | null;
-    }>("/api/register/client/check-phone", {
+    // Type inféré automatiquement par Nuxt depuis check-phone.post.ts
+    // (CheckPhoneResponse) — pas de générique explicite : cette route est
+    // connue littéralement par le $fetch typé de Nuxt, qui n'accepte pas de
+    // paramètre de type pour les chemins reconnus.
+    const response = await $fetch("/api/register/client/check-phone", {
       method: "POST",
       body: { telephone: telephone.value },
     });
