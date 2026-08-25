@@ -60,6 +60,21 @@ tout site Nuxt utilisant `navigateTo`/`<NuxtLink>` (XSS reflected, open
 redirect) — ce projet les utilise partout — donc la migration reste
 justifiée indépendamment du cas Server Islands.
 
+## Correctif nécessaire : `ci.yml` passe à `npm ci --legacy-peer-deps`
+
+Découvert seulement en PR réelle (pas reproduit par mes premières
+vérifications locales) : `@nuxt/devtools` → `vite-plugin-vue-tracer`
+déclare des `peerDependencies` sur `vite` qui entrent en conflit avec la
+version que `@nuxt/vite-builder` utilise réellement. En résolution stricte,
+npm 10 plante avec `Cannot read properties of null (reading 'edgesOut')`
+(bug connu d'Arborist) — reproduit à l'identique sur Windows **et** sur
+`ubuntu-latest` via un workflow temporaire, donc pas un problème
+d'environnement local. `--legacy-peer-deps` contourne le crash ; le lock a
+été généré avec ce même flag, donc `ci.yml` doit l'utiliser aussi pour que
+`npm ci` accepte le lock (une résolution stricte du lock ne correspond pas
+à une résolution stricte à froid — d'où l'échec initial en CI malgré des
+vérifications locales vertes).
+
 ## Correctif nécessaire : `@types/node`
 
 Régression détectée au typecheck après la bascule : `config/runtime.ts`
