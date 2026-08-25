@@ -6,6 +6,9 @@
 .cache
 dist
 
+# PWA (@vite-pwa/nuxt) dev-mode artifacts
+dev-dist
+
 # Playwright E2E outputs
 test-results
 playwright-report
