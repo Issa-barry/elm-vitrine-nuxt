@@ -226,6 +226,7 @@ const statusClass = (status: DeliveryStatus) => ({
 </script>
 
 <template>
+  <div>
   <section class="client-mobile-deliveries" aria-labelledby="mobile-deliveries-title">
     <ClientMobilePageTopbar
       title="Livraisons"
@@ -539,4 +540,5 @@ const statusClass = (status: DeliveryStatus) => ({
       </div>
     </div>
   </Drawer>
+  </div>
 </template>

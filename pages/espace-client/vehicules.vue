@@ -41,6 +41,7 @@ const applyVehicleFilter = () => {
 </script>
 
 <template>
+  <div>
   <section class="client-mobile-vehicles-page" aria-labelledby="mobile-vehicles-title">
     <ClientMobilePageTopbar
       title="Véhicules"
@@ -149,4 +150,5 @@ const applyVehicleFilter = () => {
       </div>
     </template>
   </Drawer>
+  </div>
 </template>
