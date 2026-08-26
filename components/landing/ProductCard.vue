@@ -22,11 +22,11 @@ withDefaults(
 </script>
 
 <template>
-  <div>
+  <div class="rounded-2xl border border-gray-200 bg-white p-4">
     <img
       :src="image"
       :alt="title"
-      :class="['w-full object-cover rounded-lg', aspectClass]"
+      :class="['w-full object-cover rounded-xl', aspectClass]"
       loading="lazy"
       :width="imageWidth"
       :height="imageHeight"
