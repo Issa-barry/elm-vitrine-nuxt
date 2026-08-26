@@ -1,6 +1,19 @@
 <script setup lang="ts">
 definePageMeta({ layout: "client" });
-useHead({ title: "Tableau de bord — Eau La Maman" });
+useHead({
+  title: "Tableau de bord — Eau La Maman",
+  // Police des 4 cartes KPI desktop/tablette paysage (voir
+  // components/client/dashboard/KpiCard.vue) : Poppins, comme dans
+  // _template/apollo-vue-6.2.0 (src/assets/layout/_fonts.scss), pour
+  // retrouver le rendu (chasse, graisse) de la référence. Chargée ici plutôt
+  // que dans le composant pour éviter 4 <link> identiques (un par carte) ;
+  // scopée à .client-kpi-card, le reste du dashboard garde "Lato".
+  link: [
+    { rel: "preconnect", href: "https://fonts.googleapis.com" },
+    { rel: "preconnect", href: "https://fonts.gstatic.com", crossorigin: "anonymous" },
+    { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap" },
+  ],
+});
 
 const formatGnf = (amount: number) => `${new Intl.NumberFormat("fr-FR").format(amount)} GNF`;
 

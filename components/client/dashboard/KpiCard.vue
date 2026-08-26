@@ -36,7 +36,7 @@ const trendLabel = computed(() => props.trend ? formatKpiTrendPercent(props.tren
 </script>
 
 <template>
-  <div class="card h-full !mb-0">
+  <div class="card client-kpi-card h-full !mb-0">
     <span class="font-semibold text-lg">{{ label }}</span>
     <span class="block font-bold text-surface-900 dark:text-surface-0 text-2xl leading-tight mt-4 whitespace-nowrap">{{ value }}</span>
 
@@ -57,3 +57,23 @@ const trendLabel = computed(() => props.trend ? formatKpiTrendPercent(props.tren
     </div>
   </div>
 </template>
+
+<style lang="scss" scoped>
+// Reprend .card d'Apollo (_template/apollo-vue-6.2.0/src/assets/layout/
+// _utils.scss et variables/_light.scss|_dark.scss) : bordure + ombre douce
+// + border-radius 12px fixe (le .card ELM n'a ni bordure ni ombre et suit
+// var(--content-border-radius), plus petit). Police Poppins (chargée dans
+// pages/espace-client/index.vue), avec repli sur la police ELM existante.
+.client-kpi-card {
+  font-family: "Poppins", "Lato", sans-serif;
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  box-shadow: 0 4px 30px rgba(221, 224, 255, 0.54);
+}
+
+:global(.app-dark) .client-kpi-card {
+  // Comme Apollo : pas d'ombre en mode sombre (celle-ci, calée sur un fond
+  // clair, dénote sur un fond sombre).
+  box-shadow: none;
+}
+</style>
