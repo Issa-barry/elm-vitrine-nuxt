@@ -58,7 +58,14 @@ export async function callMonolith<T = unknown>(path: string, options: CallMonol
     const data = await $fetch(`${baseUrl}${path}`, {
       method: options.method || "GET",
       headers,
-      body: options.body,
+      // `options.body` est volontairement typé `unknown` côté appelant (pas
+      // de forme imposée aux appelants de callMonolith) — non assignable tel
+      // quel au type `body` de $fetch (union BodyInit/Record<string,any>),
+      // d'où ce cast vers l'union réelle attendue (jamais `any`, voir règle
+      // @typescript-eslint/no-explicit-any) — seul endroit où la frontière
+      // est franchie (CI l'a révélé : `nuxt typecheck` en local s'appuyait
+      // sur un cache .nuxt périmé qui masquait cette erreur).
+      body: options.body as Record<string, unknown> | BodyInit | null | undefined,
       query: options.query,
       retry: options.method && options.method !== "GET" ? 0 : 2,
       retryDelay: 300,
