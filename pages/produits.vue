@@ -10,5 +10,7 @@ definePageMeta({
       <template #title>Nos produits</template>
       <template #desc>Cette page est en cours de préparation, revenez bientôt.</template>
     </LandingSectionhead>
+
+    <LandingProductCategories />
   </LandingContainer>
 </template>
