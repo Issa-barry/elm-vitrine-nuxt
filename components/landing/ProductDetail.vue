@@ -11,11 +11,30 @@ import image350ml from "~/assets/img/produit/prd_8_gris_grand.webp";
 
 // Titre + prix (GNF, voir la grille tarifaire réelle) pilotés par l'image
 // active de la galerie : pas de "Pack" ici, ces photos montrent une bouteille
-// seule, pas un pack.
+// seule, pas un pack. packSize/argument reprennent les mêmes infos que
+// LandingProductFormats, pour rester cohérent sur toute la page.
 const images = [
-  { src: image1500ml, title: "Bouteille de 1,5 L", priceGnf: 25000 },
-  { src: image500ml, title: "Bouteille de 500 ml", priceGnf: 20000 },
-  { src: image350ml, title: "Bouteille de 350 ml", priceGnf: 20000 },
+  {
+    src: image1500ml,
+    title: "Bouteille de 1,5 L",
+    priceGnf: 25000,
+    packSize: 6,
+    argument: "Le grand format familial, économique pour la maison.",
+  },
+  {
+    src: image500ml,
+    title: "Bouteille de 500 ml",
+    priceGnf: 20000,
+    packSize: 12,
+    argument: "Notre format le plus demandé, parfait pour un usage quotidien.",
+  },
+  {
+    src: image350ml,
+    title: "Bouteille de 350 ml",
+    priceGnf: 20000,
+    packSize: 15,
+    argument: "Le format individuel, pratique à transporter au quotidien.",
+  },
 ];
 
 const formatGnf = (amount: number) => `${new Intl.NumberFormat("fr-FR").format(amount)} GNF`;
@@ -140,17 +159,20 @@ function increaseQuantity() {
 
         <button
           type="button"
-          class="h-12 px-6 rounded-md text-base font-medium flex items-center gap-2 text-[var(--p-primary-color,#3b82f6)] bg-[color-mix(in_srgb,var(--p-primary-color,#3b82f6)_10%,transparent)]"
+          disabled
+          class="h-12 px-6 rounded-md text-base font-medium flex items-center gap-2 cursor-not-allowed opacity-60 text-[var(--p-primary-color,#3b82f6)] bg-[color-mix(in_srgb,var(--p-primary-color,#3b82f6)_10%,transparent)]"
         >
           <Icon name="uil:shopping-bag" class="w-5 h-5" />
-          Add
+          Ajouter
         </button>
       </div>
 
+      <p class="text-sm text-slate-500">
+        Précommande bientôt disponible en ligne.
+      </p>
+
       <p class="text-slate-500">
-        This hoodie is the perfect choice for comfort and warmth. Meticulously crafted from
-        100% cotton, the hoodie features a soft, plush fleece interior and a unisex sizing
-        design. Soft and lightweight, it's sure to be your go-to for chilly days.
+        {{ activeFormat.argument }} Vendue en pack de {{ activeFormat.packSize }} bouteilles.
       </p>
     </div>
   </div>
