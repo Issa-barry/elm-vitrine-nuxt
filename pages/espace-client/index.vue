@@ -16,6 +16,19 @@ const totals = computed(() => ({
   remaining: vehicles.reduce((sum, vehicle) => sum + vehicle.commission - vehicle.paid, 0),
 }));
 
+// Même montant que la carte "Dépenses" mobile (client-mobile-summary-card,
+// non modifiée dans cette passe) : pas encore branché sur une source de
+// dépenses partagée/datée, donc pas de série ni de variation réelle possible
+// pour ce KPI ci-dessous.
+const totalExpenses = 614_200;
+
+// "Net à payer" n'existe pas comme notion distincte ailleurs dans l'app :
+// interprété ici comme la commission générée nette des dépenses (differe de
+// "Reste à payer", qui est la commission générée nette de ce qui est déjà
+// payé). Simple soustraction de deux valeurs déjà affichées, aucune nouvelle
+// règle métier/backend introduite.
+const netToPay = computed(() => totals.value.generated - totalExpenses);
+
 const notifications = [
   { icon: "pi pi-check", background: "bg-blue-100 dark:bg-blue-400/10", iconColor: "text-blue-500", title: "Livraison CMD-2841 terminée", detail: "12 packs livrés aujourd’hui" },
   { icon: "pi pi-send", background: "bg-orange-100 dark:bg-orange-400/10", iconColor: "text-orange-500", title: "Nouvelle commande attribuée", detail: "Commande CMD-2847" },
@@ -82,52 +95,51 @@ const notifications = [
 
   <div class="client-desktop-dashboard grid grid-cols-12 gap-8">
     <!--
-      KPI "commissions" : même trio que la carte solde mobile
-      (client-mobile-balance-card + son meta Déjà payé/Reste à payer),
-      recomposé en 3 cartes horizontales à partir de tablette paysage —
-      voir components/client/dashboard/KpiCard.vue. En dessous de lg (grille
-      encore trop étroite pour 3 cartes lisibles), 2 colonnes puis 1 sur la
-      ligne suivante ; à partir de lg, les 3 cartes tiennent sur une ligne.
-      "Cumul des commissions" reste le KPI dominant du dashboard (déjà mis en
-      avant côté mobile) : seule carte en variante "primary".
-    -->
-    <div class="col-span-12">
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <ClientDashboardKpiCard
-          label="Cumul des commissions"
-          :amount="formatGnf(totals.generated)"
-          variant="primary"
-          secondary-label="Déjà payé"
-          :secondary-value="formatGnf(totals.paid)"
-        />
-        <ClientDashboardKpiCard
-          label="Déjà payé"
-          :amount="formatGnf(totals.paid)"
-          icon="pi pi-check-circle"
-          icon-background="bg-green-100 dark:bg-green-400/10"
-          icon-color="text-green-500"
-          secondary-label="Commissions déjà versées"
-        />
-        <ClientDashboardKpiCard
-          label="Reste à payer"
-          :amount="formatGnf(totals.remaining)"
-          icon="pi pi-clock"
-          icon-background="bg-orange-100 dark:bg-orange-400/10"
-          icon-color="text-orange-500"
-          secondary-label="Commissions en attente"
-        />
-      </div>
-    </div>
+      KPI desktop/tablette paysage : markup et classes repris fidèlement de
+      _template/apollo-vue-6.2.0/src/components/dashboard/ecommerce/
+      StatsEcommerceWidget.vue (voir components/client/dashboard/KpiCard.vue).
+      Grille strictement identique à celle d'Apollo (col-span-12
+      md:col-span-6 xl:col-span-3) : 2x2 dès ~768px en paysage (tablette),
+      4x1 à partir de 1280px (seuil xl propre à Apollo, couvre le desktop).
+      En dessous de 768px ou en portrait, .client-desktop-dashboard reste
+      masqué (voir le split chrome/contenu de _mobile.scss) : le mobile et
+      la tablette portrait ne sont pas concernés par ce bloc.
 
-    <!-- Dépenses : carte compacte à part, comme sur mobile (client-mobile-summary-card), pas noyée dans la grille KPI. -->
-    <div class="col-span-12">
-      <NuxtLink to="/espace-client/depenses" class="card !mb-0 flex items-center justify-between gap-4 group">
-        <div class="flex items-center gap-4 min-w-0">
-          <div class="flex items-center justify-center bg-purple-100 dark:bg-purple-400/10 rounded-border w-10 h-10 shrink-0"><i class="pi pi-wallet text-purple-500 !text-xl" /></div>
-          <div class="min-w-0"><span class="block text-muted-color font-medium">Dépenses</span><strong class="block text-surface-900 dark:text-surface-0 font-medium text-xl">614 200 GNF</strong></div>
-        </div>
-        <i class="pi pi-arrow-right text-muted-color group-hover:text-primary shrink-0" aria-hidden="true" />
-      </NuxtLink>
+      Pas d'historique de période dans les données actuelles du dashboard
+      (vehicles est un instantané, pas une série datée) : les 4 cartes
+      affichent donc un état neutre pour la variation (%) plutôt qu'un
+      chiffre inventé. Les mini-tracés utilisent la seule vraie décomposition
+      disponible ici (répartition par véhicule) pour Commission générée et
+      Reste à payer ; Dépenses/Net à payer n'ont pas de décomposition dans ce
+      composant et affichent une ligne neutre plutôt qu'une courbe inventée.
+    -->
+    <div class="col-span-12 md:col-span-6 xl:col-span-3">
+      <ClientDashboardKpiCard
+        label="Commission générée"
+        :value="formatGnf(totals.generated)"
+        :series="vehicles.map((vehicle) => vehicle.commission)"
+      />
+    </div>
+    <div class="col-span-12 md:col-span-6 xl:col-span-3">
+      <ClientDashboardKpiCard
+        label="Dépenses"
+        :value="formatGnf(totalExpenses)"
+      />
+    </div>
+    <div class="col-span-12 md:col-span-6 xl:col-span-3">
+      <ClientDashboardKpiCard
+        label="Net à payer"
+        :value="formatGnf(netToPay)"
+      />
+    </div>
+    <div class="col-span-12 md:col-span-6 xl:col-span-3">
+      <ClientDashboardKpiCard
+        label="Reste à payer"
+        :value="formatGnf(totals.remaining)"
+        :series="vehicles.map((vehicle) => vehicle.commission - vehicle.paid)"
+        secondary-label="Déjà payé"
+        :secondary-value="formatGnf(totals.paid)"
+      />
     </div>
 
     <div class="col-span-12 xl:col-span-6">
