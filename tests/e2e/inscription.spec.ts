@@ -1,16 +1,15 @@
 import { test, expect } from "@playwright/test";
 
-// Le parcours complet (téléphone -> identité -> sécurité -> succès) ne
-// nécessite pas de backend : checkPhone() bascule sur `isUiPreview`
-// (import.meta.dev) et simule une réponse "not_found" sans appel réseau.
-// Ce test tourne donc contre `npm run dev` (voir playwright.config.ts), pas
-// contre le vrai monolithe elm-monolithe.
+// Le parcours complet (téléphone -> identité -> sécurité -> succès) appelle
+// réellement /api/register/client/* (isUiPreview retiré le 26/08/2026) —
+// contre le mock backend de tests/e2e/mock-backend.mjs (voir
+// playwright.config.ts), pas contre le vrai elm-monolithe.
 
 test.describe("Inscription", () => {
   test("parcours complet jusqu'à la création de compte", async ({ page }) => {
     await page.goto("/inscription", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("load");
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(1000);
 
     // Étape 1 : téléphone
     await expect(page.getByRole("heading", { name: "Votre numéro de téléphone" })).toBeVisible();
@@ -39,7 +38,7 @@ test.describe("Inscription", () => {
   test("bloque l'étape identité si le prénom est vide", async ({ page }) => {
     await page.goto("/inscription", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("load");
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(1000);
     await page.getByLabel("Numéro de téléphone").fill("601020304");
     await page.getByRole("button", { name: "Continuer" }).click();
 

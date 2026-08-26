@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: false });
+definePageMeta({ layout: false, middleware: "guest" });
 
 useHead({
   title: "Connexion — Eau La Maman",
@@ -8,14 +8,24 @@ useHead({
   ],
 });
 
-// Contrat réel du backend (elm-monolithe) pour le futur branchement :
-//   POST /api/auth/login
-//   body: { telephone: "+224XXXXXXXXX", password: string, device_name: string }
-//   200 -> { token: string, user: { id, prenom, nom, telephone, email, roles } }
-//   422 -> { errors: { telephone: [...] } } (téléphone/mot de passe invalides)
-//   403 -> { code: "email_not_verified" | "account_blocked" }
-// Aucun appel réseau pour l'instant : la validation ci-dessous est uniquement
-// côté front, et la soumission simule une connexion réussie.
+// Contrat réel du backend (elm-monolithe, docs/api-auth-contract.md) :
+//   POST /api/auth/login (relayé par server/api/auth/login.post.ts)
+//   body: { telephone: "+224XXXXXXXXX", password: string }
+//   200 -> { user: { id, prenom, nom, telephone, email, roles } } (token
+//          jamais renvoyé au navigateur, voir composables/useAuth.ts)
+//   422 -> { errors: { telephone: [...] } } (identifiants incorrects)
+//   403 -> { code: "email_not_verified" | "account_blocked" | "pending_validation" }
+//
+// Appelé pour de vrai dans TOUS les environnements, y compris `nuxt dev` —
+// décision du 26/08/2026 : aucun bypass d'auth runtime, même en
+// développement local (voir docs/environment.md). pages/inscription.vue et
+// pages/mot-de-passe-oublie.vue suivent désormais la même règle. Un backend
+// injoignable produit une vraie erreur affichée à l'écran (voir
+// server/utils/monolithClient.ts), jamais un faux succès silencieux. Les
+// tests E2E qui ont besoin d'un vrai aller-retour (tests/e2e/connexion.spec.ts)
+// utilisent soit page.route() pour les scénarios de validation/erreur
+// purement client, soit le mock backend dédié (tests/e2e/mock-backend.mjs)
+// pour un login qui doit réellement établir une session.
 
 type Country = { name: string; iso2: string; dial: string; digits: number };
 
@@ -138,23 +148,28 @@ const phoneError = computed(() => {
 // d'examiner. Ne PAS réintroduire de règle de complexité ici.
 const passwordError = computed(() => (password.value ? "" : "Mot de passe requis."));
 
-// Payload prêt à envoyer, dans la forme exacte attendue par
-// POST /api/auth/login. device_name identifie ce client pour Sanctum.
-const buildLoginPayload = () => ({
+// Identifiants prêts à envoyer, validés selon les mêmes règles que le back
+// (normalizePhone / phoneError ci-dessus). `device_name` n'est plus construit
+// ici : il est centralisé côté serveur (config/auth.ts::DEVICE_NAME, utilisé
+// par server/api/auth/login.post.ts) pour ne jamais le dupliquer/diverger
+// entre composants.
+const buildCredentials = () => ({
   telephone: `${selectedCountry.value.dial}${phoneDigits.value}`,
   password: password.value,
-  device_name: "elm-web",
 });
 
 const phoneInputRef = ref<HTMLInputElement | null>(null);
 const passwordInputRef = ref<HTMLInputElement | null>(null);
 
 const router = useRouter();
+const auth = useAuth();
+const globalError = ref("");
 
 const handleSubmit = async () => {
   if (isSubmitting.value) return;
 
   hasAttemptedSubmit.value = true;
+  globalError.value = "";
 
   if (phoneError.value) {
     await nextTick();
@@ -170,20 +185,28 @@ const handleSubmit = async () => {
 
   isSubmitting.value = true;
 
-  // Le payload est prêt, validé selon les mêmes règles que le back
-  // (normalizePhone / phoneError ci-dessus), mais aucun appel réseau n'est
-  // fait pour l'instant : c'est justement ce qui évite d'appeler une API
-  // avec une requête qu'on sait déjà invalide.
-  const payload = buildLoginPayload();
-  if (import.meta.dev) console.info("[connexion] payload prêt pour POST /api/auth/login (mock, non envoyé) :", payload);
-
-  await new Promise((resolve) => setTimeout(resolve, 350));
-
+  const credentials = buildCredentials();
+  const result = await auth.login(credentials);
   isSubmitting.value = false;
+
+  if (!result.ok) {
+    globalError.value = result.error.message;
+    return;
+  }
+
   router.push("/espace-client");
 };
 
+// Si ce chargement de /connexion fait suite à une redirection forcée (session
+// expirée/compte désactivé pendant la navigation — voir middleware/auth.ts et
+// server/api/auth/me.get.ts), auth.lastError porte le message à afficher.
+// Consommé une seule fois : on ne veut pas le réafficher à une nouvelle
+// tentative de connexion échouée pour une raison différente.
 onMounted(() => {
+  if (auth.lastError.value) {
+    globalError.value = auth.lastError.value.message;
+    auth.lastError.value = null;
+  }
   document.body.style.overflow = "hidden";
 });
 
@@ -200,6 +223,8 @@ onBeforeUnmount(() => {
         <h1>Connexion</h1>
         <p>Eau la maman</p>
       </div>
+
+      <p v-if="globalError" class="connexion-global-error" role="alert" aria-live="assertive">{{ globalError }}</p>
 
       <form class="connexion-form" novalidate @submit.prevent="handleSubmit">
         <label class="connexion-field">
@@ -319,6 +344,18 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 2.5rem;
+}
+
+.connexion-global-error {
+  margin: -1.5rem 0 1.5rem;
+  padding: 0.75rem 1rem;
+  color: var(--p-red-600, #dc2626);
+  text-align: center;
+  background: color-mix(in srgb, var(--p-red-500, #ef4444) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--p-red-500, #ef4444) 30%, transparent);
+  border-radius: 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 700;
 }
 
 .connexion-brand-mark {
