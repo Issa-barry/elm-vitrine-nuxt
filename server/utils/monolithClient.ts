@@ -2,18 +2,19 @@ import type { IFetchError } from "ofetch";
 import { resolveMonolithBaseUrl } from "../../config/auth";
 
 interface CallMonolithOptions {
-  method?: "GET" | "POST";
+  method?: "GET" | "POST" | "PATCH";
   body?: unknown;
   /** Bearer token Sanctum — jamais lu depuis le navigateur, voir authSession.ts. */
   token?: string;
 }
 
-// Équivalent pour l'auth (login/me/logout/logout-all) de ce que
-// registrationProxy.ts et passwordResetProxy.ts font déjà pour
-// inscription/mot-de-passe-oublié : résolution de baseURL + normalisation
-// d'erreur upstream identiques, en gardant les fichiers existants inchangés
-// (hors périmètre de ce chantier) plutôt que de les refactoriser sans
-// nécessité.
+// Client HTTP générique vers elm-monolithe — utilisé par server/api/auth/*
+// (login/me/logout/logout-all) et server/api/client/* (profile/vehicules).
+// Équivalent pour ces routes de ce que registrationProxy.ts et
+// passwordResetProxy.ts font déjà pour inscription/mot-de-passe-oublié :
+// résolution de baseURL + normalisation d'erreur upstream identiques, en
+// gardant ces deux fichiers existants inchangés (hors périmètre de ce
+// chantier) plutôt que de les refactoriser sans nécessité.
 export async function callMonolith<T = unknown>(path: string, options: CallMonolithOptions = {}): Promise<T> {
   // event omis : optionnel côté Nitro (nitropack/dist/runtime/config.d.ts),
   // sans effet sur un preset Node classique — évite une collision de type
@@ -25,8 +26,8 @@ export async function callMonolith<T = unknown>(path: string, options: CallMonol
   if (!baseUrl) {
     throw createError({
       statusCode: 503,
-      statusMessage: "Service d'authentification non configuré.",
-      data: { message: "Le service d'authentification n'est pas encore configuré sur cette vitrine." },
+      statusMessage: "Service non configuré.",
+      data: { message: "Le service n'est pas encore configuré sur cette vitrine." },
     });
   }
 
@@ -56,7 +57,7 @@ export async function callMonolith<T = unknown>(path: string, options: CallMonol
       statusMessage:
         (upstreamData.message as string) ||
         (upstreamData.error as string) ||
-        "Le service d'authentification est momentanément indisponible.",
+        "Le service est momentanément indisponible.",
       data: upstreamData,
     });
   }

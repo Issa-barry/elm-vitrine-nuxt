@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { computeKpiTrend, formatKpiTrendPercent } from "../../utils/kpiTrend";
+import { loginAsTestUser } from "./helpers";
 
 // Couvre les 4 cartes KPI desktop/tablette paysage du dashboard
 // (pages/espace-client/index.vue + components/client/dashboard/KpiCard.vue,
@@ -45,7 +46,7 @@ const remainingTrend = formatKpiTrendPercent(computeKpiTrend(remaining, previous
 
 test.describe("Dashboard — cartes KPI (tablette paysage / desktop)", () => {
   test("affiche les 4 cartes avec les bons libellés et montants", async ({ page }) => {
-    await page.goto("/espace-client", { waitUntil: "domcontentloaded" });
+    await loginAsTestUser(page);
 
     const kpiRow = page.locator(".client-desktop-dashboard");
     await expect(kpiRow.getByText("Commission générée")).toBeVisible();
@@ -59,14 +60,14 @@ test.describe("Dashboard — cartes KPI (tablette paysage / desktop)", () => {
   });
 
   test("la carte \"Reste à payer\" affiche le sous-titre Déjà payé", async ({ page }) => {
-    await page.goto("/espace-client", { waitUntil: "domcontentloaded" });
+    await loginAsTestUser(page);
     const kpiRow = page.locator(".client-desktop-dashboard");
     await expect(kpiRow.getByText("Déjà payé")).toBeVisible();
     await expect(kpiRow.getByText(formatGnf(paid))).toBeVisible();
   });
 
   test("affiche des variations réellement calculées, pas de pourcentage inventé", async ({ page }) => {
-    await page.goto("/espace-client", { waitUntil: "domcontentloaded" });
+    await loginAsTestUser(page);
     const kpiRow = page.locator(".client-desktop-dashboard");
 
     await expect(kpiRow.getByText(generatedTrend, { exact: true })).toBeVisible();
@@ -84,7 +85,7 @@ test.describe("Dashboard — cartes KPI (tablette paysage / desktop)", () => {
   });
 
   test("Dépenses : une hausse de dépenses ne s'affiche pas en vert (tone inversé)", async ({ page }) => {
-    await page.goto("/espace-client", { waitUntil: "domcontentloaded" });
+    await loginAsTestUser(page);
     const expensesTrendValue = computeKpiTrend(totalExpenses, previousExpenses, true)!;
     // Garde-fou : si ce mock venait à changer et que Dépenses baissait, ce
     // test perdrait son sens (voir utils/kpiTrend.test.ts pour le cas inverse).
@@ -104,21 +105,21 @@ test.describe("Dashboard — cartes KPI (tablette paysage / desktop)", () => {
 test.describe("Dashboard — responsive des cartes KPI", () => {
   test("mobile (390x844) : garde le dashboard mobile actuel, pas les cartes Apollo", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/espace-client", { waitUntil: "domcontentloaded" });
+    await loginAsTestUser(page);
     await expect(page.locator(".client-mobile-dashboard")).toBeVisible();
     await expect(page.locator(".client-desktop-dashboard")).toBeHidden();
   });
 
   test("tablette portrait (834x1210) : garde le dashboard mobile enrichi, pas les cartes Apollo", async ({ page }) => {
     await page.setViewportSize({ width: 834, height: 1210 });
-    await page.goto("/espace-client", { waitUntil: "domcontentloaded" });
+    await loginAsTestUser(page);
     await expect(page.locator(".client-mobile-dashboard")).toBeVisible();
     await expect(page.locator(".client-desktop-dashboard")).toBeHidden();
   });
 
   test("tablette paysage étroite (1024x768) : cartes Apollo en 2 colonnes", async ({ page }) => {
     await page.setViewportSize({ width: 1024, height: 768 });
-    await page.goto("/espace-client", { waitUntil: "domcontentloaded" });
+    await loginAsTestUser(page);
     await expect(page.locator(".client-desktop-dashboard")).toBeVisible();
 
     const firstCard = page.locator(".client-desktop-dashboard")
@@ -138,7 +139,7 @@ test.describe("Dashboard — responsive des cartes KPI", () => {
 
   test("desktop large (1440x900) : les 4 cartes KPI tiennent sur une seule ligne", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
-    await page.goto("/espace-client", { waitUntil: "domcontentloaded" });
+    await loginAsTestUser(page);
     await expect(page.locator(".client-desktop-dashboard")).toBeVisible();
 
     const firstCard = page.locator(".client-desktop-dashboard")

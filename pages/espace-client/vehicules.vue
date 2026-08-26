@@ -2,31 +2,43 @@
 definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Mes véhicules — Eau La Maman" });
 
+// GET /v1/mobile/vehicules/mine via le BFF (server/api/client/vehicles.get.ts)
+// — pas de pagination côté backend (collection complète, voir
+// config/clientVehicles.ts), pas de statut "Entretien" dans le modèle ELM :
+// seul `is_active` existe (voir demande du 26/08/2026, section 15).
+const { vehicles, isLoading, error, hasLoaded, fetchVehicles } = useClientVehicles();
+
+onMounted(() => {
+  fetchVehicles();
+});
+
 const search = ref("");
 const vehicleFilterVisible = ref(false);
-const appliedStatus = ref("");
-const draftStatus = ref("");
-const vehicles = [
-  { id: "ou3859", name: "ABARRY", plate: "OU3859", type: "Camion", capacityPacks: 500, driver: "Issa M.", status: "Actif", gains: "2 380 000 GNF" },
-  { id: "ou4217", name: "ABARRY 2", plate: "OU4217", type: "Minibus", capacityPacks: 150, driver: "Mamadou D.", status: "Actif", gains: "1 950 000 GNF" },
-  { id: "ou7712", name: "ABARRY 3", plate: "OU7712", type: "Tricycle", capacityPacks: 80, driver: "Amine B.", status: "Entretien", gains: "1 420 000 GNF" },
-];
+const appliedStatus = ref<"" | "active" | "inactive">("");
+const draftStatus = ref<"" | "active" | "inactive">("");
 
-const formatCapacity = (capacityPacks: number) => `${new Intl.NumberFormat("fr-FR").format(capacityPacks)} packs`;
+const formatCapacity = (capacite: number | null) =>
+  capacite === null ? "—" : `${new Intl.NumberFormat("fr-FR").format(capacite)} packs`;
 
 const filteredVehicles = computed(() => {
   const query = search.value.trim().toLocaleLowerCase("fr");
-  return vehicles.filter((vehicle) => {
-    const matchesStatus = !appliedStatus.value || vehicle.status === appliedStatus.value;
-    const matchesSearch = !query || Object.values(vehicle).some((value) => String(value).toLocaleLowerCase("fr").includes(query));
+  return vehicles.value.filter((vehicle) => {
+    const matchesStatus =
+      !appliedStatus.value ||
+      (appliedStatus.value === "active" ? vehicle.is_active : !vehicle.is_active);
+    const haystack = [vehicle.nom, vehicle.immatriculation, vehicle.type, vehicle.conducteur]
+      .filter(Boolean)
+      .join(" ")
+      .toLocaleLowerCase("fr");
+    const matchesSearch = !query || haystack.includes(query);
     return matchesStatus && matchesSearch;
   });
 });
 
 const vehicleStatusOptions = [
   { label: "Tous les statuts", value: "" },
-  { label: "Actif", value: "Actif" },
-  { label: "Entretien", value: "Entretien" },
+  { label: "Actif", value: "active" },
+  { label: "Inactif", value: "inactive" },
 ];
 
 const openVehicleFilter = () => {
@@ -50,79 +62,85 @@ const applyVehicleFilter = () => {
       :filter-count="appliedStatus ? 1 : 0"
       @filter="openVehicleFilter"
     />
-    <div class="client-mobile-vehicles-page__intro">
-      <p>Suivez les gains et l’activité de chaque véhicule.</p>
-      <span>{{ filteredVehicles.length }}</span>
-    </div>
 
-    <label class="client-mobile-vehicles-search">
-      <i class="pi pi-search" aria-hidden="true" />
-      <span class="sr-only">Rechercher un véhicule</span>
-      <input v-model="search" type="search" inputmode="search" placeholder="Nom, type ou immatriculation" autocomplete="off">
-      <button v-if="search" type="button" aria-label="Effacer la recherche" @click="search = ''">
-        <i class="pi pi-times" aria-hidden="true" />
-      </button>
-    </label>
+    <p v-if="isLoading && !hasLoaded" class="client-mobile-vehicles-status" role="status">Chargement…</p>
 
-    <div class="client-mobile-vehicles-list" :aria-label="`${filteredVehicles.length} véhicule${filteredVehicles.length > 1 ? 's' : ''}`">
-      <NuxtLink
-        v-for="vehicle in filteredVehicles"
-        :key="vehicle.id"
-        :to="`/espace-client/vehicules/${vehicle.id}`"
-        external
-        class="client-mobile-vehicles-card"
-        :aria-label="`Voir les détails de ${vehicle.name}`"
-      >
-        <div class="client-mobile-vehicles-card__top">
-          <span class="client-mobile-vehicles-card__icon" aria-hidden="true"><i class="pi pi-car" /></span>
-          <div class="client-mobile-vehicles-card__identity">
-            <strong>{{ vehicle.name }}</strong>
-            <span>{{ vehicle.type }} · {{ vehicle.plate }}</span>
+    <p v-else-if="error" class="client-mobile-vehicles-status client-mobile-vehicles-status--error" role="alert">{{ error.message }}</p>
+
+    <template v-else>
+      <div class="client-mobile-vehicles-page__intro">
+        <p>Suivez l’activité de chaque véhicule.</p>
+        <span>{{ filteredVehicles.length }}</span>
+      </div>
+
+      <label class="client-mobile-vehicles-search">
+        <i class="pi pi-search" aria-hidden="true" />
+        <span class="sr-only">Rechercher un véhicule</span>
+        <input v-model="search" type="search" inputmode="search" placeholder="Nom, type, immatriculation ou conducteur" autocomplete="off">
+        <button v-if="search" type="button" aria-label="Effacer la recherche" @click="search = ''">
+          <i class="pi pi-times" aria-hidden="true" />
+        </button>
+      </label>
+
+      <div class="client-mobile-vehicles-list" :aria-label="`${filteredVehicles.length} véhicule${filteredVehicles.length > 1 ? 's' : ''}`">
+        <NuxtLink
+          v-for="vehicle in filteredVehicles"
+          :key="vehicle.id"
+          :to="`/espace-client/vehicules/${vehicle.id}`"
+          external
+          class="client-mobile-vehicles-card"
+          :aria-label="`Voir les détails de ${vehicle.nom}`"
+        >
+          <div class="client-mobile-vehicles-card__top">
+            <span class="client-mobile-vehicles-card__icon" aria-hidden="true"><i class="pi pi-car" /></span>
+            <div class="client-mobile-vehicles-card__identity">
+              <strong>{{ vehicle.nom }}</strong>
+              <span>{{ vehicle.type }} · {{ vehicle.immatriculation }}</span>
+            </div>
+            <span class="client-mobile-vehicles-card__status" :class="{ 'is-maintenance': !vehicle.is_active }">
+              {{ vehicle.is_active ? "Actif" : "Inactif" }}
+            </span>
           </div>
-          <span class="client-mobile-vehicles-card__status" :class="{ 'is-maintenance': vehicle.status !== 'Actif' }">
-            {{ vehicle.status }}
-          </span>
-        </div>
 
-        <div class="client-mobile-vehicles-card__meta">
-          <span><i class="pi pi-box" aria-hidden="true" /> {{ formatCapacity(vehicle.capacityPacks) }}</span>
-          <span><i class="pi pi-user" aria-hidden="true" /> {{ vehicle.driver }}</span>
-        </div>
-
-        <div class="client-mobile-vehicles-card__finance">
-          <div>
-            <span>Commissions générées</span>
-            <strong>{{ vehicle.gains }}</strong>
+          <div class="client-mobile-vehicles-card__meta">
+            <span><i class="pi pi-box" aria-hidden="true" /> {{ formatCapacity(vehicle.capacite) }}</span>
+            <span><i class="pi pi-user" aria-hidden="true" /> {{ vehicle.conducteur || "Non assigné" }}</span>
+            <span v-if="vehicle.en_livraison"><i class="pi pi-send" aria-hidden="true" /> En livraison</span>
           </div>
-          <i class="pi pi-chevron-right" aria-hidden="true" />
-        </div>
-      </NuxtLink>
-    </div>
+        </NuxtLink>
+      </div>
 
-    <div v-if="!filteredVehicles.length" class="client-mobile-vehicles-empty" role="status">
-      <span aria-hidden="true"><i class="pi pi-car" /></span>
-      <strong>Aucun véhicule trouvé</strong>
-      <p>Essayez avec un autre nom ou une autre immatriculation.</p>
-      <button type="button" @click="search = ''">Effacer la recherche</button>
-    </div>
+      <div v-if="!filteredVehicles.length && hasLoaded" class="client-mobile-vehicles-empty" role="status">
+        <span aria-hidden="true"><i class="pi pi-car" /></span>
+        <strong>{{ vehicles.length ? "Aucun véhicule trouvé" : "Aucun véhicule rattaché à votre compte" }}</strong>
+        <p v-if="vehicles.length">Essayez avec un autre nom ou une autre immatriculation.</p>
+        <button v-if="search || appliedStatus" type="button" @click="search = ''; appliedStatus = ''">Réinitialiser les filtres</button>
+      </div>
+    </template>
   </section>
 
   <div class="card client-desktop-vehicles">
     <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
-      <div><div class="font-semibold text-xl">Mes véhicules</div><span class="text-muted-color">Véhicules rattachés à votre compte propriétaire</span></div>
+      <div><div class="font-semibold text-xl">Mes véhicules</div><span class="text-muted-color">Véhicules rattachés à votre compte</span></div>
     </div>
-    <div class="flex justify-end mb-4">
-      <IconField><InputIcon class="pi pi-search" /><InputText v-model="search" placeholder="Rechercher" /></IconField>
-    </div>
-    <DataTable :value="filteredVehicles" data-key="plate" :rows="10" paginator responsive-layout="scroll" striped-rows>
-      <Column field="name" header="Véhicule" sortable><template #body="{ data }"><NuxtLink :to="`/espace-client/vehicules/${data.id}`" external class="font-medium text-primary hover:underline">{{ data.name }}</NuxtLink></template></Column>
-      <Column field="plate" header="Immatriculation" sortable />
-      <Column field="type" header="Type" sortable />
-      <Column header="Capacité"><template #body="{ data }">{{ formatCapacity(data.capacityPacks) }}</template></Column>
-      <Column field="driver" header="Conducteur" />
-      <Column header="Statut"><template #body="{ data }"><Tag :value="data.status" :severity="data.status === 'Actif' ? 'success' : 'warn'" /></template></Column>
-      <Column header="Actions"><template #body="{ data }"><NuxtLink :to="`/espace-client/vehicules/${data.id}`" external :aria-label="`Voir ${data.name}`"><Button icon="pi pi-eye" text rounded severity="secondary" /></NuxtLink></template></Column>
-    </DataTable>
+
+    <p v-if="isLoading && !hasLoaded" class="text-muted-color">Chargement…</p>
+    <p v-else-if="error" class="text-red-600">{{ error.message }}</p>
+    <template v-else>
+      <div class="flex justify-end mb-4">
+        <IconField><InputIcon class="pi pi-search" /><InputText v-model="search" placeholder="Rechercher" /></IconField>
+      </div>
+      <DataTable :value="filteredVehicles" data-key="id" :rows="10" :paginator="filteredVehicles.length > 10" responsive-layout="scroll" striped-rows>
+        <template #empty>{{ vehicles.length ? "Aucun véhicule trouvé." : "Aucun véhicule rattaché à votre compte." }}</template>
+        <Column field="nom" header="Véhicule" sortable><template #body="{ data }"><NuxtLink :to="`/espace-client/vehicules/${data.id}`" external class="font-medium text-primary hover:underline">{{ data.nom }}</NuxtLink></template></Column>
+        <Column field="immatriculation" header="Immatriculation" sortable />
+        <Column field="type" header="Type" sortable />
+        <Column header="Capacité"><template #body="{ data }">{{ formatCapacity(data.capacite) }}</template></Column>
+        <Column header="Conducteur"><template #body="{ data }">{{ data.conducteur || "Non assigné" }}</template></Column>
+        <Column header="Statut"><template #body="{ data }"><Tag :value="data.is_active ? 'Actif' : 'Inactif'" :severity="data.is_active ? 'success' : 'warn'" /></template></Column>
+        <Column header="Actions"><template #body="{ data }"><NuxtLink :to="`/espace-client/vehicules/${data.id}`" external :aria-label="`Voir ${data.nom}`"><Button icon="pi pi-eye" text rounded severity="secondary" /></NuxtLink></template></Column>
+      </DataTable>
+    </template>
   </div>
 
   <Drawer
@@ -152,3 +170,15 @@ const applyVehicleFilter = () => {
   </Drawer>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.client-mobile-vehicles-status {
+  padding: 1rem;
+  color: var(--p-text-muted-color);
+  text-align: center;
+}
+
+.client-mobile-vehicles-status--error {
+  color: var(--p-red-600, #dc2626);
+}
+</style>

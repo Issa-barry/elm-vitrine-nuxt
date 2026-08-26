@@ -41,6 +41,12 @@ const TEST_USER = {
 const app = createApp();
 const router = createRouter();
 
+// Route de disponibilité pour la sonde webServer.url de playwright.config.ts
+// (probablement un GET / attendant un statut 2xx) — sans elle, ce routeur
+// n'ayant aucune route sur "/", Playwright considère le serveur "jamais prêt"
+// jusqu'à expiration de son propre timeout.
+router.get("/", defineEventHandler(() => ({ status: "ok" })));
+
 // ── Auth ─────────────────────────────────────────────────────────────────
 router.post(
   "/api/auth/login",
@@ -118,6 +124,98 @@ router.post(
 );
 router.post("/api/auth/password/verify", defineEventHandler(() => ({ message: "Code vérifié." })));
 router.post("/api/auth/password/reset", defineEventHandler(() => ({ message: "Mot de passe modifié." })));
+
+// ── Espace client (contrat vérifié le 26/08/2026 contre le code réel de
+// elm-monolithe — voir config/clientProfile.ts, config/clientVehicles.ts) ──
+function requireTestToken(event) {
+  const authHeader = getHeader(event, "authorization");
+  if (authHeader !== `Bearer ${TEST_TOKEN}`) {
+    throw createError({ statusCode: 401, statusMessage: "Non authentifié." });
+  }
+}
+
+// État mutable en mémoire : permet de tester un vrai cycle GET -> PATCH ->
+// GET dans un test E2E, comme le ferait le vrai backend. type: "client" pour
+// rester cohérent avec TEST_USER.roles (["client"]) et le context.client_id
+// renvoyé par /api/auth/me ci-dessus — jamais deux profils différents pour le
+// même compte de test.
+const profileState = {
+  type: "client",
+  identite: { prenom: "Test", nom: "E2E", surnom: null, nom_affichage: "Test E2E" },
+  entreprise: null,
+  contact: { telephone: TEST_TELEPHONE, email: "test-e2e@example.com" },
+  localisation: { pays: "Guinée", code_pays: "GN", code_phone_pays: "+224", ville: "Conakry", adresse: null },
+  actif: true,
+  notifications: { activite: true },
+};
+
+router.get(
+  "/api/v1/mobile/profile",
+  defineEventHandler((event) => {
+    requireTestToken(event);
+    return { user: { id: TEST_USER.id, telephone: TEST_USER.telephone, email: TEST_USER.email }, profile: profileState };
+  }),
+);
+
+router.patch(
+  "/api/v1/mobile/profile",
+  defineEventHandler(async (event) => {
+    requireTestToken(event);
+    const body = await readBody(event);
+    // Même filtre que UpdateProfileRequest côté backend : seuls ces 4 champs.
+    for (const key of ["pays", "code_pays", "ville", "adresse"]) {
+      if (key in (body || {})) profileState.localisation[key] = body[key];
+    }
+    return { user: { id: TEST_USER.id, telephone: TEST_USER.telephone, email: TEST_USER.email }, profile: profileState };
+  }),
+);
+
+router.patch(
+  "/api/v1/mobile/profile/notification-preferences",
+  defineEventHandler(async (event) => {
+    requireTestToken(event);
+    const body = await readBody(event);
+    if (body?.preferences && "activite" in body.preferences) {
+      profileState.notifications.activite = Boolean(body.preferences.activite);
+    }
+    return { notifications: profileState.notifications };
+  }),
+);
+
+const TEST_VEHICLES = [
+  {
+    id: "veh-1",
+    nom: "ABARRY",
+    immatriculation: "OU3859",
+    type: "Camion",
+    capacite: 500,
+    is_active: true,
+    photo_url: null,
+    en_livraison: false,
+    role: "proprietaire",
+    conducteur: "Mamadou D.",
+  },
+  {
+    id: "veh-2",
+    nom: "ABARRY 2",
+    immatriculation: "OU4217",
+    type: "Minibus",
+    capacite: null,
+    is_active: false,
+    photo_url: null,
+    en_livraison: true,
+    role: "proprietaire",
+    conducteur: null,
+  },
+];
+
+router.get(
+  "/api/v1/mobile/vehicules/mine",
+  defineEventHandler((event) => {
+    requireTestToken(event);
+    return TEST_VEHICLES;
+  }),
+);
 
 app.use(router);
 

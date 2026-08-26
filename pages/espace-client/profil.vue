@@ -2,24 +2,19 @@
 definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Mon profil — Eau La Maman" });
 
-// Identité (avatar/nom/champs personnels) branchée sur GET /api/auth/me
-// (voir docs/api-auth-contract.md côté elm-monolithe) — jamais un second
-// appel réseau ici : middleware/auth.ts a déjà peuplé useAuth() via
-// ensureFetched() avant que cette page ne s'affiche (sinon redirection vers
-// /connexion). Forme exacte de la réponse réelle vérifiée en direct sur un
-// compte réel le 26/08/2026 (id, prenom, nom, telephone, email, roles,
-// is_active, context) — pas de champ deviné.
-//
-// Champs sans équivalent dans le contrat backend réel (société, SIRET, ville,
-// préférence de notification) : la mise en page existante est conservée telle
-// quelle (aucune refonte), mais ces champs restent vides plutôt que de garder
-// leur ancienne valeur de démonstration ("Transport IM", "Paris"...) — vide
-// est une donnée honnête, une valeur inventée ne l'est pas.
+// Deux sources de vérité distinctes, jamais fusionnées (voir
+// config/clientProfile.ts) :
+//   - useAuth() / GET /api/auth/me  -> identité minimale + session (déjà
+//     chargée par middleware/auth.ts avant que cette page ne s'affiche) ;
+//   - useClientProfile() / GET /v1/mobile/profile -> fiche métier plus lourde
+//     (localisation, entreprise, préférences), chargée ici spécifiquement,
+//     l'écran "Mon profil" étant le seul à en avoir besoin.
 const auth = useAuth();
-// Destructurés en bindings top-level : Vue les déballe automatiquement dans
-// le template (user.prenom, pas user.value.prenom) — auth.user resterait un
-// Ref brut à ce niveau, useAuth() ne renvoyant pas un objet reactive().
 const { user, context } = auth;
+
+const clientProfile = useClientProfile();
+const { profile, isLoading: isProfileLoading, isSavingLocalisation, isSavingNotifications, error: profileError } = clientProfile;
+
 const router = useRouter();
 const isLoggingOut = ref(false);
 
@@ -67,12 +62,57 @@ const accountTypeLabel = computed(() => {
   return labels.join(" · ");
 });
 
-// Aucun endpoint Laravel de mise à jour de profil, de société ou de
-// préférence de notification n'existe à ce jour (voir
-// docs/api-auth-contract.md côté elm-monolithe) — ces champs restent affichés
-// (mise en page conservée) mais vides et non modifiables plutôt que de
-// simuler une valeur ou une sauvegarde qui n'existe pas.
-const cities = ["Paris", "Boulogne-Billancourt", "Issy-les-Moulineaux", "Neuilly-sur-Seine"];
+// Champs de localisation : les 3 seuls modifiables par l'espace client
+// (UpdateProfileRequest côté backend n'accepte que pays/code_pays/ville/
+// adresse — code_pays volontairement pas exposé ici, un simple champ texte
+// ne suffirait pas à le renseigner correctement sans un vrai sélecteur pays,
+// hors périmètre de cette page). Initialisés dès que /profile répond, et à
+// chaque fois qu'il est rechargé/mis à jour — jamais une valeur de
+// démonstration en repli.
+const localisationForm = reactive({ pays: "", ville: "", adresse: "" });
+watch(
+  profile,
+  (value) => {
+    localisationForm.pays = value?.localisation?.pays || "";
+    localisationForm.ville = value?.localisation?.ville || "";
+    localisationForm.adresse = value?.localisation?.adresse || "";
+  },
+  { immediate: true },
+);
+
+const localisationSaveMessage = ref("");
+const localisationSaveIsError = ref(false);
+
+const saveLocalisation = async () => {
+  localisationSaveMessage.value = "";
+  const result = await clientProfile.updateLocalisation({
+    pays: localisationForm.pays || null,
+    ville: localisationForm.ville || null,
+    adresse: localisationForm.adresse || null,
+  });
+  localisationSaveIsError.value = !result.ok;
+  localisationSaveMessage.value = result.ok
+    ? "Localisation mise à jour."
+    : result.error.message;
+};
+
+const notificationSaveMessage = ref("");
+const notificationSaveIsError = ref(false);
+
+// Non optimiste (voir composables/useClientProfile.ts) : le toggle ne change
+// visuellement qu'après confirmation du backend — v-model direct sur
+// profile.notifications.activite provoquerait un changement visuel immédiat
+// suivi d'un rollback en cas d'échec, jamais testé ici.
+const onToggleNotifications = async (nextValue: boolean) => {
+  notificationSaveMessage.value = "";
+  const result = await clientProfile.updateNotificationPreference(nextValue);
+  notificationSaveIsError.value = !result.ok;
+  notificationSaveMessage.value = result.ok ? "" : result.error.message;
+};
+
+onMounted(() => {
+  clientProfile.fetchProfile();
+});
 </script>
 
 <template>
@@ -87,12 +127,12 @@ const cities = ["Paris", "Boulogne-Billancourt", "Issy-les-Moulineaux", "Neuilly
           <Avatar :label="initials" size="xlarge" shape="circle" class="!bg-primary !text-primary-contrast" />
           <div><div class="font-semibold text-xl">{{ fullName }}</div><span v-if="accountTypeLabel" class="text-muted-color">{{ accountTypeLabel }}</span></div>
         </div>
-        <!-- Cadenas sur tout champ non modifiable de cette page (aucune
-             route Laravel de mise à jour n'existe encore) : signale
-             visuellement "lecture seule" sans le curseur "interdit" par
-             défaut des composants PrimeVue désactivés/readonly, plus
-             agressif que nécessaire ici (voir .profil-readonly-field
-             ci-dessous). -->
+        <!-- Cadenas sur tout champ non modifiable de cette page (identité
+             civile/téléphone/email réservés au backoffice, voir
+             UpdateProfileRequest côté backend) : signale visuellement
+             "lecture seule" sans le curseur "interdit" par défaut des
+             composants PrimeVue désactivés/readonly (voir
+             .profil-readonly-field ci-dessous). -->
         <div class="grid grid-cols-12 gap-4">
           <div class="col-span-12 md:col-span-6 flex flex-col gap-2">
             <label for="first-name" class="font-medium">Prénom</label>
@@ -110,51 +150,53 @@ const cities = ["Paris", "Boulogne-Billancourt", "Issy-les-Moulineaux", "Neuilly
             <label for="phone" class="font-medium">Téléphone</label>
             <IconField class="profil-readonly-field"><InputIcon class="pi pi-lock" /><InputText id="phone" :model-value="formattedPhone" readonly fluid /></IconField>
           </div>
-          <!-- Aucune notion de ville dans le modèle ELM (Personne/User) :
-               champ conservé (même mise en page), laissé vide plutôt que
-               préselectionné sur une valeur inventée. -->
-          <div class="col-span-12 flex flex-col gap-2">
-            <label for="city" class="font-medium">Ville principale</label>
-            <IconField class="profil-readonly-field"><InputIcon class="pi pi-lock" /><Select id="city" :options="cities" placeholder="Non renseigné" disabled fluid /></IconField>
-          </div>
-        </div>
-        <div class="flex justify-end mt-6">
-          <Button v-tooltip.top="'Pas encore disponible : aucun endpoint de mise à jour du profil côté backend.'" label="Enregistrer" icon="pi pi-check" disabled />
         </div>
       </div>
     </div>
 
     <div class="col-span-12 xl:col-span-5">
-      <!-- Aucune notion de société/SIRET dans le modèle ELM : champs
-           conservés (même mise en page), laissés vides plutôt que de garder
-           les anciennes valeurs de démonstration ("Transport IM", ...). -->
       <div class="card">
         <div class="font-semibold text-xl mb-6">Informations professionnelles</div>
-        <div class="flex flex-col gap-4">
-          <div class="flex flex-col gap-2">
+
+        <p v-if="isProfileLoading" class="text-muted-color">Chargement…</p>
+
+        <p v-else-if="profileError" class="text-red-600">{{ profileError.message }}</p>
+
+        <p v-else-if="!profile" class="text-muted-color">Aucune fiche métier associée à ce compte.</p>
+
+        <div v-else class="flex flex-col gap-4">
+          <!-- Raison sociale : lecture seule (réservée au backoffice), affichée
+               uniquement pour un profil entreprise. Aucun champ "SIRET" :
+               n'existe pas dans le modèle ELM. -->
+          <div v-if="profile.entreprise" class="flex flex-col gap-2">
             <label for="company" class="font-medium">Société</label>
-            <IconField class="profil-readonly-field"><InputIcon class="pi pi-lock" /><InputText id="company" placeholder="Non renseigné" readonly fluid /></IconField>
+            <IconField class="profil-readonly-field"><InputIcon class="pi pi-lock" /><InputText id="company" :model-value="profile.entreprise.raison_sociale" readonly fluid /></IconField>
           </div>
-          <div class="flex flex-col gap-2">
-            <label for="siret" class="font-medium">Numéro SIRET</label>
-            <IconField class="profil-readonly-field"><InputIcon class="pi pi-lock" /><InputText id="siret" placeholder="Non renseigné" readonly fluid /></IconField>
-          </div>
+
+          <!-- Localisation : seuls champs réellement modifiables par ce compte
+               (PATCH /v1/mobile/profile). -->
+          <div class="flex flex-col gap-2"><label for="pays" class="font-medium">Pays</label><InputText id="pays" v-model="localisationForm.pays" fluid /></div>
+          <div class="flex flex-col gap-2"><label for="ville" class="font-medium">Ville</label><InputText id="ville" v-model="localisationForm.ville" fluid /></div>
+          <div class="flex flex-col gap-2"><label for="adresse" class="font-medium">Adresse</label><InputText id="adresse" v-model="localisationForm.adresse" fluid /></div>
         </div>
-        <div class="flex justify-end mt-6">
-          <Button v-tooltip.top="'Pas encore disponible : aucun endpoint de mise à jour du profil côté backend.'" label="Mettre à jour" severity="secondary" outlined disabled />
+
+        <div v-if="profile" class="flex flex-col items-end gap-2 mt-6">
+          <Button label="Mettre à jour" severity="secondary" outlined :loading="isSavingLocalisation" @click="saveLocalisation" />
+          <small v-if="localisationSaveMessage" :class="localisationSaveIsError ? 'text-red-600' : 'text-green-600'">{{ localisationSaveMessage }}</small>
         </div>
       </div>
 
-      <!-- Aucune notion de préférence de notification dans le modèle ELM :
-           carte conservée (même mise en page), interrupteur laissé sur son
-           état neutre (désactivé) plutôt que de prétendre "activé" par
-           défaut, valeur qui n'existerait nulle part côté backend. -->
       <div class="card">
         <div class="font-semibold text-xl mb-6">Notifications</div>
         <div class="flex items-center justify-between gap-4">
           <div><span class="font-medium">Alertes d’activité</span><span class="block text-muted-color mt-1">Nouvelles commandes et validations</span></div>
-          <ToggleSwitch :model-value="false" disabled />
+          <ToggleSwitch
+            :model-value="profile?.notifications?.activite ?? false"
+            :disabled="!profile || isSavingNotifications"
+            @update:model-value="onToggleNotifications"
+          />
         </div>
+        <small v-if="notificationSaveMessage" class="block mt-2" :class="notificationSaveIsError ? 'text-red-600' : ''">{{ notificationSaveMessage }}</small>
       </div>
 
       <div class="card">
@@ -170,15 +212,15 @@ const cities = ["Paris", "Boulogne-Billancourt", "Issy-les-Moulineaux", "Neuilly
 </template>
 
 <style lang="scss" scoped>
-// Champs non modifiables (aucun endpoint de mise à jour côté backend, voir
-// script) : cadenas visible plutôt que le curseur "interdit" par défaut de
-// PrimeVue sur [readonly]/[disabled], plus agressif que ce que justifie une
-// simple absence de fonctionnalité (pas une action réellement bloquée).
+// Champs non modifiables (identité civile/téléphone/email/raison sociale,
+// réservés au backoffice — voir script) : cadenas visible plutôt que le
+// curseur "interdit" par défaut de PrimeVue sur [readonly], plus agressif que
+// ce que justifie une simple absence de fonctionnalité (pas une action
+// réellement bloquée).
 .profil-readonly-field {
   width: 100%;
 
-  :deep(input),
-  :deep(.p-select) {
+  :deep(input) {
     cursor: default !important;
   }
 
