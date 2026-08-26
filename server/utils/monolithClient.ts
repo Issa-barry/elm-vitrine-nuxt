@@ -6,6 +6,13 @@ interface CallMonolithOptions {
   body?: unknown;
   /** Bearer token Sanctum — jamais lu depuis le navigateur, voir authSession.ts. */
   token?: string;
+  /**
+   * Query string (dashboard/depenses/activite/commandes — filtres et
+   * pagination, voir docs/api-espace-client-contract.md côté elm-monolithe).
+   * `undefined` retire le paramètre (ofetch) — laisse l'appelant passer un
+   * objet de filtres sans avoir à retirer lui-même les clés absentes.
+   */
+  query?: Record<string, string | number | undefined>;
 }
 
 // Client HTTP générique vers elm-monolithe — utilisé par server/api/auth/*
@@ -52,6 +59,7 @@ export async function callMonolith<T = unknown>(path: string, options: CallMonol
       method: options.method || "GET",
       headers,
       body: options.body,
+      query: options.query,
       retry: options.method && options.method !== "GET" ? 0 : 2,
       retryDelay: 300,
     });

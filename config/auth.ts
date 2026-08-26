@@ -154,3 +154,16 @@ export function hasClientSpaceAccess(roles: string[] | undefined | null): boolea
   const allowed: readonly string[] = CLIENT_SPACE_ROLES;
   return roles.some((role) => allowed.includes(role));
 }
+
+// Libellé d'affichage pour un compte cumulant plusieurs rôles (ex. carte
+// d'identité mobile, pages/espace-client/index.vue) — même ordre de priorité
+// que `profile.type` sur GET /v1/mobile/profile (proprietaire > client >
+// livreur en cas de cumul, voir docs/api-espace-client-contract.md §0/§3
+// côté elm-monolithe) : jamais roles[0], qui refléterait un ordre arbitraire
+// côté base de données plutôt qu'une vraie priorité métier.
+export function clientSpaceRoleLabel(roles: string[] | undefined | null): string {
+  if (roles?.includes("proprietaire")) return "Propriétaire";
+  if (roles?.includes("client")) return "Client";
+  if (roles?.includes("livreur")) return "Livreur";
+  return "Compte";
+}

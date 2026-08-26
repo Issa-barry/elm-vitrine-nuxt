@@ -2,12 +2,27 @@ import { describe, expect, it } from "vitest";
 import {
   DEVICE_NAME,
   buildLoginPayload,
+  clientSpaceRoleLabel,
   hasClientSpaceAccess,
   isAccountStatusCode,
   normalizeAuthError,
   resolveMonolithBaseUrl,
   shouldUseSecureCookies,
 } from "./auth";
+
+describe("clientSpaceRoleLabel", () => {
+  it("priorité proprietaire > client > livreur en cas de cumul (même ordre que profile.type backend)", () => {
+    expect(clientSpaceRoleLabel(["client", "proprietaire"])).toBe("Propriétaire");
+    expect(clientSpaceRoleLabel(["manager", "client"])).toBe("Client");
+    expect(clientSpaceRoleLabel(["comptable", "livreur"])).toBe("Livreur");
+  });
+
+  it("compte staff pur (sans rôle espace client) : libellé neutre, jamais un rôle inventé", () => {
+    expect(clientSpaceRoleLabel(["super_admin"])).toBe("Compte");
+    expect(clientSpaceRoleLabel(null)).toBe("Compte");
+    expect(clientSpaceRoleLabel(undefined)).toBe("Compte");
+  });
+});
 
 describe("buildLoginPayload", () => {
   it("ajoute device_name sans jamais le laisser au choix de l'appelant", () => {

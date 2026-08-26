@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import type { ClientDashboardResponse } from "~/config/clientDashboard";
+import { clientSpaceRoleLabel } from "~/config/auth";
+
 definePageMeta({ layout: "client", middleware: "auth" });
 useHead({
   title: "Tableau de bord — Eau La Maman",
@@ -15,123 +18,159 @@ useHead({
   ],
 });
 
-const formatGnf = (amount: number) => `${new Intl.NumberFormat("fr-FR").format(amount)} GNF`;
+const auth = useAuth();
+const { dashboard, isLoading, error, fetchDashboard } = useClientDashboard();
+const { notifications, fetchNotifications, markAllRead } = useClientNotifications();
+const requestFetch = useRequestFetch();
 
-const vehicles = [
-  { id: "ou3859", name: "ABARRY", registration: "OU3859", commission: 2_380_000, paid: 1_800_000, status: "En activité" },
-  { id: "ou4217", name: "ABARRY 2", registration: "OU4217", commission: 1_950_000, paid: 1_450_000, status: "En activité" },
-  { id: "ou7712", name: "ABARRY 3", registration: "OU7712", commission: 1_420_000, paid: 850_000, status: "En activité" },
-];
+// Identité réelle (GET /api/auth/me) — jamais "Issa M." (ancienne donnée de
+// démonstration). clientSpaceRoleLabel() reflète la même priorité que
+// profile.type côté backend en cas de cumul de rôles (proprietaire > client
+// > livreur), voir config/auth.ts.
+const displayName = computed(() => {
+  const user = auth.user.value;
+  return user ? `${user.prenom} ${user.nom}`.trim() : "";
+});
+const displayPhone = computed(() => formatPhoneNumber(auth.user.value?.telephone));
+const displayRole = computed(() => clientSpaceRoleLabel(auth.user.value?.roles));
+const displayQr = computed(() => auth.user.value?.qr_payload ?? null);
 
-const totals = computed(() => ({
-  generated: vehicles.reduce((sum, vehicle) => sum + vehicle.commission, 0),
-  paid: vehicles.reduce((sum, vehicle) => sum + vehicle.paid, 0),
-  remaining: vehicles.reduce((sum, vehicle) => sum + vehicle.commission - vehicle.paid, 0),
-}));
+// Période précédente (comparaison RÉELLE, pas une image locale figée) : même
+// endpoint, filtre "mois_passe" — voir docs/api-espace-client-contract.md §5
+// côté elm-monolithe (raccourci de période supporté nativement). État
+// volontairement local (pas de useState partagé) : ne sert qu'au calcul de
+// variation de cette page, jamais consommé ailleurs.
+const previousDashboard = ref<ClientDashboardResponse | null>(null);
 
-// Même montant que la carte "Dépenses" mobile (client-mobile-summary-card,
-// non modifiée dans cette passe) : pas encore branché sur une source de
-// dépenses partagée/datée.
-const totalExpenses = 614_200;
+onMounted(async () => {
+  await Promise.all([
+    fetchDashboard({ period: "ce_mois" }),
+    requestFetch<ClientDashboardResponse>("/api/client/dashboard", { query: { period: "mois_passe" } })
+      .then((data) => { previousDashboard.value = data; })
+      .catch(() => { previousDashboard.value = null; }),
+    fetchNotifications(),
+  ]);
+});
 
-// "Net à payer" n'existe pas comme notion distincte ailleurs dans l'app :
-// interprété ici comme la commission générée nette des dépenses (differe de
-// "Reste à payer", qui est la commission générée nette de ce qui est déjà
-// payé). Simple soustraction de deux valeurs déjà affichées, aucune nouvelle
-// règle métier/backend introduite.
-const netToPay = computed(() => totals.value.generated - totalExpenses);
+const summary = computed(() => dashboard.value?.summary ?? null);
+const previousSummary = computed(() => previousDashboard.value?.summary ?? null);
+const parVehicule = computed(() => dashboard.value?.par_vehicule ?? []);
+const hasVehicles = computed(() => parVehicule.value.length > 0);
 
-// Période précédente : même statut que vehicles/totalExpenses ci-dessus
-// (instantané mock local, le dashboard n'a pas encore de vrai historique
-// daté) — sert de base de comparaison RÉELLE (voir utils/kpiTrend.ts) pour
-// les 4 variations affichées, plutôt qu'un pourcentage tapé en dur.
-const previousVehicles = [
-  { commission: 2_150_000, paid: 1_600_000 },
-  { commission: 1_780_000, paid: 1_300_000 },
-  { commission: 1_190_000, paid: 700_000 },
-];
-const previousExpenses = 590_000;
+// Jamais un pourcentage inventé : null tant que l'une des deux périodes n'est
+// pas chargée (voir utils/kpiTrend.ts — computeKpiTrend renvoie déjà null si
+// la période précédente vaut 0).
+const kpiTrends = computed(() => {
+  if (!summary.value || !previousSummary.value) {
+    return { generated: null, expenses: null, operations: null, remaining: null };
+  }
+  const current = summary.value;
+  const previous = previousSummary.value;
+  return {
+    generated: computeKpiTrend(current.total_earned, previous.total_earned),
+    // invertTone=true : une hausse de dépenses n'est pas une bonne nouvelle,
+    // contrairement aux 3 autres KPI (voir utils/kpiTrend.ts).
+    expenses: computeKpiTrend(current.frais_depenses_total, previous.frais_depenses_total, true),
+    operations: computeKpiTrend(current.operations_count, previous.operations_count),
+    remaining: computeKpiTrend(current.balance, previous.balance),
+  };
+});
 
-const previousTotals = computed(() => ({
-  generated: previousVehicles.reduce((sum, vehicle) => sum + vehicle.commission, 0),
-  remaining: previousVehicles.reduce((sum, vehicle) => sum + vehicle.commission - vehicle.paid, 0),
-}));
-const previousNetToPay = computed(() => previousTotals.value.generated - previousExpenses);
+// Carte n°3 : "Net à payer" (ancienne maquette) n'a AUCUN équivalent réel
+// dans `summary` (GET /v1/mobile/dashboard) — c'était une simple soustraction
+// locale (commission - dépenses), désormais interdite (aucun calcul financier
+// côté Nuxt, voir demande du 26/08/2026, section 30). Remplacée par un champ
+// réel et distinct des 3 autres cartes : `operations_count`. La grille à 4
+// cartes (et les tests de mise en page associés) reste inchangée.
+const notificationVisuals: Record<string, { icon: string; background: string; iconColor: string }> = {
+  commande_validee: { icon: "pi pi-send", background: "bg-orange-100 dark:bg-orange-400/10", iconColor: "text-orange-500" },
+  livraison_terminee: { icon: "pi pi-check", background: "bg-blue-100 dark:bg-blue-400/10", iconColor: "text-blue-500" },
+  versement: { icon: "pi pi-wallet", background: "bg-green-100 dark:bg-green-400/10", iconColor: "text-green-500" },
+};
+const defaultNotificationVisual = { icon: "pi pi-bell", background: "bg-surface-100 dark:bg-surface-800", iconColor: "text-muted-color" };
+const notificationVisual = (type: string | null) => (type && notificationVisuals[type]) || defaultNotificationVisual;
 
-// invertTone=true pour Dépenses : une hausse de dépenses n'est pas une
-// bonne nouvelle, contrairement aux 3 autres KPI (voir utils/kpiTrend.ts).
-const kpiTrends = computed(() => ({
-  generated: computeKpiTrend(totals.value.generated, previousTotals.value.generated),
-  expenses: computeKpiTrend(totalExpenses, previousExpenses, true),
-  net: computeKpiTrend(netToPay.value, previousNetToPay.value),
-  remaining: computeKpiTrend(totals.value.remaining, previousTotals.value.remaining),
-}));
+const notificationDateFormatter = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const formatNotificationDate = (iso: string) => notificationDateFormatter.format(new Date(iso));
 
-const notifications = [
-  { icon: "pi pi-check", background: "bg-blue-100 dark:bg-blue-400/10", iconColor: "text-blue-500", title: "Livraison CMD-2841 terminée", detail: "12 packs livrés aujourd’hui" },
-  { icon: "pi pi-send", background: "bg-orange-100 dark:bg-orange-400/10", iconColor: "text-orange-500", title: "Nouvelle commande attribuée", detail: "Commande CMD-2847" },
-  { icon: "pi pi-wallet", background: "bg-green-100 dark:bg-green-400/10", iconColor: "text-green-500", title: "Versement validé", detail: "Montant de 850 000 GNF" },
-];
+// Les 6 plus récentes seulement (déjà triées par le backend, `latest()`) —
+// la carte dashboard reste un aperçu, pas la liste complète.
+const recentNotifications = computed(() => (notifications.value?.data ?? []).slice(0, 6));
 </script>
 
 <template>
   <div>
   <div class="client-mobile-dashboard">
-    <ClientMobileIdentityQr name="Issa M." phone="+224 622 60 26 93" role="Propriétaire" />
+    <ClientMobileIdentityQr :name="displayName" :phone="displayPhone" :role="displayRole" :qr-value="displayQr" />
 
-    <section class="client-mobile-balance-card" aria-labelledby="mobile-balance-title">
-      <svg class="client-mobile-balance-wave" viewBox="0 0 600 180" preserveAspectRatio="none" aria-hidden="true">
-        <path d="M0 65 C105 18 174 38 260 70 C360 108 425 38 600 62 L600 180 L0 180 Z" fill="var(--p-primary-500)" />
-      </svg>
-      <div class="client-mobile-balance-content">
-        <template v-if="totals.generated > 0">
-          <span id="mobile-balance-title" class="client-mobile-balance-label">Cumul des commissions</span>
-          <strong class="client-mobile-balance-amount">{{ formatGnf(totals.generated) }}</strong>
-          <div class="client-mobile-balance-meta">
-            <div><span>Déjà payé</span><strong>{{ formatGnf(totals.paid) }}</strong></div>
-            <div><span>Reste à payer</span><strong>{{ formatGnf(totals.remaining) }}</strong></div>
-          </div>
-        </template>
-        <p v-else id="mobile-balance-title" class="client-mobile-balance-empty">Aucune commission enregistrée pour le moment.</p>
-      </div>
+    <div v-if="error" class="p-4 text-red-500" role="alert">
+      {{ error.message }}
+    </div>
+
+    <section v-else-if="isLoading && !dashboard" class="p-4 text-muted-color" role="status">
+      Chargement du tableau de bord…
     </section>
 
-    <div class="client-mobile-summary-grid">
-      <NuxtLink to="/espace-client/depenses" class="client-mobile-summary-card" aria-label="Voir le détail des dépenses">
-        <span class="client-mobile-summary-icon"><i class="pi pi-wallet" /></span>
-        <div><span>Dépenses</span><strong>614 200 GNF</strong></div>
-        <i class="pi pi-chevron-right client-mobile-summary-chevron" aria-hidden="true" />
-      </NuxtLink>
-    </div>
+    <template v-else-if="summary">
+      <section class="client-mobile-balance-card" aria-labelledby="mobile-balance-title">
+        <svg class="client-mobile-balance-wave" viewBox="0 0 600 180" preserveAspectRatio="none" aria-hidden="true">
+          <path d="M0 65 C105 18 174 38 260 70 C360 108 425 38 600 62 L600 180 L0 180 Z" fill="var(--p-primary-500)" />
+        </svg>
+        <div class="client-mobile-balance-content">
+          <template v-if="summary.total_earned > 0">
+            <span id="mobile-balance-title" class="client-mobile-balance-label">Cumul des commissions</span>
+            <strong class="client-mobile-balance-amount">{{ formatGnf(summary.total_earned) }}</strong>
+            <div class="client-mobile-balance-meta">
+              <div><span>Déjà payé</span><strong>{{ formatGnf(summary.total_paid) }}</strong></div>
+              <div><span>Reste à payer</span><strong>{{ formatGnf(summary.balance) }}</strong></div>
+            </div>
+          </template>
+          <p v-else id="mobile-balance-title" class="client-mobile-balance-empty">Aucune commission enregistrée pour le moment.</p>
+        </div>
+      </section>
 
-    <div class="client-mobile-section-heading">
-      <h2>Commissions par véhicule</h2>
-      <NuxtLink to="/espace-client/vehicules">Tout voir <i class="pi pi-arrow-right" /></NuxtLink>
-    </div>
-    <div v-if="vehicles.length" class="client-mobile-vehicle-list">
-      <NuxtLink
-        v-for="vehicle in vehicles"
-        :key="vehicle.id"
-        :to="`/espace-client/vehicules/${vehicle.id}`"
-        external
-        class="client-mobile-vehicle-row"
-        :aria-label="`Voir les détails de ${vehicle.name}`"
-      >
-        <div>
-          <span class="client-mobile-vehicle-name">{{ vehicle.name }}</span>
-          <span class="client-mobile-vehicle-registration">{{ vehicle.registration }}</span>
-        </div>
-        <div class="client-mobile-vehicle-finance">
-          <span class="client-mobile-vehicle-amount">{{ formatGnf(vehicle.commission) }}</span>
-          <span class="client-mobile-vehicle-status">{{ vehicle.status }}</span>
-        </div>
-        <i class="pi pi-chevron-right" />
-      </NuxtLink>
-    </div>
-    <p v-else class="client-mobile-empty-state">Aucun véhicule associé pour le moment.</p>
+      <div class="client-mobile-summary-grid">
+        <NuxtLink to="/espace-client/depenses" class="client-mobile-summary-card" aria-label="Voir le détail des dépenses">
+          <span class="client-mobile-summary-icon"><i class="pi pi-wallet" /></span>
+          <div><span>Dépenses</span><strong>{{ formatGnf(summary.frais_depenses_total) }}</strong></div>
+          <i class="pi pi-chevron-right client-mobile-summary-chevron" aria-hidden="true" />
+        </NuxtLink>
+      </div>
+
+      <div class="client-mobile-section-heading">
+        <h2>Commissions par véhicule</h2>
+        <NuxtLink to="/espace-client/vehicules">Tout voir <i class="pi pi-arrow-right" /></NuxtLink>
+      </div>
+      <div v-if="hasVehicles" class="client-mobile-vehicle-list">
+        <NuxtLink
+          v-for="vehicle in parVehicule"
+          :key="vehicle.vehicule_id"
+          :to="`/espace-client/vehicules/${vehicle.vehicule_id}`"
+          external
+          class="client-mobile-vehicle-row"
+          :aria-label="`Voir les détails de ${vehicle.nom_vehicule}`"
+        >
+          <div>
+            <span class="client-mobile-vehicle-name">{{ vehicle.nom_vehicule }}</span>
+            <span class="client-mobile-vehicle-registration">{{ vehicle.immatriculation }}</span>
+          </div>
+          <div class="client-mobile-vehicle-finance">
+            <span class="client-mobile-vehicle-amount">{{ formatGnf(vehicle.total_earned) }}</span>
+          </div>
+          <i class="pi pi-chevron-right" />
+        </NuxtLink>
+      </div>
+      <p v-else class="client-mobile-empty-state">Aucun véhicule associé pour le moment.</p>
+    </template>
   </div>
 
-  <div class="client-desktop-dashboard grid grid-cols-12 gap-8">
+  <div v-if="error" class="client-desktop-dashboard" role="alert">
+    <div class="card">{{ error.message }}</div>
+  </div>
+  <div v-else-if="isLoading && !dashboard" class="client-desktop-dashboard" role="status">
+    <div class="card">Chargement du tableau de bord…</div>
+  </div>
+  <div v-else-if="summary" class="client-desktop-dashboard grid grid-cols-12 gap-8">
     <!--
       KPI desktop/tablette paysage : markup et classes repris fidèlement de
       _template/apollo-vue-6.2.0/src/components/dashboard/ecommerce/
@@ -143,40 +182,39 @@ const notifications = [
       masqué (voir le split chrome/contenu de _mobile.scss) : le mobile et
       la tablette portrait ne sont pas concernés par ce bloc.
 
-      Variation (%) calculée réellement (voir utils/kpiTrend.ts) contre une
-      période précédente encore mockée localement (previousVehicles/
-      previousExpenses ci-dessus, même statut que vehicles) faute d'un vrai
-      historique daté dans le dashboard — jamais un pourcentage tapé en dur.
-      Plus de mini line chart : retiré à la demande explicite du 2026-08-26.
+      Variation (%) calculée réellement contre GET /v1/mobile/dashboard?
+      period=mois_passe (voir computed kpiTrends plus haut) — jamais un
+      pourcentage tapé en dur. Carte 3 = operations_count (voir commentaire
+      "Carte n°3" plus haut : "Net à payer" n'a pas d'équivalent réel).
     -->
     <div class="col-span-12 md:col-span-6 xl:col-span-3">
       <ClientDashboardKpiCard
         label="Commission générée"
-        :value="formatGnf(totals.generated)"
+        :value="formatGnf(summary.total_earned)"
         :trend="kpiTrends.generated"
       />
     </div>
     <div class="col-span-12 md:col-span-6 xl:col-span-3">
       <ClientDashboardKpiCard
         label="Dépenses"
-        :value="formatGnf(totalExpenses)"
+        :value="formatGnf(summary.frais_depenses_total)"
         :trend="kpiTrends.expenses"
       />
     </div>
     <div class="col-span-12 md:col-span-6 xl:col-span-3">
       <ClientDashboardKpiCard
-        label="Net à payer"
-        :value="formatGnf(netToPay)"
-        :trend="kpiTrends.net"
+        label="Opérations"
+        :value="String(summary.operations_count)"
+        :trend="kpiTrends.operations"
       />
     </div>
     <div class="col-span-12 md:col-span-6 xl:col-span-3">
       <ClientDashboardKpiCard
         label="Reste à payer"
-        :value="formatGnf(totals.remaining)"
+        :value="formatGnf(summary.balance)"
         :trend="kpiTrends.remaining"
         secondary-label="Déjà payé"
-        :secondary-value="formatGnf(totals.paid)"
+        :secondary-value="formatGnf(summary.total_paid)"
       />
     </div>
 
@@ -186,27 +224,36 @@ const notifications = [
           <div><div class="font-semibold text-xl">Solde par véhicule</div><span class="text-muted-color">Total des commissions générées</span></div>
           <NuxtLink to="/espace-client/vehicules" class="flex items-center gap-2 text-primary font-medium hover:underline">Tout voir <i class="pi pi-arrow-right text-sm" /></NuxtLink>
         </div>
-        <ul class="list-none p-0 m-0">
-          <li v-for="vehicle in vehicles" :key="vehicle.registration" class="border-b border-surface last:border-b-0">
-            <NuxtLink :to="`/espace-client/vehicules/${vehicle.id}`" external class="flex items-center justify-between gap-4 py-4 group">
-              <div class="min-w-0"><span class="block text-surface-900 dark:text-surface-0 font-semibold group-hover:text-primary">{{ vehicle.name }}</span><span class="block text-muted-color text-sm mt-1">{{ vehicle.registration }}</span></div>
-              <div class="shrink-0 text-right"><strong class="block text-surface-900 dark:text-surface-0">{{ formatGnf(vehicle.commission) }}</strong><span class="block text-green-500 text-sm mt-1">{{ vehicle.status }}</span></div>
+        <ul v-if="hasVehicles" class="list-none p-0 m-0">
+          <li v-for="vehicle in parVehicule" :key="vehicle.vehicule_id" class="border-b border-surface last:border-b-0">
+            <NuxtLink :to="`/espace-client/vehicules/${vehicle.vehicule_id}`" external class="flex items-center justify-between gap-4 py-4 group">
+              <div class="min-w-0"><span class="block text-surface-900 dark:text-surface-0 font-semibold group-hover:text-primary">{{ vehicle.nom_vehicule }}</span><span class="block text-muted-color text-sm mt-1">{{ vehicle.immatriculation }}</span></div>
+              <div class="shrink-0 text-right"><strong class="block text-surface-900 dark:text-surface-0">{{ formatGnf(vehicle.total_earned) }}</strong></div>
             </NuxtLink>
           </li>
         </ul>
+        <p v-else class="text-muted-color">Aucun véhicule associé pour le moment.</p>
       </div>
     </div>
 
     <div class="col-span-12 xl:col-span-6">
       <div class="card">
-        <div class="flex items-center justify-between mb-6"><div class="font-semibold text-xl">Notifications</div><Button icon="pi pi-ellipsis-v" text rounded severity="secondary" /></div>
-        <span class="block text-muted-color font-medium mb-4">AUJOURD’HUI</span>
-        <ul class="p-0 m-0 list-none">
-          <li v-for="notification in notifications" :key="notification.title" class="flex items-center py-3 border-b border-surface last:border-b-0">
-            <div :class="notification.background" class="w-12 h-12 flex items-center justify-center rounded-full mr-4 shrink-0"><i :class="[notification.icon, notification.iconColor]" class="!text-xl" /></div>
-            <span class="text-surface-900 dark:text-surface-0 leading-normal"><strong class="font-medium">{{ notification.title }}</strong><span class="block text-muted-color mt-1">{{ notification.detail }}</span></span>
+        <div class="flex items-center justify-between mb-6">
+          <div class="font-semibold text-xl">Notifications</div>
+          <Button icon="pi pi-ellipsis-v" text rounded severity="secondary" aria-label="Tout marquer comme lu" @click="markAllRead" />
+        </div>
+        <ul v-if="recentNotifications.length" class="p-0 m-0 list-none">
+          <li v-for="notification in recentNotifications" :key="notification.id" class="flex items-center py-3 border-b border-surface last:border-b-0">
+            <div :class="notificationVisual(notification.type).background" class="w-12 h-12 flex items-center justify-center rounded-full mr-4 shrink-0">
+              <i :class="[notificationVisual(notification.type).icon, notificationVisual(notification.type).iconColor]" class="!text-xl" />
+            </div>
+            <span class="text-surface-900 dark:text-surface-0 leading-normal" :class="{ 'font-semibold': !notification.lu }">
+              <strong class="font-medium">{{ notification.titre }}</strong>
+              <span class="block text-muted-color mt-1">{{ notification.message }} · {{ formatNotificationDate(notification.created_at) }}</span>
+            </span>
           </li>
         </ul>
+        <p v-else class="text-muted-color">Aucune notification pour le moment.</p>
       </div>
     </div>
   </div>
