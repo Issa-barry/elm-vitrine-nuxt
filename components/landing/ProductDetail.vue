@@ -53,7 +53,7 @@ function increaseQuantity() {
   <div class="grid gap-8 md:grid-cols-2 mt-16">
     <div>
       <div class="relative rounded-md bg-gray-100 aspect-square overflow-hidden">
-        <img :src="activeFormat.src" :alt="activeFormat.title" class="w-full h-full object-contain">
+        <img :src="activeFormat.src" :alt="activeFormat.title" class="w-full h-full object-cover">
 
         <button
           type="button"
@@ -81,7 +81,7 @@ function increaseQuantity() {
           class="rounded-md bg-gray-100 aspect-square overflow-hidden"
           @click="activeImageIndex = index + 1"
         >
-          <img :src="format.src" :alt="format.title" class="w-full h-full object-contain">
+          <img :src="format.src" :alt="format.title" class="w-full h-full object-cover">
         </button>
       </div>
     </div>
