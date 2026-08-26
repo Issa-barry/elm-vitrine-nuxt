@@ -1,159 +1,79 @@
 <script setup lang="ts">
-// Carte KPI desktop / tablette paysage : un seul composant factorisé pour les
-// 3 cartes "commissions" du tableau de bord (voir pages/espace-client/index.vue),
-// au lieu de dupliquer le balisage. Hiérarchie volontairement simple —
-// libellé -> montant -> information secondaire — inspirée d'une référence
-// visuelle externe (composition uniquement, aucune donnée ni texte repris).
+// Carte KPI desktop / tablette paysage — markup/classes repris de
+// _template/apollo-vue-6.2.0/src/components/dashboard/ecommerce/
+// StatsEcommerceWidget.vue (titre en haut, gros montant, variation %),
+// sans le mini line chart : retiré à la demande explicite du 2026-08-26
+// (surchargeait des cartes déjà denses une fois les % réels en place).
+// Voir pages/espace-client/index.vue pour les 4 instances et
+// utils/kpiTrend.ts pour le calcul/l'arrondi de la variation.
+interface Trend {
+  /** Pourcentage brut, non arrondi — voir utils/kpiTrend.ts. */
+  percent: number;
+  /** Couleur découplée du signe : une hausse n'est pas toujours "positive"
+   * (ex. Dépenses) — voir pages/espace-client/index.vue. */
+  tone: "positive" | "negative";
+}
+
 interface Props {
   label: string;
-  amount: string;
-  /** Variante "primary" : carte mise en avant (fond coloré), pour LE KPI
-   * dominant du tableau de bord. Les autres cartes restent neutres. */
-  variant?: "primary" | "default";
-  icon?: string;
-  iconBackground?: string;
-  iconColor?: string;
+  value: string;
+  /** null/undefined => aucune comparaison calculable (période précédente à
+   * 0, données absentes) : état neutre, jamais de pourcentage inventé. */
+  trend?: Trend | null;
   secondaryLabel?: string;
   secondaryValue?: string;
 }
 
-withDefaults(defineProps<Props>(), {
-  variant: "default",
+const props = withDefaults(defineProps<Props>(), {
+  trend: null,
 });
+
+// Une variation qui s'arrondit à 0 est "stable" : affichée "0%" en neutre,
+// sans flèche ni couleur de tone — distinct du cas "pas de trend du tout"
+// (tiret) où la comparaison n'était pas calculable.
+const roundedPercent = computed(() => props.trend ? roundKpiTrendPercent(props.trend.percent) : null);
+const trendLabel = computed(() => props.trend ? formatKpiTrendPercent(props.trend.percent) : "");
 </script>
 
 <template>
-  <div class="client-kpi-card" :class="`client-kpi-card--${variant}`">
-    <svg
-      v-if="variant === 'primary'"
-      class="client-kpi-card__wave"
-      viewBox="0 0 600 180"
-      preserveAspectRatio="none"
-      aria-hidden="true"
+  <div class="card client-kpi-card h-full !mb-0">
+    <span class="font-semibold text-lg">{{ label }}</span>
+    <span class="block font-bold text-surface-900 dark:text-surface-0 text-2xl leading-tight mt-4 whitespace-nowrap">{{ value }}</span>
+
+    <div
+      v-if="trend"
+      class="mt-1"
+      :class="roundedPercent === 0 ? 'text-muted-color' : (trend.tone === 'positive' ? 'text-green-500' : 'text-red-500')"
     >
-      <path d="M0 65 C105 18 174 38 260 70 C360 108 425 38 600 62 L600 180 L0 180 Z" fill="currentColor" />
-    </svg>
+      <span class="font-medium">{{ trendLabel }}</span>
+      <i v-if="roundedPercent !== 0" class="pi text-xs ml-2" :class="roundedPercent! > 0 ? 'pi-arrow-up' : 'pi-arrow-down'" />
+    </div>
+    <div v-else class="mt-1 text-muted-color">
+      <span class="font-medium">—</span>
+    </div>
 
-    <div class="client-kpi-card__body">
-      <div class="client-kpi-card__head">
-        <span class="client-kpi-card__label">{{ label }}</span>
-        <span v-if="icon" class="client-kpi-card__icon" :class="iconBackground">
-          <i :class="[icon, iconColor]" />
-        </span>
-      </div>
-
-      <strong class="client-kpi-card__amount">{{ amount }}</strong>
-
-      <div v-if="secondaryLabel" class="client-kpi-card__secondary">
-        <span>{{ secondaryValue ? `${secondaryLabel} :` : secondaryLabel }}</span>
-        <strong v-if="secondaryValue">{{ secondaryValue }}</strong>
-      </div>
+    <div v-if="secondaryLabel" class="mt-2 text-sm text-muted-color">
+      {{ secondaryLabel }}<template v-if="secondaryValue">&nbsp;: <strong class="text-surface-900 dark:text-surface-0 font-medium">{{ secondaryValue }}</strong></template>
     </div>
   </div>
 </template>
 
 <style lang="scss" scoped>
+// Reprend .card d'Apollo (_template/apollo-vue-6.2.0/src/assets/layout/
+// _utils.scss et variables/_light.scss|_dark.scss) : bordure + ombre douce
+// + border-radius 12px fixe (le .card ELM n'a ni bordure ni ombre et suit
+// var(--content-border-radius), plus petit). Police Poppins (chargée dans
+// pages/espace-client/index.vue), avec repli sur la police ELM existante.
 .client-kpi-card {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-  padding: 1.75rem;
-  background: var(--surface-card);
+  font-family: "Poppins", "Lato", sans-serif;
   border: 1px solid var(--surface-border);
-  border-radius: var(--content-border-radius);
+  border-radius: 12px;
+  box-shadow: 0 4px 30px rgba(221, 224, 255, 0.54);
 }
 
-.client-kpi-card__wave {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 55%;
-  color: color-mix(in srgb, var(--primary-contrast-color) 16%, transparent);
-  pointer-events: none;
-}
-
-.client-kpi-card__body {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-}
-
-.client-kpi-card__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
-  margin-bottom: 0.85rem;
-}
-
-.client-kpi-card__label {
-  color: var(--text-color-secondary);
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
-.client-kpi-card__icon {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: var(--content-border-radius);
-  font-size: 1.15rem;
-}
-
-.client-kpi-card__amount {
-  margin: auto 0 0.9rem;
-  color: var(--text-color);
-  font-size: 1.5rem;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.client-kpi-card__secondary {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  color: var(--text-color-secondary);
-  font-size: 0.88rem;
-}
-
-.client-kpi-card__secondary strong {
-  color: var(--text-color);
-  font-weight: 700;
-}
-
-// Variante mise en avant : même fond/vague que la carte "Cumul des
-// commissions" du dashboard mobile (client-mobile-balance-card), pour une
-// continuité visuelle réelle entre mobile et desktop plutôt qu'un habillage
-// desktop inventé.
-.client-kpi-card--primary {
-  border-color: transparent;
-  background: var(--primary-color);
-}
-
-.client-kpi-card--primary .client-kpi-card__label,
-.client-kpi-card--primary .client-kpi-card__secondary,
-.client-kpi-card--primary .client-kpi-card__amount {
-  color: var(--primary-contrast-color);
-}
-
-.client-kpi-card--primary .client-kpi-card__secondary strong {
-  color: var(--primary-contrast-color);
-}
-
-.client-kpi-card--primary .client-kpi-card__label {
-  opacity: 0.92;
-}
-
-.client-kpi-card--primary .client-kpi-card__secondary {
-  opacity: 0.85;
+:global(.app-dark) .client-kpi-card {
+  // Comme Apollo : pas d'ombre en mode sombre (celle-ci, calée sur un fond
+  // clair, dénote sur un fond sombre).
+  box-shadow: none;
 }
 </style>

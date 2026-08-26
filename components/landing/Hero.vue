@@ -3,10 +3,9 @@
     <div class="p-24 md:order-1 hidden md:block">
       <img
         class="rounded-full transition-transform transform hover:scale-125"
-        src="~/assets/img/hero.jpg"
-        alt="Starship starts the engine"
+        src="~/assets/img/produit/prd-21.webp"
+        alt="Bouteille Eau La Maman sur la ligne de production"
         loading="eager"
-        format="avif"
         width="512"
         height="512"
       >
