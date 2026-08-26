@@ -26,13 +26,17 @@ const categories = [
 </script>
 
 <template>
-  <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-8 mt-16">
-    <LandingProductCard
-      v-for="item of categories"
-      :key="item.title"
-      :image="item.image"
-      :title="item.title"
-      :description="item.description"
-    />
+  <div class="mt-16">
+    <h2 class="font-bold text-3xl text-gray-800">Nos catégories</h2>
+
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-8 mt-10">
+      <LandingProductCard
+        v-for="item of categories"
+        :key="item.title"
+        :image="item.image"
+        :title="item.title"
+        :description="item.description"
+      />
+    </div>
   </div>
 </template>
