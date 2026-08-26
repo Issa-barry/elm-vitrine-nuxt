@@ -12,6 +12,7 @@ definePageMeta({
     </LandingSectionhead>
 
     <LandingProductFormats />
-    <LandingProductCategories />
+    <!-- <LandingProductCategories /> -->
+    <LandingProductDetail />
   </LandingContainer>
 </template>
