@@ -1,4 +1,3 @@
-import { $fetch as rawFetch } from "ofetch";
 import type { AuthContext, AuthErrorInfo, AuthUser, LoginInput } from "~/config/auth";
 import { hasClientSpaceAccess, normalizeAuthError } from "~/config/auth";
 
@@ -35,6 +34,20 @@ export function useAuth() {
   const status = useState<AuthStatus>("auth:status", () => "idle");
   const lastError = useState<AuthErrorInfo | null>("auth:lastError", () => null);
 
+  // useRequestFetch() (Nuxt, pas ofetch brut) : nécessaire pour appeler nos
+  // propres routes BFF (chemins relatifs "/api/auth/...") depuis un
+  // middleware qui s'exécute aussi côté SSR (middleware/auth.ts,
+  // middleware/guest.ts, sur toute navigation "dure" — page.goto() direct,
+  // F5...). Un ofetch importé brut n'a pas d'URL de base côté serveur (Node
+  // ne sait pas résoudre un chemin relatif sans document/origine) et échoue
+  // avec "Failed to parse URL from /api/auth/me" ; useRequestFetch() résout
+  // en plus vers CE serveur Nuxt et transmet le cookie de session entrant
+  // (indispensable pour que server/api/auth/me.get.ts retrouve le token
+  // scellé). Côté client, useRequestFetch() renvoie simplement le $fetch
+  // habituel : aucun comportement différent pour les appels déclenchés après
+  // hydratation (ex. clic sur "Se connecter").
+  const requestFetch = useRequestFetch();
+
   const isAuthenticated = computed(() => status.value === "authenticated");
   const hasClientAccess = computed(() => hasClientSpaceAccess(user.value?.roles));
 
@@ -58,7 +71,7 @@ export function useAuth() {
   async function refreshMe(): Promise<boolean> {
     status.value = "loading";
     try {
-      const data = await rawFetch<MeResponse>("/api/auth/me");
+      const data = await requestFetch<MeResponse>("/api/auth/me");
       applyMe(data);
       return true;
     } catch (error) {
@@ -79,7 +92,7 @@ export function useAuth() {
 
   async function logout(): Promise<void> {
     try {
-      await rawFetch("/api/auth/logout", { method: "POST" });
+      await requestFetch("/api/auth/logout", { method: "POST" });
     } catch {
       // Le nettoyage local a lieu quoi qu'il arrive (voir clear() plus bas) :
       // mieux vaut un utilisateur "trop" déconnecté côté Nuxt qu'une session
@@ -94,7 +107,7 @@ export function useAuth() {
 
   async function logoutAll(): Promise<void> {
     try {
-      await rawFetch("/api/auth/logout-all", { method: "POST" });
+      await requestFetch("/api/auth/logout-all", { method: "POST" });
     } catch {
       // Idem logout().
     }
@@ -105,7 +118,7 @@ export function useAuth() {
     status.value = "loading";
     lastError.value = null;
     try {
-      const data = await rawFetch<LoginResponse>("/api/auth/login", {
+      const data = await requestFetch<LoginResponse>("/api/auth/login", {
         method: "POST",
         body: input,
       });
@@ -121,7 +134,7 @@ export function useAuth() {
       // perdre l'état authentifié qui vient d'être établi. `context` reste
       // simplement absent dans ce cas.
       try {
-        const me = await rawFetch<MeResponse>("/api/auth/me");
+        const me = await requestFetch<MeResponse>("/api/auth/me");
         applyMe(me);
       } catch {
         // user/status restent ceux posés par le login ci-dessus.

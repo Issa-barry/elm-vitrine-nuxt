@@ -86,13 +86,13 @@ router.post("/api/auth/logout", defineEventHandler(() => ({ message: "Déconnect
 router.post("/api/auth/logout-all", defineEventHandler(() => ({ message: "Déconnecté de tous les appareils." })));
 
 // ── Inscription ──────────────────────────────────────────────────────────
+// Toujours "not_found" : tests/e2e/inscription.spec.ts utilise volontairement
+// le même numéro que TEST_TELEPHONE (601020304, un numéro guinéen plausible
+// quelconque) sans lien avec le compte de connexion simulé ici — un
+// "user_exists" bloquerait son parcours d'inscription dès l'étape 1.
 router.post(
   "/api/auth/register/check-phone",
-  defineEventHandler(async (event) => {
-    const body = await readBody(event);
-    if (body?.telephone === TEST_TELEPHONE) {
-      return { status: "user_exists", prefill: null };
-    }
+  defineEventHandler(async () => {
     return { status: "not_found", prefill: null };
   }),
 );

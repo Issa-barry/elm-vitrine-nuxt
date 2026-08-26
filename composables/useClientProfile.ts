@@ -1,4 +1,3 @@
-import { $fetch as rawFetch } from "ofetch";
 import type {
   ClientProfile,
   ClientProfileResponse,
@@ -17,12 +16,16 @@ export function useClientProfile() {
   const isSavingLocalisation = useState<boolean>("client:profile:savingLocalisation", () => false);
   const isSavingNotifications = useState<boolean>("client:profile:savingNotifications", () => false);
   const error = useState<AuthErrorInfo | null>("client:profile:error", () => null);
+  // useRequestFetch() plutôt qu'un ofetch importé brut : voir le commentaire
+  // équivalent dans composables/useAuth.ts (résolution d'URL relative +
+  // transmission du cookie de session côté SSR).
+  const requestFetch = useRequestFetch();
 
   async function fetchProfile(): Promise<boolean> {
     isLoading.value = true;
     error.value = null;
     try {
-      const data = await rawFetch<ClientProfileResponse>("/api/client/profile");
+      const data = await requestFetch<ClientProfileResponse>("/api/client/profile");
       profile.value = data.profile;
       return true;
     } catch (fetchError) {
@@ -43,7 +46,7 @@ export function useClientProfile() {
   ): Promise<{ ok: true } | { ok: false; error: AuthErrorInfo }> {
     isSavingLocalisation.value = true;
     try {
-      const data = await rawFetch<ClientProfileResponse>("/api/client/profile", {
+      const data = await requestFetch<ClientProfileResponse>("/api/client/profile", {
         method: "PATCH",
         body: payload,
       });
@@ -66,7 +69,7 @@ export function useClientProfile() {
   ): Promise<{ ok: true } | { ok: false; error: AuthErrorInfo }> {
     isSavingNotifications.value = true;
     try {
-      const data = await rawFetch<UpdateNotificationPreferencesResponse>(
+      const data = await requestFetch<UpdateNotificationPreferencesResponse>(
         "/api/client/profile/notification-preferences",
         { method: "PATCH", body: { preferences: { activite } } },
       );

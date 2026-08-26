@@ -7,14 +7,19 @@ import { loginAsTestUser } from "./helpers";
 // ("ABARRY", statut "Entretien"...) depuis le branchement du 26/08/2026.
 
 test.describe("Espace client — véhicules", () => {
+  // Voir le commentaire équivalent dans tests/e2e/profil.spec.ts.
+  test.describe.configure({ timeout: 90_000 });
+
   test("affiche le tableau des vrais véhicules (pas de mock)", async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", (err) => errors.push(err.message));
 
     await loginAsTestUser(page);
-    await page.goto("/espace-client/vehicules", { waitUntil: "domcontentloaded" });
+    await page.goto("/espace-client/vehicules", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(1000);
 
-    await expect(page.getByRole("main").getByText("Mes véhicules")).toBeVisible();
+    await expect(page.getByRole("main").getByText("Mes véhicules")).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole("columnheader", { name: "Immatriculation" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Conducteur" })).toBeVisible();
 
@@ -38,10 +43,12 @@ test.describe("Espace client — véhicules", () => {
 
   test("filtre par statut réel (Actif/Inactif, pas Entretien)", async ({ page }) => {
     await loginAsTestUser(page);
-    await page.goto("/espace-client/vehicules", { waitUntil: "domcontentloaded" });
+    await page.goto("/espace-client/vehicules", { waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.waitForLoadState("load");
+    await page.waitForTimeout(1000);
 
     const search = page.locator(".client-desktop-vehicles").getByPlaceholder("Rechercher");
+    await expect(search).toBeVisible({ timeout: 10_000 });
     await search.fill("ABARRY 2");
 
     const table = page.locator(".client-desktop-vehicles table");

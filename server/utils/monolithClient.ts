@@ -41,10 +41,19 @@ export async function callMonolith<T = unknown>(path: string, options: CallMonol
     // registrationProxy.ts/passwordResetProxy.ts — le chemin est construit
     // dynamiquement, rien à inférer ici. Le type de retour de callMonolith
     // (Promise<T>) porte la forme réelle, fixée par chaque appelant.
+    //
+    // retry : uniquement pour GET (idempotent — jamais pour POST/PATCH, qui
+    // pourraient dupliquer un effet de bord). Cible les pannes réseau
+    // transitoires serveur-à-serveur (timeout, connexion refusée/relancée) ;
+    // ofetch ne réessaie déjà par défaut que sur des statuts HTTP
+    // typiquement transitoires (408/429/5xx), jamais sur un vrai refus
+    // métier (401/403/404/422).
     const data = await $fetch(`${baseUrl}${path}`, {
       method: options.method || "GET",
       headers,
       body: options.body,
+      retry: options.method && options.method !== "GET" ? 0 : 2,
+      retryDelay: 300,
     });
     return data as T;
   } catch (error) {

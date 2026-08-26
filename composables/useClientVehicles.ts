@@ -1,4 +1,3 @@
-import { $fetch as rawFetch } from "ofetch";
 import type { ClientVehicle } from "~/config/clientVehicles";
 import type { AuthErrorInfo } from "~/config/auth";
 import { normalizeAuthError } from "~/config/auth";
@@ -12,12 +11,16 @@ export function useClientVehicles() {
   // (voir demande du 26/08/2026, section 24 : jamais de données fictives
   // pendant le chargement).
   const hasLoaded = useState<boolean>("client:vehicles:hasLoaded", () => false);
+  // useRequestFetch() plutôt qu'un ofetch importé brut : voir le commentaire
+  // équivalent dans composables/useAuth.ts (résolution d'URL relative +
+  // transmission du cookie de session côté SSR).
+  const requestFetch = useRequestFetch();
 
   async function fetchVehicles(): Promise<boolean> {
     isLoading.value = true;
     error.value = null;
     try {
-      vehicles.value = await rawFetch<ClientVehicle[]>("/api/client/vehicles");
+      vehicles.value = await requestFetch<ClientVehicle[]>("/api/client/vehicles");
       hasLoaded.value = true;
       return true;
     } catch (fetchError) {
