@@ -18,8 +18,7 @@ const totals = computed(() => ({
 
 // Même montant que la carte "Dépenses" mobile (client-mobile-summary-card,
 // non modifiée dans cette passe) : pas encore branché sur une source de
-// dépenses partagée/datée, donc pas de série ni de variation réelle possible
-// pour ce KPI ci-dessous.
+// dépenses partagée/datée.
 const totalExpenses = 614_200;
 
 // "Net à payer" n'existe pas comme notion distincte ailleurs dans l'app :
@@ -28,6 +27,32 @@ const totalExpenses = 614_200;
 // payé). Simple soustraction de deux valeurs déjà affichées, aucune nouvelle
 // règle métier/backend introduite.
 const netToPay = computed(() => totals.value.generated - totalExpenses);
+
+// Période précédente : même statut que vehicles/totalExpenses ci-dessus
+// (instantané mock local, le dashboard n'a pas encore de vrai historique
+// daté) — sert de base de comparaison RÉELLE (voir utils/kpiTrend.ts) pour
+// les 4 variations affichées, plutôt qu'un pourcentage tapé en dur.
+const previousVehicles = [
+  { commission: 2_150_000, paid: 1_600_000 },
+  { commission: 1_780_000, paid: 1_300_000 },
+  { commission: 1_190_000, paid: 700_000 },
+];
+const previousExpenses = 590_000;
+
+const previousTotals = computed(() => ({
+  generated: previousVehicles.reduce((sum, vehicle) => sum + vehicle.commission, 0),
+  remaining: previousVehicles.reduce((sum, vehicle) => sum + vehicle.commission - vehicle.paid, 0),
+}));
+const previousNetToPay = computed(() => previousTotals.value.generated - previousExpenses);
+
+// invertTone=true pour Dépenses : une hausse de dépenses n'est pas une
+// bonne nouvelle, contrairement aux 3 autres KPI (voir utils/kpiTrend.ts).
+const kpiTrends = computed(() => ({
+  generated: computeKpiTrend(totals.value.generated, previousTotals.value.generated),
+  expenses: computeKpiTrend(totalExpenses, previousExpenses, true),
+  net: computeKpiTrend(netToPay.value, previousNetToPay.value),
+  remaining: computeKpiTrend(totals.value.remaining, previousTotals.value.remaining),
+}));
 
 const notifications = [
   { icon: "pi pi-check", background: "bg-blue-100 dark:bg-blue-400/10", iconColor: "text-blue-500", title: "Livraison CMD-2841 terminée", detail: "12 packs livrés aujourd’hui" },
@@ -105,38 +130,38 @@ const notifications = [
       masqué (voir le split chrome/contenu de _mobile.scss) : le mobile et
       la tablette portrait ne sont pas concernés par ce bloc.
 
-      Pas d'historique de période dans les données actuelles du dashboard
-      (vehicles est un instantané, pas une série datée) : les 4 cartes
-      affichent donc un état neutre pour la variation (%) plutôt qu'un
-      chiffre inventé. Les mini-tracés utilisent la seule vraie décomposition
-      disponible ici (répartition par véhicule) pour Commission générée et
-      Reste à payer ; Dépenses/Net à payer n'ont pas de décomposition dans ce
-      composant et affichent une ligne neutre plutôt qu'une courbe inventée.
+      Variation (%) calculée réellement (voir utils/kpiTrend.ts) contre une
+      période précédente encore mockée localement (previousVehicles/
+      previousExpenses ci-dessus, même statut que vehicles) faute d'un vrai
+      historique daté dans le dashboard — jamais un pourcentage tapé en dur.
+      Plus de mini line chart : retiré à la demande explicite du 2026-08-26.
     -->
     <div class="col-span-12 md:col-span-6 xl:col-span-3">
       <ClientDashboardKpiCard
         label="Commission générée"
         :value="formatGnf(totals.generated)"
-        :series="vehicles.map((vehicle) => vehicle.commission)"
+        :trend="kpiTrends.generated"
       />
     </div>
     <div class="col-span-12 md:col-span-6 xl:col-span-3">
       <ClientDashboardKpiCard
         label="Dépenses"
         :value="formatGnf(totalExpenses)"
+        :trend="kpiTrends.expenses"
       />
     </div>
     <div class="col-span-12 md:col-span-6 xl:col-span-3">
       <ClientDashboardKpiCard
         label="Net à payer"
         :value="formatGnf(netToPay)"
+        :trend="kpiTrends.net"
       />
     </div>
     <div class="col-span-12 md:col-span-6 xl:col-span-3">
       <ClientDashboardKpiCard
         label="Reste à payer"
         :value="formatGnf(totals.remaining)"
-        :series="vehicles.map((vehicle) => vehicle.commission - vehicle.paid)"
+        :trend="kpiTrends.remaining"
         secondary-label="Déjà payé"
         :secondary-value="formatGnf(totals.paid)"
       />

@@ -1,10 +1,14 @@
 import { test, expect } from "@playwright/test";
+import { computeKpiTrend, formatKpiTrendPercent } from "../../utils/kpiTrend";
 
 // Couvre les 4 cartes KPI desktop/tablette paysage du dashboard
 // (pages/espace-client/index.vue + components/client/dashboard/KpiCard.vue,
 // markup repris de _template/apollo-vue-6.2.0/.../StatsEcommerceWidget.vue).
 // Le dashboard mobile (.client-mobile-dashboard) n'est pas concerné par ces
-// cartes et reste couvert par espace-client-navigation.spec.ts.
+// cartes et reste couvert par espace-client-navigation.spec.ts. Le calcul de
+// variation lui-même (formule, arrondi, cas limites) est testé unitairement
+// dans utils/kpiTrend.test.ts ; ici on vérifie juste que la page affiche bien
+// le résultat de ce calcul, pas un chiffre différent.
 //
 // Les montants attendus sont calculés ici avec le même formatter (fr-FR)
 // que l'app plutôt que codés en dur avec un espace normal : Intl.NumberFormat
@@ -22,6 +26,22 @@ const paid = vehicles.reduce((sum, v) => sum + v.paid, 0);
 const remaining = generated - paid;
 const totalExpenses = 614_200;
 const netToPay = generated - totalExpenses;
+
+// Même instantané "période précédente" que pages/espace-client/index.vue.
+const previousVehicles = [
+  { commission: 2_150_000, paid: 1_600_000 },
+  { commission: 1_780_000, paid: 1_300_000 },
+  { commission: 1_190_000, paid: 700_000 },
+];
+const previousExpenses = 590_000;
+const previousGenerated = previousVehicles.reduce((sum, v) => sum + v.commission, 0);
+const previousRemaining = previousVehicles.reduce((sum, v) => sum + v.commission - v.paid, 0);
+const previousNetToPay = previousGenerated - previousExpenses;
+
+const generatedTrend = formatKpiTrendPercent(computeKpiTrend(generated, previousGenerated)!.percent);
+const expensesTrend = formatKpiTrendPercent(computeKpiTrend(totalExpenses, previousExpenses, true)!.percent);
+const netTrend = formatKpiTrendPercent(computeKpiTrend(netToPay, previousNetToPay)!.percent);
+const remainingTrend = formatKpiTrendPercent(computeKpiTrend(remaining, previousRemaining)!.percent);
 
 test.describe("Dashboard — cartes KPI (tablette paysage / desktop)", () => {
   test("affiche les 4 cartes avec les bons libellés et montants", async ({ page }) => {
@@ -45,14 +65,39 @@ test.describe("Dashboard — cartes KPI (tablette paysage / desktop)", () => {
     await expect(kpiRow.getByText(formatGnf(paid))).toBeVisible();
   });
 
-  test("affiche un état neutre pour la variation (pas d'historique de période disponible)", async ({ page }) => {
+  test("affiche des variations réellement calculées, pas de pourcentage inventé", async ({ page }) => {
     await page.goto("/espace-client", { waitUntil: "domcontentloaded" });
-    // Les 4 cartes sont dans le même état tant qu'aucune donnée de période
-    // précédente n'existe dans le dashboard : "—" plutôt qu'un pourcentage
-    // inventé (aucun +X%/-X% ne doit apparaître dans la grille KPI).
     const kpiRow = page.locator(".client-desktop-dashboard");
-    await expect(kpiRow.getByText("—")).toHaveCount(4);
-    await expect(kpiRow.locator(".pi-arrow-up, .pi-arrow-down")).toHaveCount(0);
+
+    await expect(kpiRow.getByText(generatedTrend, { exact: true })).toBeVisible();
+    await expect(kpiRow.getByText(expensesTrend, { exact: true })).toBeVisible();
+    await expect(kpiRow.getByText(netTrend, { exact: true })).toBeVisible();
+    await expect(kpiRow.getByText(remainingTrend, { exact: true })).toBeVisible();
+
+    // Jamais de pourcentage cassé.
+    await expect(kpiRow.getByText("NaN%")).toHaveCount(0);
+    await expect(kpiRow.getByText("Infinity%")).toHaveCount(0);
+    await expect(kpiRow.getByText(/^[+-]?0%$/)).toHaveCount(0); // les 4 KPI actuels varient tous, aucun ne doit tomber à "0%"/"+0%"/"-0%"
+
+    // Plus de mini line chart (retiré à la demande du 26/08) : aucun <svg> dans la grille KPI.
+    await expect(kpiRow.locator("svg")).toHaveCount(0);
+  });
+
+  test("Dépenses : une hausse de dépenses ne s'affiche pas en vert (tone inversé)", async ({ page }) => {
+    await page.goto("/espace-client", { waitUntil: "domcontentloaded" });
+    const expensesTrendValue = computeKpiTrend(totalExpenses, previousExpenses, true)!;
+    // Garde-fou : si ce mock venait à changer et que Dépenses baissait, ce
+    // test perdrait son sens (voir utils/kpiTrend.test.ts pour le cas inverse).
+    expect(expensesTrendValue.percent).toBeGreaterThan(0);
+    expect(expensesTrendValue.tone).toBe("negative");
+
+    const expensesCard = page.locator(".client-desktop-dashboard")
+      .getByText("Dépenses", { exact: true })
+      .locator("xpath=ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' card ')][1]");
+    // La classe de couleur (text-red-500) est sur le conteneur du badge, pas
+    // sur le <span> du texte lui-même (voir KpiCard.vue).
+    const trendBadge = expensesCard.getByText(expensesTrend, { exact: true }).locator("xpath=parent::div");
+    await expect(trendBadge).toHaveClass(/text-red-500/);
   });
 });
 
