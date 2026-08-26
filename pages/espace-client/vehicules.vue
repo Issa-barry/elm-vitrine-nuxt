@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: "client" });
+definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Mes véhicules — Eau La Maman" });
 
 const search = ref("");

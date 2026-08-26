@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: "client" });
+definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Dépenses de mes véhicules — Eau La Maman" });
 
 type ExpenseStatus = "valide" | "soumis";

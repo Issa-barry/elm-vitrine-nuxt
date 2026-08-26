@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: "client" });
+definePageMeta({ layout: "client", middleware: "auth" });
 useHead({
   title: "Tableau de bord — Eau La Maman",
   // Police des 4 cartes KPI desktop/tablette paysage (voir

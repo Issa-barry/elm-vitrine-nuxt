@@ -34,7 +34,7 @@ interface DeliveryFilters {
 
 type DeliveryFilterKey = keyof DeliveryFilters;
 
-definePageMeta({ layout: "client" });
+definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Livraisons — Eau La Maman" });
 
 // Données locales temporaires : l'interface est prête à recevoir les mêmes champs depuis l'API.

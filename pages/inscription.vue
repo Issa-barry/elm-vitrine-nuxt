@@ -45,7 +45,6 @@ const isPrefilled = ref(false);
 const isLoading = ref(false);
 const globalError = ref("");
 const errors = ref<Record<string, string>>({});
-const isUiPreview = import.meta.dev;
 
 const selectedCountry = computed(
   () => countries.find((country) => country.iso2 === selectedCode.value) ?? countries[0],
@@ -216,13 +215,6 @@ const checkPhone = async () => {
     return false;
   }
 
-  if (isUiPreview) {
-    isPrefilled.value = false;
-    errors.value = {};
-    globalError.value = "";
-    return true;
-  }
-
   isLoading.value = true;
   errors.value = {};
   globalError.value = "";
@@ -273,13 +265,6 @@ const checkPhone = async () => {
 
 const submitRegistration = async () => {
   if (!validateSecurity()) return;
-
-  if (isUiPreview) {
-    errors.value = {};
-    globalError.value = "";
-    step.value = "success";
-    return;
-  }
 
   isLoading.value = true;
   errors.value = {};

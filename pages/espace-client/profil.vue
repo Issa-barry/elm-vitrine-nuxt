@@ -1,6 +1,22 @@
 <script setup lang="ts">
-definePageMeta({ layout: "client" });
+definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Mon profil — Eau La Maman" });
+
+// Section "Sécurité" ci-dessous uniquement : le reste de cette page
+// (identité/société/notifications) reste un aperçu statique, hors périmètre
+// de ce chantier (socle auth) — voir docs/environment.md.
+const auth = useAuth();
+const router = useRouter();
+const isLoggingOut = ref(false);
+
+const handleLogout = async () => {
+  if (isLoggingOut.value) return;
+  isLoggingOut.value = true;
+  // Pas d'appel réseau en `nuxt dev` (voir composables/useAuth.ts::logout) —
+  // même convention que le reste de la page de connexion.
+  await auth.logout();
+  router.push("/connexion");
+};
 
 const profile = reactive({
   firstName: "Issa",
@@ -53,6 +69,14 @@ const cities = ["Paris", "Boulogne-Billancourt", "Issy-les-Moulineaux", "Neuilly
         <div class="flex items-center justify-between gap-4">
           <div><span class="font-medium">Alertes d’activité</span><span class="block text-muted-color mt-1">Nouvelles commandes et validations</span></div>
           <ToggleSwitch v-model="profile.notifications" />
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="font-semibold text-xl mb-6">Sécurité</div>
+        <div class="flex items-center justify-between gap-4">
+          <div><span class="font-medium">Session</span><span class="block text-muted-color mt-1">Met fin à votre session sur cet appareil uniquement</span></div>
+          <Button label="Se déconnecter" severity="danger" outlined :loading="isLoggingOut" @click="handleLogout" />
         </div>
       </div>
     </div>
