@@ -36,6 +36,14 @@ export interface AuthContext {
   client_id: string | null;
   proprietaire_id: string | null;
   livreur_id: string | null;
+  // Contexte "prestataire" (chantier UI du 27/08/2026, voir
+  // config/clientCapabilities.ts) : n'existe PAS encore dans le contrat réel
+  // GET /api/auth/me — champ optionnel en attendant que le backend l'expose
+  // (nom exact non confirmé, "prestataire_id" choisi par cohérence avec les
+  // 3 champs ci-dessus). Toujours undefined aujourd'hui en pratique ; ne
+  // jamais s'appuyer sur sa présence pour une vraie décision d'autorisation
+  // (Laravel reste l'autorité, voir docs/api-espace-client-contract.md).
+  prestataire_id?: string | null;
 }
 
 // `code` renvoyé par LoginController et par le filet de sécurité
