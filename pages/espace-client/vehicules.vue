@@ -12,10 +12,16 @@ onMounted(() => {
   fetchVehicles();
 });
 
+// "tous" plutôt que "" comme valeur par défaut : PrimeVue Select affiche son
+// placeholder (jamais défini ici) tant que la modelValue est vide ("", null,
+// undefined), même avec une option `{ value: "" }` déjà présente dans la
+// liste — d'où ce sentinel non vide (voir même correctif sur depenses.vue,
+// commissions.vue, activite.vue).
+const ALL = "tous";
 const search = ref("");
 const vehicleFilterVisible = ref(false);
-const appliedStatus = ref<"" | "active" | "inactive">("");
-const draftStatus = ref<"" | "active" | "inactive">("");
+const appliedStatus = ref<typeof ALL | "active" | "inactive">(ALL);
+const draftStatus = ref<typeof ALL | "active" | "inactive">(ALL);
 
 const formatCapacity = (capacite: number | null) =>
   capacite === null ? "—" : `${new Intl.NumberFormat("fr-FR").format(capacite)} packs`;
@@ -24,7 +30,7 @@ const filteredVehicles = computed(() => {
   const query = search.value.trim().toLocaleLowerCase("fr");
   return vehicles.value.filter((vehicle) => {
     const matchesStatus =
-      !appliedStatus.value ||
+      appliedStatus.value === ALL ||
       (appliedStatus.value === "active" ? vehicle.is_active : !vehicle.is_active);
     const haystack = [vehicle.nom, vehicle.immatriculation, vehicle.type, vehicle.conducteur]
       .filter(Boolean)
@@ -36,7 +42,7 @@ const filteredVehicles = computed(() => {
 });
 
 const vehicleStatusOptions = [
-  { label: "Tous les statuts", value: "" },
+  { label: "Tous les statuts", value: ALL },
   { label: "Actif", value: "active" },
   { label: "Inactif", value: "inactive" },
 ];
@@ -59,7 +65,7 @@ const applyVehicleFilter = () => {
       title="Véhicules"
       title-id="mobile-vehicles-title"
       filter-label="Filtrer les véhicules"
-      :filter-count="appliedStatus ? 1 : 0"
+      :filter-count="appliedStatus !== ALL ? 1 : 0"
       @filter="openVehicleFilter"
     />
 
@@ -114,7 +120,7 @@ const applyVehicleFilter = () => {
         <span aria-hidden="true"><i class="pi pi-car" /></span>
         <strong>{{ vehicles.length ? "Aucun véhicule trouvé" : "Aucun véhicule rattaché à votre compte" }}</strong>
         <p v-if="vehicles.length">Essayez avec un autre nom ou une autre immatriculation.</p>
-        <button v-if="search || appliedStatus" type="button" @click="search = ''; appliedStatus = ''">Réinitialiser les filtres</button>
+        <button v-if="search || appliedStatus !== ALL" type="button" @click="search = ''; appliedStatus = ALL">Réinitialiser les filtres</button>
       </div>
     </template>
   </section>
@@ -163,7 +169,7 @@ const applyVehicleFilter = () => {
 
     <template #footer>
       <div class="client-delivery-filter__actions">
-        <Button type="button" label="Réinitialiser" severity="secondary" text @click="draftStatus = ''" />
+        <Button type="button" label="Réinitialiser" severity="secondary" text @click="draftStatus = ALL" />
         <Button type="submit" form="client-vehicle-filter-form" label="Afficher les véhicules" />
       </div>
     </template>

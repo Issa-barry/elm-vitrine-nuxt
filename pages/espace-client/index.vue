@@ -22,6 +22,12 @@ const auth = useAuth();
 const { dashboard, isLoading, error, fetchDashboard } = useClientDashboard();
 const { notifications, fetchNotifications, markAllRead } = useClientNotifications();
 const requestFetch = useRequestFetch();
+// "Solde par véhicule" n'a de sens que pour un contexte proprietaire/livreur
+// (chantier "capacités" du 27/08/2026, voir config/clientCapabilities.ts) :
+// masqué en dessous, pas seulement affiché vide, pour un compte sans ce
+// contexte (ex. client seul, ou futur prestataire seul) — distinction
+// "capacité métier" vs "aucune donnée" (demande du 27/08/2026, section 21).
+const capabilities = useClientCapabilities();
 
 // Identité réelle (GET /api/auth/me) — jamais "Issa M." (ancienne donnée de
 // démonstration). clientSpaceRoleLabel() reflète la même priorité que
@@ -56,6 +62,16 @@ const summary = computed(() => dashboard.value?.summary ?? null);
 const previousSummary = computed(() => previousDashboard.value?.summary ?? null);
 const parVehicule = computed(() => dashboard.value?.par_vehicule ?? []);
 const hasVehicles = computed(() => parVehicule.value.length > 0);
+// Aperçu limité à 3 véhicules sur le dashboard (mobile "Commissions par
+// véhicule" et desktop "Solde par véhicule") — "Tout voir" reste le chemin
+// vers la liste complète des véhicules ; les lignes individuelles mènent
+// maintenant aux commissions (voir topVehicleLink ci-dessous), pas à la fiche
+// véhicule.
+const topVehicles = computed(() => parVehicule.value.slice(0, 3));
+const topVehicleLink = (vehiculeId: string) => ({
+  path: "/espace-client/commissions",
+  query: { vehicule_id: vehiculeId },
+});
 
 // Jamais un pourcentage inventé : null tant que l'une des deux périodes n'est
 // pas chargée (voir utils/kpiTrend.ts — computeKpiTrend renvoie déjà null si
@@ -137,30 +153,31 @@ const recentNotifications = computed(() => (notifications.value?.data ?? []).sli
         </NuxtLink>
       </div>
 
-      <div class="client-mobile-section-heading">
-        <h2>Commissions par véhicule</h2>
-        <NuxtLink to="/espace-client/vehicules">Tout voir <i class="pi pi-arrow-right" /></NuxtLink>
-      </div>
-      <div v-if="hasVehicles" class="client-mobile-vehicle-list">
-        <NuxtLink
-          v-for="vehicle in parVehicule"
-          :key="vehicle.vehicule_id"
-          :to="`/espace-client/vehicules/${vehicle.vehicule_id}`"
-          external
-          class="client-mobile-vehicle-row"
-          :aria-label="`Voir les détails de ${vehicle.nom_vehicule}`"
-        >
-          <div>
-            <span class="client-mobile-vehicle-name">{{ vehicle.nom_vehicule }}</span>
-            <span class="client-mobile-vehicle-registration">{{ vehicle.immatriculation }}</span>
-          </div>
-          <div class="client-mobile-vehicle-finance">
-            <span class="client-mobile-vehicle-amount">{{ formatGnf(vehicle.total_earned) }}</span>
-          </div>
-          <i class="pi pi-chevron-right" />
-        </NuxtLink>
-      </div>
-      <p v-else class="client-mobile-empty-state">Aucun véhicule associé pour le moment.</p>
+      <template v-if="capabilities.vehicles">
+        <div class="client-mobile-section-heading">
+          <h2>Commissions par véhicule</h2>
+          <NuxtLink to="/espace-client/vehicules">Tout voir <i class="pi pi-arrow-right" /></NuxtLink>
+        </div>
+        <div v-if="hasVehicles" class="client-mobile-vehicle-list">
+          <NuxtLink
+            v-for="vehicle in topVehicles"
+            :key="vehicle.vehicule_id"
+            :to="topVehicleLink(vehicle.vehicule_id)"
+            class="client-mobile-vehicle-row"
+            :aria-label="`Voir les commissions de ${vehicle.nom_vehicule}`"
+          >
+            <div>
+              <span class="client-mobile-vehicle-name">{{ vehicle.nom_vehicule }}</span>
+              <span class="client-mobile-vehicle-registration">{{ vehicle.immatriculation }}</span>
+            </div>
+            <div class="client-mobile-vehicle-finance">
+              <span class="client-mobile-vehicle-amount">{{ formatGnf(vehicle.total_earned) }}</span>
+            </div>
+            <i class="pi pi-chevron-right" />
+          </NuxtLink>
+        </div>
+        <p v-else class="client-mobile-empty-state">Aucun véhicule associé pour le moment.</p>
+      </template>
     </template>
   </div>
 
@@ -218,15 +235,15 @@ const recentNotifications = computed(() => (notifications.value?.data ?? []).sli
       />
     </div>
 
-    <div class="col-span-12 xl:col-span-6">
+    <div v-if="capabilities.vehicles" class="col-span-12 xl:col-span-6">
       <div class="card">
         <div class="flex items-center justify-between mb-4">
           <div><div class="font-semibold text-xl">Solde par véhicule</div><span class="text-muted-color">Total des commissions générées</span></div>
           <NuxtLink to="/espace-client/vehicules" class="flex items-center gap-2 text-primary font-medium hover:underline">Tout voir <i class="pi pi-arrow-right text-sm" /></NuxtLink>
         </div>
         <ul v-if="hasVehicles" class="list-none p-0 m-0">
-          <li v-for="vehicle in parVehicule" :key="vehicle.vehicule_id" class="border-b border-surface last:border-b-0">
-            <NuxtLink :to="`/espace-client/vehicules/${vehicle.vehicule_id}`" external class="flex items-center justify-between gap-4 py-4 group">
+          <li v-for="vehicle in topVehicles" :key="vehicle.vehicule_id" class="border-b border-surface last:border-b-0">
+            <NuxtLink :to="topVehicleLink(vehicle.vehicule_id)" class="flex items-center justify-between gap-4 py-4 group">
               <div class="min-w-0"><span class="block text-surface-900 dark:text-surface-0 font-semibold group-hover:text-primary">{{ vehicle.nom_vehicule }}</span><span class="block text-muted-color text-sm mt-1">{{ vehicle.immatriculation }}</span></div>
               <div class="shrink-0 text-right"><strong class="block text-surface-900 dark:text-surface-0">{{ formatGnf(vehicle.total_earned) }}</strong></div>
             </NuxtLink>
@@ -236,7 +253,7 @@ const recentNotifications = computed(() => (notifications.value?.data ?? []).sli
       </div>
     </div>
 
-    <div class="col-span-12 xl:col-span-6">
+    <div class="col-span-12" :class="{ 'xl:col-span-6': capabilities.vehicles }">
       <div class="card">
         <div class="flex items-center justify-between mb-6">
           <div class="font-semibold text-xl">Notifications</div>

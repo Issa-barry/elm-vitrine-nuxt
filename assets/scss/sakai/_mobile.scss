@@ -125,7 +125,12 @@ $bp-mobile-or-tablet-portrait: "#{$bp-mobile}, #{$bp-tablet-portrait}";
       bottom: 0;
       left: 0;
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      // Nombre de colonnes réellement piloté par le style inline du
+      // composant (repeat(N, 1fr), N = items visibles selon les capacités du
+      // compte — voir ClientMobileBottomNav.vue, chantier "capacités" du
+      // 27/08/2026) : 4 ici n'est qu'un repli avant hydratation/JS
+      // désactivé, pas la source de vérité.
+      grid-template-columns: repeat(4, 1fr);
       min-height: calc(var(--client-mobile-nav-height) + env(safe-area-inset-bottom));
       padding: 0.55rem 0.75rem calc(0.45rem + env(safe-area-inset-bottom));
       background: color-mix(in srgb, var(--surface-card) 96%, transparent);

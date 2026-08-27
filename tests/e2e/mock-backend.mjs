@@ -20,6 +20,7 @@ import {
   defineEventHandler,
   getHeader,
   getQuery,
+  getRouterParam,
   readBody,
   toNodeListener,
 } from "h3";
@@ -223,6 +224,35 @@ router.get(
   }),
 );
 
+// Commissions par véhicule (contrat vérifié le 27/08/2026 contre le code réel
+// de App\Http\Controllers\Api\Client\VehiculeCommissionsController — voir
+// config/clientCommissions.ts). Scopé à un seul véhicule à la fois, comme le
+// vrai backend : /espace-client/commissions (composables/useClientCommissions.ts)
+// appelle cette route une fois par véhicule de TEST_VEHICLES et fusionne.
+const TEST_COMMISSIONS_BY_VEHICULE = {
+  "veh-1": [
+    { id: "comm-1", reference: "CMD-2847", date: "2026-08-20T00:00:00.000Z", montant_net: 50_000, montant_a_payer: 50_000, montant_verse: 50_000, montant_restant: 0, statut: "paye", mois: "Août 2026" },
+    { id: "comm-2", reference: "CMD-2820", date: "2026-07-15T00:00:00.000Z", montant_net: 42_000, montant_a_payer: 42_000, montant_verse: 20_000, montant_restant: 22_000, statut: "partiel", mois: "Juillet 2026" },
+  ],
+  "veh-2": [
+    { id: "comm-3", reference: "CMD-2839", date: "2026-08-17T00:00:00.000Z", montant_net: 38_000, montant_a_payer: 38_000, montant_verse: 0, montant_restant: 38_000, statut: "en_attente", mois: "Août 2026" },
+  ],
+};
+
+router.get(
+  "/api/v1/mobile/vehicules/:vehiculeId/commissions",
+  defineEventHandler((event) => {
+    requireTestToken(event);
+    const vehiculeId = getRouterParam(event, "vehiculeId");
+    // Même comportement que le vrai backend : véhicule inconnu -> 404,
+    // véhicule connu mais sans commission -> liste vide (jamais un 404).
+    if (!TEST_VEHICLES.some((v) => v.id === vehiculeId)) {
+      throw createError({ statusCode: 404, statusMessage: "Véhicule introuvable." });
+    }
+    return TEST_COMMISSIONS_BY_VEHICULE[vehiculeId] || [];
+  }),
+);
+
 // ── Dashboard / dépenses / activité (contrat vérifié le 26/08/2026 contre le
 // code réel de elm-monolithe — voir config/clientDashboard.ts,
 // clientExpenses.ts, clientActivity.ts) ─────────────────────────────────────
@@ -252,6 +282,14 @@ const DASHBOARD_VEHICULES = [
 // .client-desktop-dashboard, ce que Playwright refuse en mode strict
 // (getByText(...) doit résoudre un élément unique) — voir l'échec initial de
 // tests/e2e/dashboard-kpi.spec.ts avant ce correctif.
+// Une entrée par valeur RÉELLE de `period` (voir docs/api-espace-client-
+// contract.md §5 côté elm-monolithe : 7j/30j/ce_mois/mois_passe/custom) —
+// jamais un repli silencieux sur ce_mois pour les autres (masquerait un vrai
+// changement de période dans les tests, voir tests/e2e/commissions.spec.ts
+// "changement de période"). `custom` volontairement vide : sert de scénario
+// "0 commission" réaliste (ex. filtre "Aujourd'hui", une seule journée sans
+// vente n'a rien d'anormal) plutôt que de fabriquer un troisième jeu de
+// montants juste pour avoir une valeur.
 const DASHBOARD_PAR_VEHICULE_BY_PERIOD = {
   ce_mois: [
     { vehicule_id: "veh-1", nom_vehicule: "ABARRY", immatriculation: "OU3859", frais_depenses: 410_000, total_earned: 2_760_000, total_paid: 1_790_000, balance: 970_000, operations: 3 },
@@ -261,6 +299,15 @@ const DASHBOARD_PAR_VEHICULE_BY_PERIOD = {
     { vehicule_id: "veh-1", nom_vehicule: "ABARRY", immatriculation: "OU3859", frais_depenses: 395_000, total_earned: 2_480_000, total_paid: 1_610_000, balance: 870_000, operations: 2 },
     { vehicule_id: "veh-2", nom_vehicule: "ABARRY 2", immatriculation: "OU4217", frais_depenses: 178_000, total_earned: 1_260_000, total_paid: 820_000, balance: 440_000, operations: 2 },
   ],
+  "7j": [
+    { vehicule_id: "veh-1", nom_vehicule: "ABARRY", immatriculation: "OU3859", frais_depenses: 90_000, total_earned: 980_000, total_paid: 500_000, balance: 480_000, operations: 1 },
+    { vehicule_id: "veh-2", nom_vehicule: "ABARRY 2", immatriculation: "OU4217", frais_depenses: 45_000, total_earned: 520_000, total_paid: 260_000, balance: 260_000, operations: 1 },
+  ],
+  "30j": [
+    { vehicule_id: "veh-1", nom_vehicule: "ABARRY", immatriculation: "OU3859", frais_depenses: 210_000, total_earned: 2_100_000, total_paid: 1_300_000, balance: 800_000, operations: 2 },
+    { vehicule_id: "veh-2", nom_vehicule: "ABARRY 2", immatriculation: "OU4217", frais_depenses: 105_000, total_earned: 1_050_000, total_paid: 650_000, balance: 400_000, operations: 2 },
+  ],
+  custom: [],
 };
 
 router.get(
@@ -270,7 +317,7 @@ router.get(
     const query = getQuery(event);
     const vehiculeId = query.vehicule_id || null;
     const period = query.period || "ce_mois";
-    const source = DASHBOARD_PAR_VEHICULE_BY_PERIOD[period] || DASHBOARD_PAR_VEHICULE_BY_PERIOD.ce_mois;
+    const source = DASHBOARD_PAR_VEHICULE_BY_PERIOD[period] ?? DASHBOARD_PAR_VEHICULE_BY_PERIOD.ce_mois;
 
     // Même règle que le vrai backend (docs/api-espace-client-contract.md §5) :
     // par_vehicule liste TOUJOURS le parc complet, seuls les montants sont
