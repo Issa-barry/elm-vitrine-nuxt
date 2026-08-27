@@ -7,28 +7,39 @@ useHead({ title: "Mes commissions — Eau La Maman" });
 
 const { commissions, isLoading, error, hasLoaded, fetchCommissions } = useClientCommissions();
 const { vehicles: ownedVehicles } = useClientVehicles();
+const route = useRoute();
 
 onMounted(() => {
   fetchCommissions();
 });
 
-const statutFilter = ref<CommissionStatus | "">("");
-const vehiculeFilter = ref<string>("");
+// "tous" plutôt que "" comme valeur du filtre par défaut : PrimeVue Select
+// affiche son placeholder (jamais défini ici) tant que la modelValue est
+// vide ("", null, undefined), même quand une option `{ value: "" }` existe
+// déjà dans la liste — d'où ce sentinel non vide (voir même correctif sur
+// pages/espace-client/depenses.vue).
+const ALL = "tous";
+const statutFilter = ref<CommissionStatus | typeof ALL>(ALL);
+// Pré-rempli depuis ?vehicule_id=... (voir pages/espace-client/index.vue,
+// carte "Solde par véhicule" — cliquer une ligne arrive ici déjà filtré sur
+// ce véhicule, plutôt que d'atterrir sur une liste non filtrée qu'il faudrait
+// re-filtrer soi-même).
+const vehiculeFilter = ref<string>(typeof route.query.vehicule_id === "string" ? route.query.vehicule_id : ALL);
 
-const statutOptions: Array<{ label: string; value: CommissionStatus | "" }> = [
-  { label: "Tous les statuts", value: "" },
+const statutOptions: Array<{ label: string; value: CommissionStatus | typeof ALL }> = [
+  { label: "Tous les statuts", value: ALL },
   { label: COMMISSION_STATUS_LABELS.paye, value: "paye" },
   { label: COMMISSION_STATUS_LABELS.partiel, value: "partiel" },
   { label: COMMISSION_STATUS_LABELS.en_attente, value: "en_attente" },
 ];
 const vehiculeOptions = computed(() => [
-  { label: "Tous les véhicules", value: "" },
+  { label: "Tous les véhicules", value: ALL },
   ...ownedVehicles.value.map((vehicle) => ({ label: `${vehicle.nom} · ${vehicle.immatriculation}`, value: vehicle.id })),
 ]);
 
 const filteredCommissions = computed(() => commissions.value.filter((commission) =>
-  (!statutFilter.value || commission.statut === statutFilter.value)
-  && (!vehiculeFilter.value || commission.vehicule.id === vehiculeFilter.value),
+  (statutFilter.value === ALL || commission.statut === statutFilter.value)
+  && (vehiculeFilter.value === ALL || commission.vehicule.id === vehiculeFilter.value),
 ));
 
 // Totaux affichés = somme des montants déjà renvoyés par le backend pour les

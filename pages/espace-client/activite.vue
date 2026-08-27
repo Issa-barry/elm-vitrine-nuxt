@@ -9,13 +9,22 @@ useHead({ title: "Activité — Eau La Maman" });
 const { response, isLoading, error, hasLoaded, fetchActivity } = useClientActivity();
 const { vehicles: ownedVehicles, fetchVehicles } = useClientVehicles();
 
+// "tous" plutôt que "" comme valeur par défaut de type/vehiculeId : PrimeVue
+// Select affiche son placeholder (jamais défini ici) tant que la modelValue
+// est vide ("", null, undefined), même avec une option `{ value: "" }` déjà
+// présente dans la liste — d'où ce sentinel non vide (voir même correctif sur
+// pages/espace-client/depenses.vue et commissions.vue). Ne concerne pas
+// `date` : c'est un <input type="date"> natif, pas un Select, "" y est le
+// placeholder attendu.
+const ALL = "tous";
+
 interface ActivityFiltersState {
-  type: "" | ActivityType;
+  type: typeof ALL | ActivityType;
   vehiculeId: string;
   date: string;
 }
 
-const createEmptyFilters = (): ActivityFiltersState => ({ type: "", vehiculeId: "", date: "" });
+const createEmptyFilters = (): ActivityFiltersState => ({ type: ALL, vehiculeId: ALL, date: "" });
 
 const search = ref("");
 const filterPanelVisible = ref(false);
@@ -27,8 +36,8 @@ const draftFilters = reactive<ActivityFiltersState>(createEmptyFilters());
 // voir config/clientActivity.ts pour le détail de cette limitation assumée.
 async function loadActivity() {
   await fetchActivity({
-    type: appliedFilters.type || undefined,
-    vehicule_id: appliedFilters.vehiculeId || undefined,
+    type: appliedFilters.type !== ALL ? appliedFilters.type : undefined,
+    vehicule_id: appliedFilters.vehiculeId !== ALL ? appliedFilters.vehiculeId : undefined,
     date_debut: appliedFilters.date || undefined,
     date_fin: appliedFilters.date || undefined,
     per_page: 50,
@@ -43,12 +52,12 @@ onMounted(() => {
 watch(appliedFilters, loadActivity);
 
 const typeOptions = [
-  { label: "Tous les types", value: "" },
+  { label: "Tous les types", value: ALL },
   { label: activityTypeLabel("vente"), value: "vente" },
   { label: activityTypeLabel("logistique"), value: "logistique" },
 ];
 const vehiculeOptions = computed(() => [
-  { label: "Tous les véhicules", value: "" },
+  { label: "Tous les véhicules", value: ALL },
   ...ownedVehicles.value.map((vehicle) => ({ label: `${vehicle.nom} · ${vehicle.immatriculation}`, value: vehicle.id })),
 ]);
 
@@ -135,11 +144,11 @@ const activeFilters = computed(() => {
   // si le filtre est appliqué avant la fin du chargement des véhicules, le
   // libellé retombe sur l'id brut plutôt que de masquer un filtre pourtant
   // bien actif.
-  const vehiculeLabel = appliedFilters.vehiculeId
+  const vehiculeLabel = appliedFilters.vehiculeId !== ALL
     ? vehiculeOptions.value.find((o) => o.value === appliedFilters.vehiculeId)?.label || appliedFilters.vehiculeId
     : "";
   const filters: Array<{ key: keyof ActivityFiltersState; label: string; value: string }> = [
-    { key: "type", label: "Type", value: appliedFilters.type ? activityTypeLabel(appliedFilters.type) : "" },
+    { key: "type", label: "Type", value: appliedFilters.type !== ALL ? activityTypeLabel(appliedFilters.type) : "" },
     { key: "vehiculeId", label: "Véhicule", value: vehiculeLabel },
     { key: "date", label: "Date", value: appliedFilters.date ? formatDate(appliedFilters.date) : "" },
   ];
@@ -156,7 +165,9 @@ const applyFilters = () => {
   filterPanelVisible.value = false;
 };
 const resetDraftFilters = () => Object.assign(draftFilters, createEmptyFilters());
-const removeFilter = (key: keyof ActivityFiltersState) => { (appliedFilters as ActivityFiltersState)[key] = "" as never; };
+const removeFilter = (key: keyof ActivityFiltersState) => {
+  (appliedFilters as ActivityFiltersState)[key] = (key === "date" ? "" : ALL) as never;
+};
 const clearAppliedFilters = () => Object.assign(appliedFilters, createEmptyFilters());
 const resetAllFilters = () => { search.value = ""; clearAppliedFilters(); };
 

@@ -102,6 +102,22 @@ test.describe("Dashboard — cartes KPI (tablette paysage / desktop)", () => {
     const trendBadge = expensesCard.getByText(expensesTrend, { exact: true }).locator("xpath=parent::div");
     await expect(trendBadge).toHaveClass(/text-red-500/);
   });
+
+  test("un véhicule de \"Solde par véhicule\" mène à ses commissions filtrées, pas à sa fiche véhicule", async ({ page }) => {
+    await loginAsTestUser(page);
+    const kpiRow = page.locator(".client-desktop-dashboard");
+    await expect(kpiRow.getByText("ABARRY", { exact: true })).toBeVisible({ timeout: 10_000 });
+
+    await kpiRow.getByText("ABARRY", { exact: true }).click();
+    await expect(page).toHaveURL(/\/espace-client\/commissions\?vehicule_id=veh-1$/);
+
+    // Arrive déjà filtré sur ce véhicule (voir pages/espace-client/commissions.vue
+    // ?vehicule_id=...) : seules les commissions d'ABARRY (veh-1) apparaissent.
+    const desktop = page.locator(".client-desktop-expenses");
+    await expect(desktop.getByText("CMD-2847")).toBeVisible({ timeout: 10_000 });
+    await expect(desktop.getByText("CMD-2820")).toBeVisible();
+    await expect(desktop.getByText("CMD-2839")).toHaveCount(0);
+  });
 });
 
 test.describe("Dashboard — responsive des cartes KPI", () => {
