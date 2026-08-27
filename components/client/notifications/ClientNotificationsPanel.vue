@@ -1,19 +1,17 @@
 <script setup lang="ts">
 import type { ClientNotification } from "~/config/clientNotifications";
-import { notificationActionRoute } from "~/config/clientNotifications";
+import { notificationResourceToRoute } from "~/config/clientNotifications";
 
 // Panneau desktop/tablette (>= 768px, cloche toujours visible dans
 // .layout-topbar-actions — voir components/client/layout/ClientTopbar.vue)
-// du "centre de notifications" (demande du 27/08/2026). La version mobile
-// équivalente est pages/espace-client/notifications.vue (page plein écran) :
-// les deux réutilisent ClientNotificationList.vue, jamais deux logiques de
-// rendu différentes. Classes Tailwind directement dans le template, même
+// du "centre de notifications" (demande du 27/08/2026, migré vers le contrat
+// paginé le 28/08/2026). La version mobile équivalente est
+// pages/espace-client/notifications.vue (page plein écran) : les deux
+// réutilisent ClientNotificationList.vue, jamais deux logiques de rendu
+// différentes. Classes Tailwind directement dans le template, même
 // convention que components/client/layout/ClientConfigurator.vue (.config-panel).
-const { notifications, isLoading, hasLoaded, fetchNotifications, markRead, markAllRead } = useClientNotifications();
+const { items, unreadCount, hasMore, isLoading, isLoadingMore, hasLoaded, error, fetchNotifications, loadMore, markRead, markAllRead } = useClientNotifications();
 const router = useRouter();
-
-const items = computed(() => notifications.value?.data ?? []);
-const unreadCount = computed(() => notifications.value?.unread_count ?? 0);
 
 // v-if (pas v-show) sur ce composant côté ClientTopbar.vue : monté à chaque
 // ouverture -> déclenche exactement le rafraîchissement silencieux demandé
@@ -23,7 +21,7 @@ const unreadCount = computed(() => notifications.value?.unread_count ?? 0);
 onMounted(() => { fetchNotifications(); });
 
 async function onSelect(notification: ClientNotification) {
-  const route = notificationActionRoute(notification);
+  const route = notificationResourceToRoute(notification.resource);
   await markRead(notification.id);
   if (route) {
     await router.push(route);
@@ -48,12 +46,23 @@ async function onSelect(notification: ClientNotification) {
       </button>
     </div>
 
-    <div class="px-4">
+    <!-- Erreur affichée uniquement sans aucune donnée en cache : un
+    rafraîchissement silencieux qui échoue ne doit jamais remplacer la liste
+    déjà affichée (demande du 28/08/2026, section 22). -->
+    <div v-if="error && !hasLoaded" class="flex flex-col items-center text-center py-8 px-4 text-muted-color">
+      <p class="text-sm mb-3">Impossible de charger les notifications.</p>
+      <Button label="Réessayer" size="small" severity="secondary" outlined @click="fetchNotifications" />
+    </div>
+
+    <div v-else class="px-4">
       <ClientNotificationsList
         :notifications="items"
         :loading="isLoading && !hasLoaded"
         @select="onSelect"
       />
+      <div v-if="hasMore" class="flex justify-center py-2 border-t border-surface">
+        <Button label="Afficher plus" text size="small" :loading="isLoadingMore" @click="loadMore" />
+      </div>
     </div>
   </section>
 </template>

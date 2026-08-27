@@ -1,8 +1,10 @@
+import type { ApiNotificationsMarkAllReadResponse } from "../../../../types/api";
 import { callMonolith } from "../../../utils/monolithClient";
 import { clearAuthSession, getSessionToken } from "../../../utils/authSession";
 
 // POST /api/client/notifications/mark-all-read (Nuxt) →
-// POST /v1/mobile/notifications/mark-all-read (Laravel, auth:sanctum seul).
+// POST /v1/mobile/notifications/mark-all-read (Laravel, auth:sanctum seul —
+// scopé à l'utilisateur, renvoie toujours unread_count: 0).
 export default defineEventHandler(async (event) => {
   const token = await getSessionToken(event);
 
@@ -11,7 +13,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    return await callMonolith<{ success: boolean }>("/api/v1/mobile/notifications/mark-all-read", {
+    return await callMonolith<ApiNotificationsMarkAllReadResponse>("/api/v1/mobile/notifications/mark-all-read", {
       method: "POST",
       token,
     });

@@ -235,6 +235,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/otp-login/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["auth.otp-login.request"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/otp-login/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["auth.otp-login.verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mobile/dashboard": {
         parameters: {
             query?: never;
@@ -263,6 +295,27 @@ export interface paths {
          *     `filters.period` : raccourci appliqué (`custom` = `date_debut`/`date_fin`
          *     pris tels quels, sinon calculés serveur — jamais un défaut inventé côté
          *     frontend).
+         *
+         *     `summary_evolution` (champ additif, cf. rapport du 27/08/2026) : évolution
+         *     de chacun des 5 champs de `summary` entre la période sélectionnée et la
+         *     période **immédiatement précédente de même durée** (ex : 01/08→31/08 est
+         *     comparé à 01/07→31/07 ; 10/08→16/08 [7 jours] est comparé à 03/08→09/08
+         *     [7 jours] — jamais "le mois précédent" arbitraire). `direction` est
+         *     **factuelle** (`up`/`down`/`stable`), jamais un jugement métier : une
+         *     hausse de `frais_depenses_total` vaut `up` exactement comme une hausse de
+         *     `total_earned` — c'est au frontend de décider, KPI par KPI, si une hausse
+         *     donnée est une bonne ou une mauvaise nouvelle. Quand la période précédente
+         *     valait 0 et que la période actuelle est non nulle, le pourcentage n'est pas
+         *     défini mathématiquement : `percent` vaut alors `null` et `comparable` vaut
+         *     `false` (jamais `Infinity`/`999999`/`100` en substitut) — `direction` reste
+         *     renseignée pour permettre d'afficher une flèche, typiquement à côté d'un
+         *     texte comme "Nouveau" plutôt que d'un pourcentage. `summary_evolution` et
+         *     `comparison_period` sont tous les deux `null` uniquement dans le cas
+         *     dégénéré `period=custom` sans `date_debut`/`date_fin` (aucune période
+         *     résolue, donc aucune période précédente calculable).
+         *
+         *     `comparison_period` : bornes exactes de la période précédente utilisée par
+         *     `summary_evolution`, pour affichage (ex. "vs 01/07 - 31/07").
          */
         get: operations["client.dashboard.mine"];
         put?: never;
@@ -506,6 +559,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * 404 (jamais 403) si la notification n'appartient pas à l'utilisateur —
+         *     même convention que le reste de l'API Client (cf.
+         *     CommandesController::show()) : n'expose jamais si l'ID existe pour un
+         *     autre compte. Idempotent : un second appel sur une notification déjà
+         *     lue ne fait rien de plus
+         */
         post: operations["client.notifications.mark-read"];
         delete?: never;
         options?: never;
@@ -621,7 +681,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Liste des véhicules du proprietaire (les siens) ou du livreur (ceux de son équipe) — jamais toute la flotte de l'organisation. **Aucun statut "Entretien"/maintenance n'existe dans le modèle ELM** — seul `is_active` (booléen) existe ; n'affichez pas un statut de ce type sans colonne backend dédiée (elle n'existe pas). `capacite` est un champ hérité (nombre unique, packs) — la capacité réelle multi-catégorie n'est pas exposée ici. `conducteur` : nom du membre d'équipe au rôle `chauffeur`, `null` si aucune équipe ou aucun chauffeur assigné (jamais le premier membre pris au hasard). */
+        /** @description Liste des véhicules du proprietaire (les siens) ou du livreur (ceux de son équipe) — jamais toute la flotte de l'organisation. **Aucun statut "Entretien"/maintenance n'existe dans le modèle ELM** — seul `is_active` (booléen) existe ; n'affichez pas un statut de ce type sans colonne backend dédiée (elle n'existe pas). `capacite`/`conducteur` sont des champs hérités conservés pour compatibilité descendante — la source canonique est désormais `capacites[]` (une entrée par catégorie, cf. VehiculeCapacite) et `equipe[]` (tous les membres actifs, avec `role` = valeur réelle stockée en base : `chauffeur`/`convoyeur`, jamais traduite). `proprietaire` est `null` si le véhicule n'a aucun propriétaire renseigné. */
         get: operations["client.vehicules.mine"];
         put?: never;
         post?: never;
@@ -720,6 +780,14 @@ export interface components {
             statut_label: string;
             parts?: components["schemas"]["CommissionPartResource"][];
         };
+        /** ComparisonPeriod */
+        ComparisonPeriod: {
+            date_debut: [
+                string,
+                string
+            ];
+            date_fin: string;
+        };
         /** DepenseResource */
         DepenseResource: {
             id: string;
@@ -749,6 +817,19 @@ export interface components {
             total_restant: number;
             nb_commandes: number;
         };
+        /** KpiEvolution */
+        KpiEvolution: {
+            previous_value: number;
+            percent: number | null;
+            direction: components["schemas"]["KpiEvolutionDirection"];
+            comparable: boolean;
+        };
+        /**
+         * KpiEvolutionDirection
+         * @description Direction FACTUELLE d'une évolution de KPI entre deux périodes (cf. `App\Services\Client\KpiEvolutionCalculator`) — jamais un jugement métier ("succès"/"danger"). Une hausse de dépenses est `up`, exactement comme une hausse de commission : c'est au frontend de décider, KPI par KPI, si une hausse donnée est une bonne ou une mauvaise nouvelle.
+         * @enum {string}
+         */
+        KpiEvolutionDirection: "up" | "down" | "stable";
         /** LivraisonEnCoursRow */
         LivraisonEnCoursRow: {
             id: string;
@@ -768,6 +849,21 @@ export interface components {
         LivraisonEnCoursVehicule: {
             nom: string;
             immatriculation: string;
+        };
+        /** NotificationResource */
+        NotificationResource: {
+            id: string;
+            type: string;
+            titre: string | null;
+            message: string | null;
+            montant: number | null;
+            resource: {
+                type: string;
+                id: string;
+            } | null;
+            lu: boolean;
+            read_at: string | null;
+            created_at: string | null;
         };
         /** PropositionVehiculeResource */
         PropositionVehiculeResource: {
@@ -828,6 +924,14 @@ export interface components {
              * @description Maximum file size: 5120 kilobytes.
              */
             photo: string;
+        };
+        /** SummaryEvolution */
+        SummaryEvolution: {
+            total_earned: components["schemas"]["KpiEvolution"];
+            total_paid: components["schemas"]["KpiEvolution"];
+            frais_depenses_total: components["schemas"]["KpiEvolution"];
+            balance: components["schemas"]["KpiEvolution"];
+            operations_count: components["schemas"]["KpiEvolution"];
         };
         /** TransfertLigneResource */
         TransfertLigneResource: {
@@ -1565,6 +1669,147 @@ export interface operations {
             422: components["responses"]["ValidationException"];
         };
     };
+    "auth.otp-login.request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    telephone: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        sent: boolean;
+                        channel: string;
+                        /**
+                         * @description Ajouté le 27/08/2026 (demande front) : la coordonnée RÉELLEMENT
+                         *     utilisée pour ce canal, déjà masquée côté serveur (cf.
+                         *     OtpDestinationMasker) — jamais l'adresse/le numéro complet,
+                         *     jamais reconstruite côté client à partir d'une autre source.
+                         */
+                        destination_masked: string;
+                        /** @constant */
+                        cooldown_seconds: 30;
+                    };
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        error: "Aucun compte trouvé pour ce numéro de téléphone.";
+                    };
+                };
+            };
+            422: components["responses"]["ValidationException"];
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        error: string;
+                        retry_after_seconds: number;
+                    };
+                };
+            };
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        error: "Impossible d'envoyer un code de connexion à ce compte pour le moment.";
+                    } | {
+                        /** @constant */
+                        error: "Aucun canal disponible pour recevoir un code de connexion pour le moment.";
+                    };
+                };
+            };
+        };
+    };
+    "auth.otp-login.verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    telephone: string;
+                    code: string;
+                    device_name: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        token: string;
+                        user: {
+                            id: string;
+                            prenom: string;
+                            nom: string;
+                            telephone: string;
+                            email: string;
+                            /**
+                             * @description ->map(fn (string $r): string => $r) explicite (pas juste ->all()) : sans
+                             *     ce recast typé, Scramble trace getRoleNames() jusqu'à la relation Eloquent
+                             *     `roles` et documente `roles[]` comme une collection de modèles Role au lieu
+                             *     du tableau de noms qu'il est vraiment (cf. audit OpenAPI du 27/08/2026).
+                             */
+                            roles: string[];
+                        };
+                    };
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @enum {string} */
+                        message: "Votre compte a bien été créé. Il est en attente de validation par un administrateur." | "Votre compte a été désactivé. Veuillez contacter notre service client pour plus d'informations." | "Veuillez vérifier votre adresse email pour activer votre compte. Consultez votre boîte de réception." | "";
+                        code: string;
+                    };
+                };
+            };
+            422: components["responses"]["ValidationException"];
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        error: "Trop de tentatives. Demandez un nouveau code.";
+                    };
+                };
+            };
+        };
+    };
     "client.dashboard.mine": {
         parameters: {
             query?: {
@@ -1610,6 +1855,8 @@ export interface operations {
                              */
                             operations_count: number;
                         };
+                        summary_evolution: components["schemas"]["SummaryEvolution"] | null;
+                        comparison_period: components["schemas"]["ComparisonPeriod"] | null;
                         par_vehicule: components["schemas"]["VehiculeEarningsRow"][];
                         vehicules: {
                             id: string;
@@ -2092,33 +2339,54 @@ export interface operations {
     };
     "client.notifications.index": {
         parameters: {
-            query?: never;
+            query?: {
+                per_page?: number | null;
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
+            /** @description Paginated set of `NotificationResource` */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        data: {
-                            id: string;
-                            type: unknown;
-                            titre: unknown;
-                            message: unknown;
-                            data: unknown[];
-                            lu: boolean;
-                            created_at: string | null;
-                        }[];
+                        data: components["schemas"]["NotificationResource"][];
+                        links: {
+                            first: string | null;
+                            last: string | null;
+                            prev: string | null;
+                            next: string | null;
+                        };
+                        meta: {
+                            current_page: number;
+                            from: number | null;
+                            last_page: number;
+                            /** @description Generated paginator links. */
+                            links: {
+                                url: string | null;
+                                label: string;
+                                active: boolean;
+                            }[];
+                            /** @description Base path for paginator generated URLs. */
+                            path: string | null;
+                            /** @description Number of items shown per page. */
+                            per_page: number;
+                            /** @description Number of the last item in the slice. */
+                            to: number | null;
+                            /** @description Total number of items being paginated. */
+                            total: number;
+                        };
                         unread_count: number;
                     };
                 };
             };
             401: components["responses"]["AuthenticationException"];
+            422: components["responses"]["ValidationException"];
         };
     };
     "client.notifications.mark-all-read": {
@@ -2137,6 +2405,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         success: boolean;
+                        unread_count: number;
                     };
                 };
             };
@@ -2161,6 +2430,8 @@ export interface operations {
                 content: {
                     "application/json": {
                         success: boolean;
+                        data: components["schemas"]["NotificationResource"];
+                        unread_count: number;
                     };
                 };
             };
@@ -2445,10 +2716,13 @@ export interface operations {
                         nom: string;
                         immatriculation: string;
                         type: string;
+                        /** @enum {string} */
+                        statut: "actif" | "inactif";
                         /**
                          * @description Colonne héritée, jamais alimentée par les parcours actuels (capacité portée
                          *     par vehicule_capacites désormais, cf. VehiculeCapaciteService) — contrat API
-                         *     mobile conservé tel quel (nombre unique), sans repli sur le type.
+                         *     mobile conservé tel quel (nombre unique), sans repli sur le type. Ne plus lire
+                         *     cette valeur côté client : cf. `capacites[]`.
                          */
                         capacite: number | null;
                         is_active: boolean;
@@ -2461,7 +2735,28 @@ export interface operations {
                         en_livraison: string;
                         /** @enum {string} */
                         role: "proprietaire" | "livreur";
+                        /**
+                         * @description Conservé pour compatibilité descendante uniquement — ne reflète que le
+                         *     chauffeur, jamais les autres membres. Source canonique : `equipe[]`.
+                         */
                         conducteur: string | null;
+                        proprietaire: {
+                            id: string;
+                            nom_complet: string;
+                            telephone: string;
+                        } | null;
+                        equipe: {
+                            id: string;
+                            nom_complet: string | null;
+                            telephone: string;
+                            role: string;
+                            ordre: number;
+                        }[];
+                        capacites: {
+                            categorie_id: string;
+                            categorie: string;
+                            capacite: number;
+                        }[];
                     }[];
                 };
             };

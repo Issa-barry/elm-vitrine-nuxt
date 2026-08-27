@@ -22,6 +22,7 @@ import {
   getQuery,
   getRouterParam,
   readBody,
+  setResponseStatus,
   toNodeListener,
 } from "h3";
 
@@ -91,6 +92,79 @@ router.get(
 
 router.post("/api/auth/logout", defineEventHandler(() => ({ message: "Déconnecté avec succès." })));
 router.post("/api/auth/logout-all", defineEventHandler(() => ({ message: "Déconnecté de tous les appareils." })));
+
+// ── Connexion sans mot de passe par OTP (chantier du 27/08/2026) ───────────
+// Contrat vérifié contre App\Http\Controllers\Api\Auth\OtpLogin\
+// {RequestController,VerifyController} côté elm-monolithe — voir
+// config/auth.ts. Numéros dédiés par scénario (même convention que le reste
+// de ce fichier, ex. inscription "toujours not_found" plus haut) : le
+// numéro RÉEL de connexion (TEST_TELEPHONE) reste le seul chemin de succès,
+// les autres déclenchent chacun un statut précis, jamais une simulation
+// complète du rate-limiting réel (5 tentatives) — inutilement lent pour ce
+// que le front doit exactement vérifier (le traitement du statut HTTP).
+export const OTP_TELEPHONE_NOT_FOUND = "+224699999999";
+export const OTP_TELEPHONE_RATE_LIMITED = "+224688888888";
+export const OTP_TELEPHONE_UNAVAILABLE = "+224677777777";
+export const OTP_CODE_VALID = "111111";
+export const OTP_CODE_LOCKED = "000000"; // déclenche directement le 429 "Trop de tentatives"
+export const OTP_DESTINATION_MASKED = "j***@example.com";
+
+// setResponseStatus(event, code) + return {...}, PAS createError(...) : un
+// createError() ici serait sérialisé par h3 dans SON PROPRE enveloppe
+// ({statusCode, statusMessage, stack, data}), que callMonolith.ts englobe
+// à son tour dans une deuxième enveloppe identique en la relayant — deux
+// niveaux d'imbrication qui n'existent PAS avec le vrai Laravel (qui renvoie
+// le JSON directement, sans enveloppe h3). Bug réel trouvé le 27/08/2026 en
+// écrivant les tests OTP (les 3 tests d'erreur échouaient : le message/
+// retry_after_seconds attendus étaient imbriqués un niveau plus loin que ce
+// que normalizeAuthError() (config/auth.ts) sait déballer — lequel reste
+// correct pour le VRAI Laravel, jamais modifié pour ce simple artefact de
+// mock). Toutes les routes ci-dessous suivent donc désormais la forme réelle
+// (réponse JSON plate + code HTTP), pas le raccourci createError() utilisé
+// ailleurs dans ce fichier pour des routes jamais exercées via un vrai
+// aller-retour BFF -> mock (toujours court-circuitées par page.route() côté
+// spec, voir tests/e2e/connexion.spec.ts).
+router.post(
+  "/api/auth/otp-login/request",
+  defineEventHandler(async (event) => {
+    const body = await readBody(event);
+    const telephone = body?.telephone;
+
+    if (telephone === OTP_TELEPHONE_RATE_LIMITED) {
+      setResponseStatus(event, 429);
+      return { error: "Vous avez demandé trop de codes. Réessayez dans 1 minute.", retry_after_seconds: 42 };
+    }
+    if (telephone === OTP_TELEPHONE_UNAVAILABLE) {
+      setResponseStatus(event, 503);
+      return { error: "Aucun canal disponible pour recevoir un code de connexion pour le moment." };
+    }
+    if (telephone !== TEST_TELEPHONE) {
+      // Couvre OTP_TELEPHONE_NOT_FOUND et tout autre numéro non enregistré.
+      setResponseStatus(event, 404);
+      return { error: "Aucun compte trouvé pour ce numéro de téléphone." };
+    }
+
+    return { sent: true, channel: "email", destination_masked: OTP_DESTINATION_MASKED, cooldown_seconds: 30 };
+  }),
+);
+
+router.post(
+  "/api/auth/otp-login/verify",
+  defineEventHandler(async (event) => {
+    const body = await readBody(event);
+
+    if (body?.code === OTP_CODE_LOCKED) {
+      setResponseStatus(event, 429);
+      return { error: "Trop de tentatives. Demandez un nouveau code." };
+    }
+    if (body?.telephone === TEST_TELEPHONE && body?.code === OTP_CODE_VALID) {
+      return { token: TEST_TOKEN, user: TEST_USER };
+    }
+
+    setResponseStatus(event, 422);
+    return { error: "Code incorrect ou expiré." };
+  }),
+);
 
 // ── Inscription ──────────────────────────────────────────────────────────
 // Toujours "not_found" : tests/e2e/inscription.spec.ts utilise volontairement
@@ -485,29 +559,31 @@ router.get(
 );
 
 // État mutable en mémoire (comme profileState plus haut) : permet un vrai
-// cycle GET -> POST mark-all-read -> GET dans un test E2E.
-// `data.commande_id` de notif-2 correspond volontairement à l'`id` réel
-// (`act-1`) d'un item TEST_ACTIVITY (type "vente", reference "CMD-2847") —
-// même correspondance que le vrai contrat backend (App\Notifications\
-// CommandeValideeNotification::commande_id === CommandeVente::id, voir
-// config/clientNotifications.ts::notificationActionRoute), pour pouvoir
-// tester la redirection contextuelle "notification -> Livraisons -> détail
-// ouvert" de bout en bout (chantier "centre de notifications" du
-// 27/08/2026).
+// cycle GET -> POST mark-all-read -> GET dans un test E2E. Nouveau contrat
+// (chantier backend "contrat API notifications" finalisé le 27/08/2026, migré
+// côté Nuxt le 28/08/2026) : pagination Laravel standard (mêmes clés
+// links/meta que paginate() ci-dessus, mais SANS `filters` — absent du
+// contrat réel de cet endpoint) + `unread_count` global, `resource` distinct
+// de `type` (type de RESSOURCE, jamais le type d'événement).
+// `resource.id` de notif-2 correspond volontairement à l'`id` réel (`act-1`)
+// d'un item TEST_ACTIVITY (type "vente", reference "CMD-2847") — même
+// correspondance que le vrai contrat backend (App\Notifications\
+// CommandeValideeNotification::commande_id === CommandeVente::id, exposé
+// aujourd'hui comme resource.id, voir config/clientNotifications.ts::
+// notificationResourceToRoute), pour pouvoir tester la redirection
+// contextuelle "notification -> Livraisons -> détail ouvert" de bout en bout.
 const TEST_NOTIFICATIONS = [
-  { id: "notif-1", type: "commande_validee", titre: "Livraison CMD-2841 terminée", message: "12 packs livrés aujourd'hui", data: {}, lu: false, created_at: "2026-08-26T10:00:00.000000Z" },
-  { id: "notif-2", type: "commande_validee", titre: "Nouvelle commande attribuée", message: "Commande CMD-2847", data: { commande_id: "act-1", reference: "CMD-2847" }, lu: false, created_at: "2026-08-25T15:30:00.000000Z" },
-  { id: "notif-3", type: "versement", titre: "Versement validé", message: "Montant de 850 000 GNF", data: {}, lu: true, created_at: "2026-08-24T09:12:00.000000Z" },
+  { id: "notif-1", type: "delivery.assigned", titre: "Livraison CMD-2841 terminée", message: "12 packs livrés aujourd'hui", montant: null, resource: null, lu: false, read_at: null, created_at: "2026-08-26T10:00:00.000000Z" },
+  { id: "notif-2", type: "delivery.assigned", titre: "Nouvelle commande attribuée", message: "Commande CMD-2847", montant: null, resource: { type: "commande_vente", id: "act-1" }, lu: false, read_at: null, created_at: "2026-08-25T15:30:00.000000Z" },
+  { id: "notif-3", type: "transfer.received", titre: "Versement reçu", message: "Un versement a été reçu sur votre compte.", montant: 850_000, resource: null, lu: true, read_at: "2026-08-24T09:15:00.000000Z", created_at: "2026-08-24T09:12:00.000000Z" },
 ];
 
 router.get(
   "/api/v1/mobile/notifications",
   defineEventHandler((event) => {
     requireTestToken(event);
-    return {
-      data: TEST_NOTIFICATIONS,
-      unread_count: TEST_NOTIFICATIONS.filter((n) => !n.lu).length,
-    };
+    const page = paginate(TEST_NOTIFICATIONS, getQuery(event), {}, "/api/v1/mobile/notifications");
+    return { data: page.data, links: page.links, meta: page.meta, unread_count: TEST_NOTIFICATIONS.filter((n) => !n.lu).length };
   }),
 );
 
@@ -515,8 +591,14 @@ router.post(
   "/api/v1/mobile/notifications/mark-all-read",
   defineEventHandler((event) => {
     requireTestToken(event);
-    for (const n of TEST_NOTIFICATIONS) n.lu = true;
-    return { success: true };
+    const now = new Date().toISOString();
+    for (const n of TEST_NOTIFICATIONS) {
+      if (!n.lu) {
+        n.lu = true;
+        n.read_at = now;
+      }
+    }
+    return { success: true, unread_count: 0 };
   }),
 );
 
@@ -526,8 +608,16 @@ router.post(
     requireTestToken(event);
     const id = getRouterParam(event, "id");
     const notification = TEST_NOTIFICATIONS.find((n) => n.id === id);
-    if (notification) notification.lu = true;
-    return { success: true };
+    // 404 (jamais 403) si l'id n'appartient pas à ce compte — même convention
+    // que le vrai contrat, voir server/api/client/notifications/[id]/read.post.ts.
+    if (!notification) {
+      throw createError({ statusCode: 404, statusMessage: "Notification introuvable." });
+    }
+    if (!notification.lu) {
+      notification.lu = true;
+      notification.read_at = new Date().toISOString();
+    }
+    return { success: true, data: notification, unread_count: TEST_NOTIFICATIONS.filter((n) => !n.lu).length };
   }),
 );
 

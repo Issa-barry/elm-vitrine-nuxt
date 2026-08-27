@@ -17,6 +17,14 @@ export type ApiLoginRequestBody = NonNullable<operations["auth.login"]["requestB
 export type ApiLoginResponse = operations["auth.login"]["responses"][200]["content"]["application/json"];
 export type ApiMeResponse = operations["auth.me"]["responses"][200]["content"]["application/json"];
 
+// Connexion sans mot de passe par OTP (chantier du 27/08/2026) — formes HTTP
+// brutes uniquement ; voir config/auth.ts pour les types réellement utilisés
+// par le front (channel/cooldown_seconds corrigés là-bas, voir pourquoi).
+export type ApiOtpLoginRequestBody = operations["auth.otp-login.request"]["requestBody"]["content"]["application/json"];
+export type ApiOtpLoginResponse = operations["auth.otp-login.request"]["responses"][200]["content"]["application/json"];
+export type ApiOtpVerifyRequestBody = operations["auth.otp-login.verify"]["requestBody"]["content"]["application/json"];
+export type ApiOtpVerifyResponse = operations["auth.otp-login.verify"]["responses"][200]["content"]["application/json"];
+
 // ── Dashboard ────────────────────────────────────────────────────────────
 export type ApiDashboardResponse = operations["client.dashboard.mine"]["responses"][200]["content"]["application/json"];
 export type ApiDashboardQuery = NonNullable<operations["client.dashboard.mine"]["parameters"]["query"]>;
@@ -75,4 +83,10 @@ export type ApiStoreVehicleProposalResponse = operations["client.propositions-ve
 
 // ── Notifications ────────────────────────────────────────────────────────
 export type ApiNotificationsResponse = operations["client.notifications.index"]["responses"][200]["content"]["application/json"];
+// `page` absent du query généré (même limite Scramble que ApiDepensesQuery/
+// ExpensesQuery, voir config/clientExpenses.ts) : Laravel paginate() le lit
+// pourtant bien depuis la requête HTTP, jamais documenté côté FormRequest.
+export type ApiNotificationsQuery = NonNullable<operations["client.notifications.index"]["parameters"]["query"]>;
+export type ApiNotification = ApiNotificationsResponse["data"][number];
+export type ApiNotificationMarkReadResponse = operations["client.notifications.mark-read"]["responses"][200]["content"]["application/json"];
 export type ApiNotificationsMarkAllReadResponse = operations["client.notifications.mark-all-read"]["responses"][200]["content"]["application/json"];

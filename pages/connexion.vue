@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import type { OtpChannel } from "~/config/auth";
+import { otpChannelPresentation } from "~/config/auth";
+import type { OtpPhase } from "~/composables/useOtpLogin";
+
 definePageMeta({ layout: false, middleware: "guest" });
 
 useHead({
@@ -165,6 +169,102 @@ const router = useRouter();
 const auth = useAuth();
 const globalError = ref("");
 
+// ── Connexion sans mot de passe par OTP (chantier du 27/08/2026) ──────────
+// Deux modes seulement (password/otp, voir composables/useOtpLogin.ts pour
+// la machine à états interne à "otp") — le téléphone déjà saisi ci-dessus
+// (selectedCode/phoneDigits) est PARTAGÉ entre les deux modes, jamais
+// dupliqué ni réinitialisé au changement de mode.
+type ConnexionMode = "password" | "otp";
+const mode = ref<ConnexionMode>("password");
+const otpLogin = useOtpLogin();
+const otpCode = ref("");
+// Typage structurel minimal (pas de composant PrimeVue importé juste pour
+// son type ici) : seul $el sert, pour retrouver le premier <input> généré
+// par InputOtp (plusieurs champs internes, pas de focus() exposé par le
+// composant) et y placer le focus après l'envoi du code.
+const otpCodeInputRef = ref<{ $el?: HTMLElement } | null>(null);
+
+// Canaux affichés — Email seul réellement câblé aujourd'hui côté backend
+// (voir docs/api-espace-client-contract.md, OtpChannelResolver côté
+// elm-monolithe) : WhatsApp/SMS visibles mais désactivés, jamais un faux
+// appel. `selectedChannel` est purement visuel (le corps de
+// POST /otp-login/request n'accepte d'ailleurs aucun paramètre de canal,
+// vérifié dans OtpLogin\RequestController — le backend choisit seul) ; le
+// canal réellement utilisé vient de la réponse serveur (otpLogin.channel).
+// Présentation compacte (demande du 27/08/2026, reprise UI/UX) : plus de
+// grandes cartes, juste un petit chip par canal — "Bientôt" uniquement pour
+// les deux indisponibles, rien sous Email.
+type OtpChannelOption = { value: OtpChannel; label: string; icon: string; available: boolean };
+const OTP_CHANNEL_OPTIONS: OtpChannelOption[] = [
+  { value: "email", label: "Email", icon: "pi-envelope", available: true },
+  { value: "whatsapp", label: "WhatsApp", icon: "pi-whatsapp", available: false },
+  { value: "sms", label: "SMS", icon: "pi-comments", available: false },
+];
+const selectedChannel = ref<OtpChannel>("email");
+
+// Titre + libellé de destination du canal RÉELLEMENT utilisé (otpLogin.channel,
+// otpLogin.destinationMasked, tous deux renvoyés par le backend) — jamais le
+// canal sélectionné visuellement ci-dessus, qui n'influence pas l'envoi réel.
+// Logique de présentation centralisée dans config/auth.ts::otpChannelPresentation
+// (jamais dispersée en if/else ici).
+const otpCodeScreenTitle = computed(() =>
+  otpLogin.channel.value ? otpChannelPresentation(otpLogin.channel.value).heading : "Connexion avec un code",
+);
+const otpDestinationLine = computed(() => {
+  if (!otpLogin.channel.value || !otpLogin.destinationMasked.value) return "";
+  return `${otpChannelPresentation(otpLogin.channel.value).destinationPrefix} ${otpLogin.destinationMasked.value}`;
+});
+
+const switchToOtp = () => {
+  globalError.value = "";
+  mode.value = "otp";
+};
+
+const switchToPassword = () => {
+  otpLogin.reset();
+  otpCode.value = "";
+  mode.value = "password";
+};
+
+const otpTelephone = computed(() => `${selectedCountry.value.dial}${phoneDigits.value}`);
+
+// Le téléphone reste éditable tant qu'aucun code n'a été envoyé (mode
+// password, ou mode otp avant "code"/"verifying") — au-delà, affiché en
+// lecture seule, avec un lien dédié "Modifier le numéro" pour revenir en
+// arrière (voir backToOtpRequest()).
+const OTP_PHONE_EDITABLE_PHASES: OtpPhase[] = ["request", "sending", "not_found", "rate_limited", "unavailable"];
+const phoneEditable = computed(() => mode.value === "password" || OTP_PHONE_EDITABLE_PHASES.includes(otpLogin.phase.value));
+
+const requestOtpCode = async () => {
+  if (phoneError.value) {
+    hasAttemptedSubmit.value = true;
+    await nextTick();
+    phoneInputRef.value?.focus();
+    return;
+  }
+  const ok = await otpLogin.requestCode(otpTelephone.value);
+  if (ok) {
+    otpCode.value = "";
+    await nextTick();
+    otpCodeInputRef.value?.$el?.querySelector("input")?.focus();
+  }
+};
+
+const verifyOtpCode = async () => {
+  if (otpCode.value.length !== 6) return;
+  const result = await otpLogin.verifyCode(otpTelephone.value, otpCode.value);
+  if (!result.ok) {
+    otpCode.value = "";
+    return;
+  }
+  router.push("/espace-client");
+};
+
+const backToOtpRequest = () => {
+  otpLogin.reset();
+  otpCode.value = "";
+};
+
 const handleSubmit = async () => {
   if (isSubmitting.value) return;
 
@@ -218,16 +318,25 @@ onBeforeUnmount(() => {
 <template>
   <div class="connexion-screen">
     <div class="connexion-card">
-      <div class="connexion-brand">
+      <!-- Gros header (logo + "Connexion" + "Eau la maman") réservé au mode
+        mot de passe : supprimé du parcours OTP (demande, section 5), qui va
+        directement au contenu utile via son propre <h1> compact ci-dessous. -->
+      <div v-if="mode === 'password'" class="connexion-brand">
         <NuxtLink to="/" class="connexion-brand-mark" aria-label="Retour à l’accueil"><BrandMark /></NuxtLink>
         <h1>Connexion</h1>
         <p>Eau la maman</p>
       </div>
 
-      <p v-if="globalError" class="connexion-global-error" role="alert" aria-live="assertive">{{ globalError }}</p>
+      <p v-if="mode === 'password' && globalError" class="connexion-global-error" role="alert" aria-live="assertive">{{ globalError }}</p>
 
-      <form class="connexion-form" novalidate @submit.prevent="handleSubmit">
-        <label class="connexion-field">
+      <h1 v-if="mode === 'otp'" class="connexion-otp-title">{{ otpCodeScreenTitle }}</h1>
+
+      <form
+        class="connexion-form"
+        novalidate
+        @submit.prevent="mode === 'password' ? handleSubmit() : (otpLogin.phase.value === 'code' || otpLogin.phase.value === 'verifying' ? verifyOtpCode() : requestOtpCode())"
+      >
+        <label v-if="phoneEditable" class="connexion-field">
           <span>Numéro de téléphone</span>
           <div class="connexion-phone" :class="{ 'has-error': hasAttemptedSubmit && phoneError }">
             <Select
@@ -274,42 +383,134 @@ onBeforeUnmount(() => {
           </div>
         </label>
 
-        <label class="connexion-field">
-          <span>Mot de passe</span>
-          <div class="connexion-password" :class="{ 'has-error': hasAttemptedSubmit && passwordError }">
-            <input
-              ref="passwordInputRef"
-              v-model="password"
-              :type="showPassword ? 'text' : 'password'"
-              autocomplete="current-password"
-              placeholder="••••••••"
-              :aria-invalid="hasAttemptedSubmit && !!passwordError"
-              :aria-describedby="hasAttemptedSubmit && passwordError ? 'connexion-password-error' : undefined"
-            >
-            <button
-              type="button"
-              class="connexion-password-toggle"
-              :aria-label="showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'"
-              @click="showPassword = !showPassword"
-            >
-              <i :class="['pi', showPassword ? 'pi-eye-slash' : 'pi-eye']" aria-hidden="true" />
-            </button>
-          </div>
-          <div class="connexion-field-error-slot">
-            <p v-if="hasAttemptedSubmit && passwordError" id="connexion-password-error" class="connexion-error" aria-live="polite">{{ passwordError }}</p>
-          </div>
-        </label>
+        <!-- Une fois un code envoyé (phase "code"/"verifying") : plus de
+          champ téléphone (édition possible uniquement via "Modifier le
+          numéro" plus bas, qui revient à l'étape de demande) — la
+          destination RÉELLE du code (jamais le téléphone, qui induirait en
+          erreur si le canal est l'email, cf. demande section 11) s'affiche
+          à la place. -->
+        <p v-else-if="otpDestinationLine" class="connexion-otp-destination">{{ otpDestinationLine }}</p>
 
-        <button type="submit" class="connexion-submit" :disabled="isSubmitting">
-          {{ isSubmitting ? "Connexion…" : "Se connecter" }}
-        </button>
+        <template v-if="mode === 'password'">
+          <label class="connexion-field">
+            <span>Mot de passe</span>
+            <div class="connexion-password" :class="{ 'has-error': hasAttemptedSubmit && passwordError }">
+              <input
+                ref="passwordInputRef"
+                v-model="password"
+                :type="showPassword ? 'text' : 'password'"
+                autocomplete="current-password"
+                placeholder="••••••••"
+                :aria-invalid="hasAttemptedSubmit && !!passwordError"
+                :aria-describedby="hasAttemptedSubmit && passwordError ? 'connexion-password-error' : undefined"
+              >
+              <button
+                type="button"
+                class="connexion-password-toggle"
+                :aria-label="showPassword ? 'Masquer le mot de passe' : 'Afficher le mot de passe'"
+                @click="showPassword = !showPassword"
+              >
+                <i :class="['pi', showPassword ? 'pi-eye-slash' : 'pi-eye']" aria-hidden="true" />
+              </button>
+            </div>
+            <div class="connexion-field-error-slot">
+              <p v-if="hasAttemptedSubmit && passwordError" id="connexion-password-error" class="connexion-error" aria-live="polite">{{ passwordError }}</p>
+            </div>
+          </label>
+
+          <button type="submit" class="connexion-submit" :disabled="isSubmitting">
+            {{ isSubmitting ? "Connexion…" : "Se connecter" }}
+          </button>
+        </template>
+
+        <template v-else-if="otpLogin.phase.value === 'code' || otpLogin.phase.value === 'verifying'">
+          <p v-if="otpLogin.error.value" class="connexion-global-error" role="alert" aria-live="assertive">{{ otpLogin.error.value.message }}</p>
+
+          <div class="connexion-field connexion-otp-code-field">
+            <span class="sr-only">Code de connexion</span>
+            <InputOtp
+              ref="otpCodeInputRef"
+              v-model="otpCode"
+              :length="6"
+              integer-only
+              autofocus
+              aria-label="Code de connexion à 6 chiffres"
+              :disabled="otpLogin.phase.value === 'verifying'"
+            />
+          </div>
+
+          <button type="submit" class="connexion-submit" :disabled="otpLogin.phase.value === 'verifying' || otpCode.length !== 6">
+            {{ otpLogin.phase.value === "verifying" ? "Vérification…" : "Valider et se connecter" }}
+          </button>
+
+          <button
+            type="button"
+            class="connexion-otp-resend"
+            :disabled="otpLogin.cooldownRemaining.value > 0"
+            @click="requestOtpCode"
+          >
+            {{ otpLogin.cooldownRemaining.value > 0 ? `Renvoyer le code dans ${otpLogin.cooldownRemaining.value} s` : "Renvoyer le code" }}
+          </button>
+
+          <button type="button" class="connexion-otp-back" @click="backToOtpRequest">← Modifier le numéro</button>
+        </template>
+
+        <template v-else>
+          <p v-if="otpLogin.phase.value === 'not_found'" class="connexion-global-error" role="alert" aria-live="assertive">
+            Aucun compte n’est associé à ce numéro. <NuxtLink to="/inscription">Créer un compte</NuxtLink>
+          </p>
+          <p v-else-if="otpLogin.phase.value === 'unavailable'" class="connexion-global-error" role="alert" aria-live="assertive">
+            Nous ne pouvons pas envoyer de code de connexion pour ce compte actuellement. Veuillez contacter le support.
+          </p>
+          <p v-else-if="otpLogin.phase.value === 'rate_limited'" class="connexion-global-error" role="alert" aria-live="assertive">
+            Trop de demandes. Réessayez dans {{ otpLogin.cooldownRemaining.value }} s.
+          </p>
+          <p v-else-if="otpLogin.error.value" class="connexion-global-error" role="alert" aria-live="assertive">{{ otpLogin.error.value.message }}</p>
+
+          <div class="connexion-field connexion-otp-channel-field">
+            <span id="connexion-otp-channel-label">Recevoir par :</span>
+            <div class="connexion-otp-channels" aria-labelledby="connexion-otp-channel-label">
+              <button
+                v-for="option in OTP_CHANNEL_OPTIONS"
+                :key="option.value"
+                type="button"
+                class="connexion-otp-channel"
+                :class="{ 'is-selected': selectedChannel === option.value, 'is-disabled': !option.available }"
+                :disabled="!option.available"
+                :aria-pressed="selectedChannel === option.value"
+                @click="option.available && (selectedChannel = option.value)"
+              >
+                <i :class="['pi', option.icon]" aria-hidden="true" />
+                <span>{{ option.label }}</span>
+                <small v-if="!option.available">Bientôt</small>
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            class="connexion-submit"
+            :disabled="otpLogin.phase.value === 'sending' || otpLogin.cooldownRemaining.value > 0"
+          >
+            {{ otpLogin.phase.value === "sending" ? "Envoi…" : otpLogin.cooldownRemaining.value > 0 ? `Réessayer dans ${otpLogin.cooldownRemaining.value} s` : "Recevoir le code" }}
+          </button>
+
+          <button type="button" class="connexion-otp-back" @click="switchToPassword">← Utiliser mon mot de passe</button>
+        </template>
       </form>
 
-      <NuxtLink to="/mot-de-passe-oublie" class="connexion-forgot">
-        Mot de passe oublié ?
-      </NuxtLink>
+      <template v-if="mode === 'password'">
+        <button type="button" class="connexion-otp-switch" @click="switchToOtp">
+          <span class="connexion-otp-switch-divider" aria-hidden="true"><span>ou</span></span>
+          <span class="connexion-otp-switch-label">Se connecter avec un code</span>
+        </button>
 
-      <p class="connexion-signup">Pas encore de compte ? <NuxtLink to="/inscription">Créer un compte</NuxtLink></p>
+        <NuxtLink to="/mot-de-passe-oublie" class="connexion-forgot">
+          Mot de passe oublié ?
+        </NuxtLink>
+
+        <p class="connexion-signup">Pas encore de compte ? <NuxtLink to="/inscription">Créer un compte</NuxtLink></p>
+      </template>
     </div>
   </div>
 </template>
@@ -587,6 +788,188 @@ onBeforeUnmount(() => {
   color: var(--p-primary-color);
   font-weight: 800;
   text-decoration: none;
+}
+
+// ── Connexion sans mot de passe par OTP (chantier du 27/08/2026) ──────────
+// Pas de gros header dans ce parcours (section 5 de la demande) : ce <h1>
+// compact est le tout premier élément visible de la carte en mode OTP,
+// jamais précédé du logo/"Eau la maman".
+.connexion-otp-title {
+  margin: 0 0 1.5rem;
+  color: var(--p-text-color);
+  text-align: center;
+  font-size: 1.35rem;
+  font-weight: 800;
+}
+
+// Destination réelle du code ("Code envoyé à j***@example.com") — texte
+// simple correctement hiérarchisé, jamais une grosse carte (section 14 de
+// la demande : "pas besoin d'une grosse carte contenant la destination").
+.connexion-otp-destination {
+  margin: 0 0 1.5rem;
+  color: var(--p-text-muted-color);
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.connexion-otp-code-field {
+  align-items: center;
+}
+
+.connexion-otp-code-field :deep(.p-inputotp) {
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.connexion-otp-code-field :deep(.p-inputotp-input) {
+  width: 2.75rem;
+  height: 3.25rem;
+  font-size: 1.2rem;
+  font-weight: 800;
+  text-align: center;
+}
+
+.connexion-otp-resend {
+  padding: 0;
+  color: var(--p-primary-color);
+  text-align: center;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.connexion-otp-resend:disabled {
+  color: var(--p-text-muted-color);
+  cursor: default;
+}
+
+.connexion-otp-back {
+  padding: 0;
+  color: var(--p-text-muted-color);
+  text-align: center;
+  cursor: pointer;
+  background: none;
+  border: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.connexion-otp-switch {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  width: 100%;
+  margin-top: 1.1rem;
+  padding: 0;
+  cursor: pointer;
+  background: none;
+  border: 0;
+}
+
+.connexion-otp-switch-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.connexion-otp-switch-divider::before,
+.connexion-otp-switch-divider::after {
+  flex: 1 1 auto;
+  height: 1px;
+  content: "";
+  background: var(--p-content-border-color);
+}
+
+.connexion-otp-switch-label {
+  display: block;
+  padding: 0.85rem;
+  color: var(--p-primary-color);
+  text-align: center;
+  background: var(--p-content-background);
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 1rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.connexion-otp-switch:hover .connexion-otp-switch-label {
+  background: color-mix(in srgb, var(--p-primary-color) 6%, var(--p-content-background));
+  border-color: var(--p-primary-color);
+}
+
+.connexion-otp-channel-field {
+  gap: 0.5rem;
+}
+
+// Trois chips sur une seule ligne, pas trois grandes cartes verticales
+// (section 4/7/8 de la demande) — tiennent sur une ligne dès le mobile le
+// plus étroit visé (360px) grâce à leur largeur minimale réduite ;
+// `flex-wrap` reste un filet de sécurité, jamais le rendu attendu.
+.connexion-otp-channels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.connexion-otp-channel {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
+  padding: 0.6rem 0.4rem;
+  color: var(--p-text-color);
+  text-align: center;
+  cursor: pointer;
+  background: var(--p-content-background);
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 0.85rem;
+  font: inherit;
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.connexion-otp-channel i {
+  font-size: 1rem;
+}
+
+.connexion-otp-channel span {
+  overflow: hidden;
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.connexion-otp-channel small {
+  color: var(--p-text-muted-color);
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.connexion-otp-channel.is-selected {
+  background: color-mix(in srgb, var(--p-primary-color) 8%, var(--p-content-background));
+  border-color: var(--p-primary-color);
+}
+
+.connexion-otp-channel.is-selected span {
+  color: var(--p-primary-color);
+}
+
+.connexion-otp-channel.is-disabled,
+.connexion-otp-channel:disabled {
+  color: var(--p-text-muted-color);
+  cursor: default;
+  opacity: 0.6;
 }
 
 // Tablette portrait uniquement (~768–1024px) : cette carte n'a pas le bug de
