@@ -55,4 +55,44 @@ test.describe("Espace client — véhicules", () => {
     await expect(table.getByText("ABARRY 2", { exact: true })).toBeVisible();
     await expect(table.getByText("ABARRY", { exact: true })).toHaveCount(0);
   });
+
+  test("mobile : cliquer une carte véhicule ouvre une boîte de dialogue (pas de navigation)", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginAsTestUser(page);
+    await page.goto("/espace-client/vehicules", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(1000);
+
+    await page.getByRole("button", { name: "Voir les détails de ABARRY", exact: true }).click();
+
+    // Reste sur /espace-client/vehicules — jamais une navigation vers
+    // /espace-client/vehicules/[id] (demande du 27/08/2026).
+    await expect(page).toHaveURL(/\/espace-client\/vehicules$/);
+
+    const detail = page.locator(".client-delivery-detail");
+    await expect(detail).toBeVisible({ timeout: 10_000 });
+    await expect(detail.locator("svg")).toBeVisible(); // QR (immatriculation réelle)
+    // "OU3859" apparaît deux fois par design (légende sous le QR +
+    // ligne "Immatriculation") : on vérifie la ligne d'info dédiée.
+    await expect(detail.locator(".client-delivery-detail__rows").getByText("OU3859")).toBeVisible();
+    await expect(detail.getByText("Mamadou D.")).toBeVisible();
+    // Jamais une liste de livreurs ni un téléphone : donnée absente du
+    // contrat backend réel (voir le commentaire de openVehicleDetail() dans
+    // pages/espace-client/vehicules.vue) — un seul champ "Conducteur".
+    await expect(detail.getByText("Conducteur")).toBeVisible();
+  });
+
+  test("desktop : l'action \"œil\" ouvre la même boîte de dialogue", async ({ page }) => {
+    await loginAsTestUser(page);
+    await page.goto("/espace-client/vehicules", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(1000);
+
+    await page.getByRole("button", { name: "Voir ABARRY", exact: true }).click();
+
+    await expect(page).toHaveURL(/\/espace-client\/vehicules$/);
+    const detail = page.locator(".client-delivery-detail");
+    await expect(detail).toBeVisible({ timeout: 10_000 });
+    await expect(detail.locator(".client-delivery-detail__rows").getByText("OU3859")).toBeVisible();
+  });
 });
