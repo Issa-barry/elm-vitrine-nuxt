@@ -463,9 +463,17 @@ router.get(
 
 // État mutable en mémoire (comme profileState plus haut) : permet un vrai
 // cycle GET -> POST mark-all-read -> GET dans un test E2E.
+// `data.commande_id` de notif-2 correspond volontairement à l'`id` réel
+// (`act-1`) d'un item TEST_ACTIVITY (type "vente", reference "CMD-2847") —
+// même correspondance que le vrai contrat backend (App\Notifications\
+// CommandeValideeNotification::commande_id === CommandeVente::id, voir
+// config/clientNotifications.ts::notificationActionRoute), pour pouvoir
+// tester la redirection contextuelle "notification -> Livraisons -> détail
+// ouvert" de bout en bout (chantier "centre de notifications" du
+// 27/08/2026).
 const TEST_NOTIFICATIONS = [
   { id: "notif-1", type: "commande_validee", titre: "Livraison CMD-2841 terminée", message: "12 packs livrés aujourd'hui", data: {}, lu: false, created_at: "2026-08-26T10:00:00.000000Z" },
-  { id: "notif-2", type: "commande_validee", titre: "Nouvelle commande attribuée", message: "Commande CMD-2847", data: {}, lu: false, created_at: "2026-08-25T15:30:00.000000Z" },
+  { id: "notif-2", type: "commande_validee", titre: "Nouvelle commande attribuée", message: "Commande CMD-2847", data: { commande_id: "act-1", reference: "CMD-2847" }, lu: false, created_at: "2026-08-25T15:30:00.000000Z" },
   { id: "notif-3", type: "versement", titre: "Versement validé", message: "Montant de 850 000 GNF", data: {}, lu: true, created_at: "2026-08-24T09:12:00.000000Z" },
 ];
 
@@ -485,6 +493,17 @@ router.post(
   defineEventHandler((event) => {
     requireTestToken(event);
     for (const n of TEST_NOTIFICATIONS) n.lu = true;
+    return { success: true };
+  }),
+);
+
+router.post(
+  "/api/v1/mobile/notifications/:id/read",
+  defineEventHandler((event) => {
+    requireTestToken(event);
+    const id = getRouterParam(event, "id");
+    const notification = TEST_NOTIFICATIONS.find((n) => n.id === id);
+    if (notification) notification.lu = true;
     return { success: true };
   }),
 );

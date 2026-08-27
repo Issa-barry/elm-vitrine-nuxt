@@ -3,8 +3,18 @@ const route = useRoute();
 const { config, state, closeOverlays } = useClientLayout();
 const showMobileTopbar = computed(() => route.path.replace(/\/+$/, "") === "/espace-client");
 
+// Chargées une seule fois par montage du shell (pas par page) : la cloche du
+// header (ClientTopbar.vue / ClientMobileTopbar.vue) doit afficher un badge
+// à jour dès l'entrée dans l'espace client, sur N'IMPORTE QUELLE page, pas
+// seulement le tableau de bord — chantier "centre de notifications" du
+// 27/08/2026. `useClientNotifications()` reste un état partagé (useState) :
+// pages/espace-client/index.vue ne refait plus son propre fetch (retiré de
+// son onMounted), il lit la même donnée déjà chargée ici.
+const { fetchNotifications } = useClientNotifications();
+
 onMounted(() => {
   document.documentElement.classList.toggle("app-dark", config.value.darkTheme);
+  fetchNotifications();
 });
 
 onBeforeUnmount(() => {

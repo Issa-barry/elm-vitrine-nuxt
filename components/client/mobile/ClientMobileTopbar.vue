@@ -1,5 +1,12 @@
 <script setup lang="ts">
+import { notificationBadgeLabel } from "~/config/clientNotifications";
+
 const { state, isDarkTheme, toggleDarkMode, toggleConfigMenu, toggleTopbarMenu, closeOverlays } = useClientLayout();
+const { unreadCount } = useClientNotifications();
+const badgeLabel = computed(() => notificationBadgeLabel(unreadCount.value));
+const bellLabel = computed(() => (unreadCount.value > 0
+  ? `Notifications, ${unreadCount.value} non lue${unreadCount.value > 1 ? "s" : ""}`
+  : "Notifications, aucune non lue"));
 
 const configPanelId = "client-mobile-config-panel";
 const configWrapper = ref<HTMLElement | null>(null);
@@ -85,8 +92,13 @@ onBeforeUnmount(() => {
     </div>
 
     <div class="client-mobile-topbar-side client-mobile-topbar-end">
-      <NuxtLink to="/espace-client/activite" class="client-mobile-icon-button" aria-label="Voir l’activité et les notifications">
+      <NuxtLink to="/espace-client/notifications" class="client-mobile-icon-button" :aria-label="bellLabel">
         <i class="pi pi-bell" />
+        <span
+          v-if="badgeLabel"
+          class="absolute -top-1 -right-1 min-w-[1.15rem] h-[1.15rem] px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[0.65rem] font-bold leading-none"
+          aria-hidden="true"
+        >{{ badgeLabel }}</span>
       </NuxtLink>
 
       <button

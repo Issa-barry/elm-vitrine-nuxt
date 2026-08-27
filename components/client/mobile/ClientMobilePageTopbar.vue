@@ -53,6 +53,11 @@ const goBack = () => router.back();
       <span>Filtre</span>
       <strong v-if="filterCount" aria-hidden="true">{{ filterCount }}</strong>
     </button>
-    <span v-else class="client-mobile-page-topbar__spacer" aria-hidden="true" />
+    <!-- Action de droite alternative (ex. "Tout marquer comme lu" sur
+    /espace-client/notifications) : opt-in, ne change rien pour les pages
+    existantes qui n'utilisent que `filterLabel` ou aucune des deux. -->
+    <slot v-else name="actions">
+      <span class="client-mobile-page-topbar__spacer" aria-hidden="true" />
+    </slot>
   </header>
 </template>
