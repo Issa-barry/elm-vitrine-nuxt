@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import QrcodeVue from "qrcode.vue";
-import type { ClientVehicle } from "~/config/clientVehicles";
+import { vehicleTeamRoleLabel, type ClientVehicle } from "~/config/clientVehicles";
 
 definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Mes véhicules — Eau La Maman" });
@@ -26,8 +26,30 @@ const vehicleFilterVisible = ref(false);
 const appliedStatus = ref<typeof ALL | "active" | "inactive">(ALL);
 const draftStatus = ref<typeof ALL | "active" | "inactive">(ALL);
 
+// Champ hérité, quasi toujours vide côté backend réel (voir
+// config/clientVehicles.ts) : ne sert plus que de repli quand
+// `capacites[]` est vide (véhicule sans catégorie configurée).
 const formatCapacity = (capacite: number | null) =>
   capacite === null ? "—" : `${new Intl.NumberFormat("fr-FR").format(capacite)} packs`;
+
+// Résumés compacts pour la carte mobile / le tableau desktop (une seule
+// ligne disponible) — `equipe[]`/`capacites[]` (chantier "équipe complète +
+// capacités réelles" du 27/08/2026, voir config/clientVehicles.ts) restent
+// la source canonique ; `conducteur`/`capacite` ne sont lus qu'en repli
+// quand les nouveaux tableaux sont vides.
+const vehicleDriverSummary = (vehicle: ClientVehicle) =>
+  vehicle.equipe[0]?.nom_complet || vehicle.conducteur || "Non assigné";
+
+const vehicleCapacitySummary = (vehicle: ClientVehicle) => {
+  if (vehicle.capacites.length === 1) {
+    const [capacite] = vehicle.capacites;
+    return `${formatNumber(capacite.capacite)} ${capacite.categorie ?? ""}`.trim();
+  }
+  if (vehicle.capacites.length > 1) {
+    return `${vehicle.capacites.length} catégories`;
+  }
+  return formatCapacity(vehicle.capacite);
+};
 
 const filteredVehicles = computed(() => {
   const query = search.value.trim().toLocaleLowerCase("fr");
@@ -35,7 +57,7 @@ const filteredVehicles = computed(() => {
     const matchesStatus =
       appliedStatus.value === ALL ||
       (appliedStatus.value === "active" ? vehicle.is_active : !vehicle.is_active);
-    const haystack = [vehicle.nom, vehicle.immatriculation, vehicle.type, vehicle.conducteur]
+    const haystack = [vehicle.nom, vehicle.immatriculation, vehicle.type, vehicleDriverSummary(vehicle)]
       .filter(Boolean)
       .join(" ")
       .toLocaleLowerCase("fr");
@@ -67,18 +89,15 @@ const applyVehicleFilter = () => {
 // (chantier resté ouvert) ; elle n'est plus liée nulle part depuis cette
 // page désormais, laissée en place telle quelle (pas supprimée, non demandé).
 //
-// "conducteur" reste un SEUL nom (jamais une liste, jamais un téléphone) :
-// c'est la forme exacte de GET /v1/mobile/vehicules/mine (voir
-// config/clientVehicles.ts). Vérifié le 27/08/2026 directement dans
-// VehiculesController::conducteurNom() (elm-monolithe) suite à une demande
-// utilisateur affirmant qu'un véhicule peut avoir "plusieurs livreurs" :
-// c'est réellement le cas au niveau du MODÈLE (Vehicule::equipe a
-// effectivement plusieurs `membres`, avec des rôles distincts — chauffeur,
-// convoyeur...), mais AUCUN endpoint mobile actuel n'expose cette liste
-// complète ni un numéro de téléphone pour qui que ce soit dans l'équipe —
-// seul le membre au rôle "chauffeur" est réduit à un simple nom. Tant que ce
-// contrat n'existe pas, ne jamais construire une UI "liste des livreurs"
-// avec des noms/téléphones inventés — un seul champ "Conducteur", honnête.
+// MàJ 27/08/2026 : le backend expose désormais l'équipe complète
+// (`equipe[]`, nom + téléphone + rôle réel chauffeur/convoyeur, jamais
+// traduit côté backend) et la capacité réelle par catégorie (`capacites[]`)
+// — voir config/clientVehicles.ts pour le détail vérifié directement contre
+// App\Http\Controllers\Api\Client\VehiculesController (elm-monolithe) et ses
+// 11 tests. `conducteur`/`capacite` (un seul nom/nombre) restent dans le
+// contrat pour compatibilité descendante mais ne sont plus lus ici QUE
+// lorsque `equipe`/`capacites` sont vides (véhicule sans équipe/catégorie
+// configurée) — jamais pour l'affichage principal.
 const selectedVehicle = ref<ClientVehicle | null>(null);
 const detailVisible = ref(false);
 const lastVehicleTrigger = ref<HTMLElement | null>(null);
@@ -142,8 +161,8 @@ const openVehicleDetail = (vehicle: ClientVehicle, event: MouseEvent) => {
           </div>
 
           <div class="client-mobile-vehicles-card__meta">
-            <span><i class="pi pi-box" aria-hidden="true" /> {{ formatCapacity(vehicle.capacite) }}</span>
-            <span><i class="pi pi-user" aria-hidden="true" /> {{ vehicle.conducteur || "Non assigné" }}</span>
+            <span><i class="pi pi-box" aria-hidden="true" /> {{ vehicleCapacitySummary(vehicle) }}</span>
+            <span><i class="pi pi-user" aria-hidden="true" /> {{ vehicleDriverSummary(vehicle) }}</span>
             <span v-if="vehicle.en_livraison"><i class="pi pi-send" aria-hidden="true" /> En livraison</span>
           </div>
         </button>
@@ -174,8 +193,8 @@ const openVehicleDetail = (vehicle: ClientVehicle, event: MouseEvent) => {
         <Column field="nom" header="Véhicule" sortable><template #body="{ data }"><button type="button" class="font-medium text-primary hover:underline" @click="openVehicleDetail(data, $event)">{{ data.nom }}</button></template></Column>
         <Column field="immatriculation" header="Immatriculation" sortable />
         <Column field="type" header="Type" sortable />
-        <Column header="Capacité"><template #body="{ data }">{{ formatCapacity(data.capacite) }}</template></Column>
-        <Column header="Conducteur"><template #body="{ data }">{{ data.conducteur || "Non assigné" }}</template></Column>
+        <Column header="Capacité"><template #body="{ data }">{{ vehicleCapacitySummary(data) }}</template></Column>
+        <Column header="Conducteur"><template #body="{ data }">{{ vehicleDriverSummary(data) }}</template></Column>
         <Column header="Statut"><template #body="{ data }"><Tag :value="data.is_active ? 'Actif' : 'Inactif'" :severity="data.is_active ? 'success' : 'warn'" /></template></Column>
         <Column header="Actions"><template #body="{ data }"><Button icon="pi pi-eye" text rounded severity="secondary" :aria-label="`Voir ${data.nom}`" @click="openVehicleDetail(data, $event)" /></template></Column>
       </DataTable>
@@ -252,20 +271,58 @@ const openVehicleDetail = (vehicle: ClientVehicle, event: MouseEvent) => {
           <span>Type</span>
           <strong>{{ selectedVehicle.type }}</strong>
         </div>
-        <div class="client-delivery-detail__row">
-          <span>Capacité</span>
-          <strong>{{ formatCapacity(selectedVehicle.capacite) }}</strong>
-        </div>
         <div v-if="selectedVehicle.en_livraison" class="client-delivery-detail__row">
           <span>Livraison en cours</span>
           <strong>Oui</strong>
         </div>
-        <!-- "Conducteur" : un seul nom, jamais une liste ni un téléphone —
-          voir le commentaire sur openVehicleDetail() plus haut, cette
-          donnée n'existe pas dans le contrat backend réel. -->
-        <div class="client-delivery-detail__row">
+        <!-- Replis (véhicule sans équipe/catégorie configurée) : affichés
+          UNIQUEMENT quand les sources canoniques ci-dessous sont vides. -->
+        <div v-if="!selectedVehicle.capacites.length" class="client-delivery-detail__row">
+          <span>Capacité</span>
+          <strong>{{ formatCapacity(selectedVehicle.capacite) }}</strong>
+        </div>
+        <div v-if="!selectedVehicle.equipe.length" class="client-delivery-detail__row">
           <span>Conducteur</span>
           <strong>{{ selectedVehicle.conducteur || "Non assigné" }}</strong>
+        </div>
+      </div>
+
+      <div v-if="selectedVehicle.proprietaire" class="client-delivery-detail__order">
+        <h3>Propriétaire</h3>
+        <div class="client-delivery-detail__row">
+          <span>Nom</span>
+          <strong>{{ selectedVehicle.proprietaire.nom_complet }}</strong>
+        </div>
+        <div class="client-delivery-detail__row">
+          <span>Téléphone</span>
+          <strong>{{ selectedVehicle.proprietaire.telephone || "—" }}</strong>
+        </div>
+      </div>
+
+      <!-- Équipe complète (tous les membres, jamais un seul nom) : source
+        canonique `equipe[]` — voir config/clientVehicles.ts et le
+        commentaire au-dessus de selectedVehicle. -->
+      <div v-if="selectedVehicle.equipe.length" class="client-delivery-detail__order">
+        <h3>Équipe de livraison</h3>
+        <div
+          v-for="(membre, index) in selectedVehicle.equipe"
+          :key="membre.id"
+          class="flex items-center justify-between gap-3"
+          :class="index > 0 ? 'mt-3 pt-3 border-t border-surface' : ''"
+        >
+          <div class="min-w-0">
+            <strong class="block text-surface-900 dark:text-surface-0 text-sm font-semibold truncate">{{ membre.nom_complet }}</strong>
+            <span class="block text-muted-color text-xs mt-0.5">{{ membre.telephone || "—" }}</span>
+          </div>
+          <Tag :value="vehicleTeamRoleLabel(membre.role)" severity="secondary" />
+        </div>
+      </div>
+
+      <div v-if="selectedVehicle.capacites.length" class="client-delivery-detail__order">
+        <h3>Capacités</h3>
+        <div v-for="capacite in selectedVehicle.capacites" :key="capacite.categorie_id" class="client-delivery-detail__row">
+          <span>{{ capacite.categorie || "—" }}</span>
+          <strong>{{ formatNumber(capacite.capacite) }}</strong>
         </div>
       </div>
     </div>
