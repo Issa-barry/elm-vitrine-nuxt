@@ -1,26 +1,16 @@
+import type { ApiVehiculeCommissionRow } from "~/types/api";
+
 // Type du contrat réel GET /v1/mobile/vehicules/{vehiculeId}/commissions côté
-// elm-monolithe (voir docs/api-espace-client-contract.md §4, vérifié
-// directement contre App\Http\Controllers\Api\Client\VehiculeCommissionsController
-// le 27/08/2026). Scopé à UN véhicule à la fois (404 si le véhicule
-// n'existe pas ; liste vide s'il existe mais n'est pas accessible au compte
-// connecté) — aucun endpoint consolidé "toutes commissions" n'existe côté
-// backend (contrairement à /depenses/mine), voir useClientCommissions.ts pour
-// la façon dont cette page les assemble.
+// elm-monolithe, dérivé du contrat OpenAPI généré (chantier du 27/08/2026,
+// voir types/api.ts — schema `VehiculeCommissionRow` propre, aucune
+// imperfection constatée ici). Scopé à UN véhicule à la fois (404 si le
+// véhicule n'existe pas ; liste vide s'il existe mais n'est pas accessible au
+// compte connecté) — aucun endpoint consolidé "toutes commissions" n'existe
+// côté backend (contrairement à /depenses/mine), voir useClientCommissions.ts
+// pour la façon dont cette page les assemble.
 export type CommissionStatus = "paye" | "partiel" | "en_attente";
 
-export interface VehicleCommission {
-  id: string;
-  reference: string;
-  // ISO 8601, ou null si aucune date de perception n'a pu être déterminée
-  // côté backend (voir `?->toISOString()` dans le contrôleur réel).
-  date: string | null;
-  montant_net: number;
-  montant_a_payer: number;
-  montant_verse: number;
-  montant_restant: number;
-  statut: CommissionStatus;
-  mois: string;
-}
+export type VehicleCommission = ApiVehiculeCommissionRow;
 
 // Extension purement frontend : le champ `vehicule` n'existe PAS dans la
 // réponse réelle (déjà scopée par l'URL) — ajouté ici uniquement pour
