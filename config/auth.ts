@@ -1,4 +1,5 @@
 import type { IFetchError } from "ofetch";
+import type { ApiMeResponse } from "~/types/api";
 
 // Contrat exact de elm-monolithe (voir docs/api-auth-contract.md côté backend,
 // et l'audit du 26/08/2026) : Sanctum Bearer, pas de cookie de session Laravel.
@@ -13,24 +14,50 @@ import type { IFetchError } from "ofetch";
 // ("elm-mobile-android", "elm-mobile-ios", "elm-nuxt-web").
 export const DEVICE_NAME = "elm-nuxt-web";
 
-// Reflet de UserResource côté backend (LoginController::userResource(),
-// MeController) — jamais de permissions détaillées ni d'attributs Eloquent
-// bruts, volontairement.
-export interface AuthUser {
-  id: string | number;
-  prenom: string;
-  nom: string;
-  telephone: string;
+// Dérivé du contrat OpenAPI généré (chantier du 27/08/2026, voir
+// types/api.ts, ApiMeResponse). `context` exclu ici volontairement, voir
+// AuthContext ci-dessous : GET /auth/me la renvoie toujours, mais
+// /auth/login (LoginResponse, plus léger) ne la renvoie pas — deux formes
+// réellement différentes, pas la même avec un champ en moins.
+//
+// `email` réécrit en `string | null` — IMPERFECTION OpenAPI CONSTATÉE :
+// généré en `string` simple (non nullable), alors qu'un compte inscrit sans
+// email (courant, l'inscription se fait par téléphone) renvoie réellement
+// `email: null` — vérifié en pratique sur de vrais comptes pendant ce
+// chantier (et déjà avant, voir l'historique de config/auth.test.ts). Ce
+// champ vient très probablement d'un exemple de réponse où l'email était
+// renseigné pour ce compte précis, jamais du vrai type nullable sous-jacent
+// (même classe de défaut que AuthContext, voir plus bas). Sans ce correctif,
+// TypeScript aurait laissé passer sans erreur du code non sûr sur
+// `user.email` pour n'importe quel compte sans email — capturé ici
+// uniquement parce que config/clientCapabilitiesFixtures.ts utilise
+// délibérément `email: null` dans ses scénarios de preview.
+//
+// `is_active`/`qr_payload` réécrits en optionnels — pas une imperfection
+// OpenAPI cette fois (ApiMeResponse les documente correctement comme requis
+// sur GET /auth/me) mais une différence d'USAGE : AuthUser est partagé entre
+// /auth/me (qui les renvoie toujours) ET la réponse de POST /auth/login
+// (LoginResponse, plus légère, qui ne les renvoie PAS — voir
+// composables/useAuth.ts::login(), qui pose `user.value = data.user` avant
+// même d'avoir appelé /me). Les rendre requis casserait ce cas réel.
+export type AuthUser = Omit<ApiMeResponse, "context" | "email" | "is_active" | "qr_payload"> & {
   email: string | null;
-  roles: string[];
   is_active?: boolean;
   qr_payload?: string | null;
-}
+};
 
 // Bloc `context` de GET /api/auth/me, résolu côté backend par
 // ClientIdentityResolver — jamais reconstruit ni deviné côté frontend (voir
 // section 6-7 de l'audit du 26/08/2026 : Nuxt n'a jamais à envoyer
 // organization_id/proprietaire_id/livreur_id pour définir son périmètre).
+// Volontairement écrit à la main plutôt que dérivé d'ApiMeResponse["context"]
+// : le schema généré type client_id/proprietaire_id/livreur_id en `null`
+// SEUL (pas `string | null`) — Scramble a visiblement inféré ces trois
+// champs depuis un exemple de réponse où ils valaient null pour ce compte
+// précis, jamais depuis le vrai type nullable sous-jacent (imperfection
+// constatée, voir le rapport de ce chantier). Utiliser ce type généré tel
+// quel aurait rendu innaccessible tout compte ayant réellement un
+// client_id/proprietaire_id/livreur_id.
 export interface AuthContext {
   organization_id: string | null;
   client_id: string | null;

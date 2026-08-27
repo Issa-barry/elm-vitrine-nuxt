@@ -6,6 +6,7 @@
   .client-mobile-expenses,
   .client-mobile-vehicles-page,
   .client-mobile-vehicle-detail,
+  .client-mobile-notifications,
   .client-mobile-page-topbar {
     display: none;
   }
@@ -190,7 +191,8 @@ $bp-mobile-or-tablet-portrait: "#{$bp-mobile}, #{$bp-tablet-portrait}";
     .client-desktop-deliveries,
     .client-desktop-expenses,
     .client-desktop-vehicles,
-    .client-desktop-vehicle-detail {
+    .client-desktop-vehicle-detail,
+    .client-desktop-notifications {
       display: none;
     }
 
@@ -294,6 +296,17 @@ $bp-mobile-or-tablet-portrait: "#{$bp-mobile}, #{$bp-tablet-portrait}";
 
     .client-mobile-page-topbar__filter:active {
       transform: scale(0.96);
+    }
+
+    // Réutilisé pour l'action "Tout lu" de /espace-client/notifications
+    // (chantier "centre de notifications" du 27/08/2026) : seul ce bouton-là
+    // peut être désactivé (aucune notification non lue), d'où cette règle
+    // absente à l'origine (le bouton "Filtre" n'est jamais désactivé).
+    .client-mobile-page-topbar__filter:disabled {
+      color: var(--text-color-secondary);
+      cursor: not-allowed;
+      background: transparent;
+      opacity: 0.5;
     }
 
     .client-mobile-page-topbar__filter strong {
@@ -675,6 +688,7 @@ $bp-mobile-or-tablet-portrait: "#{$bp-mobile}, #{$bp-tablet-portrait}";
       font-size: 0.75rem;
     }
 
+    .client-mobile-notifications,
     .client-mobile-expenses {
       display: block;
       width: 100%;
@@ -1089,6 +1103,15 @@ $bp-mobile-or-tablet-portrait: "#{$bp-mobile}, #{$bp-tablet-portrait}";
 
     .client-mobile-vehicles-card {
       display: block;
+      // Réinitialisation nécessaire depuis le passage <NuxtLink> -> <button>
+      // (demande du 27/08/2026 : ouvre une boîte de dialogue plutôt que de
+      // naviguer) — un <button> a des styles par défaut qu'un <a> n'a pas
+      // (largeur au contenu, alignement, police de formulaire).
+      width: 100%;
+      text-align: left;
+      font: inherit;
+      cursor: pointer;
+      appearance: none;
       padding: 1rem;
       color: inherit;
       text-decoration: none;

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { notificationBadgeLabel } from "~/config/clientNotifications";
+
 const {
   state,
   isDarkTheme,
@@ -6,7 +8,55 @@ const {
   toggleDarkMode,
   toggleConfigMenu,
   toggleTopbarMenu,
+  toggleNotificationsMenu,
 } = useClientLayout();
+
+const { unreadCount } = useClientNotifications();
+const badgeLabel = computed(() => notificationBadgeLabel(unreadCount.value));
+const bellLabel = computed(() => (unreadCount.value > 0
+  ? `Notifications, ${unreadCount.value} non lue${unreadCount.value > 1 ? "s" : ""}`
+  : "Notifications, aucune non lue"));
+
+// Ouvre/ferme au clic hors du panneau et à Échap — même logique que le
+// panneau de thème mobile (ClientMobileTopbar.vue), appliquée ici à la
+// cloche desktop/tablette (chantier "centre de notifications" du
+// 27/08/2026) : indépendante de la config du thème et du sous-menu
+// "Actions rapides" (toggleNotificationsMenu ne touche à aucun des deux).
+const notificationsWrapper = ref<HTMLElement | null>(null);
+const bellButton = ref<HTMLButtonElement | null>(null);
+
+const handlePointerDown = (event: PointerEvent) => {
+  const wrapper = notificationsWrapper.value;
+  const target = event.target;
+  if (!wrapper || !(target instanceof Node) || wrapper.contains(target)) return;
+  state.value.notificationsMenuVisible = false;
+};
+
+const handleKeydown = (event: KeyboardEvent) => {
+  if (event.key !== "Escape") return;
+  state.value.notificationsMenuVisible = false;
+  bellButton.value?.focus();
+};
+
+watch(
+  () => state.value.notificationsMenuVisible,
+  (visible) => {
+    if (!import.meta.client) return;
+
+    if (visible) {
+      document.addEventListener("pointerdown", handlePointerDown);
+      document.addEventListener("keydown", handleKeydown);
+    } else {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeydown);
+    }
+  },
+);
+
+onBeforeUnmount(() => {
+  document.removeEventListener("pointerdown", handlePointerDown);
+  document.removeEventListener("keydown", handleKeydown);
+});
 </script>
 
 <template>
@@ -36,6 +86,25 @@ const {
         </div>
       </div>
 
+      <div ref="notificationsWrapper" class="relative">
+        <button
+          ref="bellButton"
+          type="button"
+          class="layout-topbar-action relative"
+          :aria-label="bellLabel"
+          :aria-expanded="state.notificationsMenuVisible"
+          @click="toggleNotificationsMenu"
+        >
+          <i class="pi pi-bell" />
+          <span
+            v-if="badgeLabel"
+            class="absolute -top-1 -right-1 min-w-[1.15rem] h-[1.15rem] px-1 !flex items-center justify-center rounded-full bg-red-500 text-white text-[0.65rem] font-bold leading-none"
+            aria-hidden="true"
+          >{{ badgeLabel }}</span>
+        </button>
+        <ClientNotificationsPanel v-if="state.notificationsMenuVisible" />
+      </div>
+
       <button class="layout-topbar-menu-button layout-topbar-action" type="button" aria-label="Actions rapides" @click="toggleTopbarMenu">
         <i class="pi pi-ellipsis-v" />
       </button>
@@ -46,10 +115,6 @@ const {
             <i class="pi pi-calendar" />
             <span>Activité</span>
           </NuxtLink>
-          <button type="button" class="layout-topbar-action">
-            <i class="pi pi-inbox" />
-            <span>Notifications</span>
-          </button>
           <NuxtLink to="/espace-client/profil" class="layout-topbar-action">
             <i class="pi pi-user" />
             <span>Profil</span>

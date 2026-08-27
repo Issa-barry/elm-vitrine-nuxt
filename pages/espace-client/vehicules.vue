@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import QrcodeVue from "qrcode.vue";
+import type { ClientVehicle } from "~/config/clientVehicles";
+
 definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Mes véhicules — Eau La Maman" });
 
@@ -56,6 +59,35 @@ const applyVehicleFilter = () => {
   appliedStatus.value = draftStatus.value;
   vehicleFilterVisible.value = false;
 };
+
+// Détail véhicule en boîte de dialogue (bas d'écran), plus une navigation
+// vers /espace-client/vehicules/[id] (demande du 27/08/2026) — même patron
+// que le détail d'opération de pages/espace-client/activite.vue. Cette page
+// [id] existait déjà mais n'était jamais branchée sur de vraies données
+// (chantier resté ouvert) ; elle n'est plus liée nulle part depuis cette
+// page désormais, laissée en place telle quelle (pas supprimée, non demandé).
+//
+// "conducteur" reste un SEUL nom (jamais une liste, jamais un téléphone) :
+// c'est la forme exacte de GET /v1/mobile/vehicules/mine (voir
+// config/clientVehicles.ts). Vérifié le 27/08/2026 directement dans
+// VehiculesController::conducteurNom() (elm-monolithe) suite à une demande
+// utilisateur affirmant qu'un véhicule peut avoir "plusieurs livreurs" :
+// c'est réellement le cas au niveau du MODÈLE (Vehicule::equipe a
+// effectivement plusieurs `membres`, avec des rôles distincts — chauffeur,
+// convoyeur...), mais AUCUN endpoint mobile actuel n'expose cette liste
+// complète ni un numéro de téléphone pour qui que ce soit dans l'équipe —
+// seul le membre au rôle "chauffeur" est réduit à un simple nom. Tant que ce
+// contrat n'existe pas, ne jamais construire une UI "liste des livreurs"
+// avec des noms/téléphones inventés — un seul champ "Conducteur", honnête.
+const selectedVehicle = ref<ClientVehicle | null>(null);
+const detailVisible = ref(false);
+const lastVehicleTrigger = ref<HTMLElement | null>(null);
+
+const openVehicleDetail = (vehicle: ClientVehicle, event: MouseEvent) => {
+  lastVehicleTrigger.value = event.currentTarget as HTMLElement;
+  selectedVehicle.value = vehicle;
+  detailVisible.value = true;
+};
 </script>
 
 <template>
@@ -89,13 +121,14 @@ const applyVehicleFilter = () => {
       </label>
 
       <div class="client-mobile-vehicles-list" :aria-label="`${filteredVehicles.length} véhicule${filteredVehicles.length > 1 ? 's' : ''}`">
-        <NuxtLink
+        <button
           v-for="vehicle in filteredVehicles"
           :key="vehicle.id"
-          :to="`/espace-client/vehicules/${vehicle.id}`"
-          external
+          type="button"
           class="client-mobile-vehicles-card"
+          aria-haspopup="dialog"
           :aria-label="`Voir les détails de ${vehicle.nom}`"
+          @click="openVehicleDetail(vehicle, $event)"
         >
           <div class="client-mobile-vehicles-card__top">
             <span class="client-mobile-vehicles-card__icon" aria-hidden="true"><i class="pi pi-car" /></span>
@@ -113,7 +146,7 @@ const applyVehicleFilter = () => {
             <span><i class="pi pi-user" aria-hidden="true" /> {{ vehicle.conducteur || "Non assigné" }}</span>
             <span v-if="vehicle.en_livraison"><i class="pi pi-send" aria-hidden="true" /> En livraison</span>
           </div>
-        </NuxtLink>
+        </button>
       </div>
 
       <div v-if="!filteredVehicles.length && hasLoaded" class="client-mobile-vehicles-empty" role="status">
@@ -138,13 +171,13 @@ const applyVehicleFilter = () => {
       </div>
       <DataTable :value="filteredVehicles" data-key="id" :rows="10" :paginator="filteredVehicles.length > 10" responsive-layout="scroll" striped-rows>
         <template #empty>{{ vehicles.length ? "Aucun véhicule trouvé." : "Aucun véhicule rattaché à votre compte." }}</template>
-        <Column field="nom" header="Véhicule" sortable><template #body="{ data }"><NuxtLink :to="`/espace-client/vehicules/${data.id}`" external class="font-medium text-primary hover:underline">{{ data.nom }}</NuxtLink></template></Column>
+        <Column field="nom" header="Véhicule" sortable><template #body="{ data }"><button type="button" class="font-medium text-primary hover:underline" @click="openVehicleDetail(data, $event)">{{ data.nom }}</button></template></Column>
         <Column field="immatriculation" header="Immatriculation" sortable />
         <Column field="type" header="Type" sortable />
         <Column header="Capacité"><template #body="{ data }">{{ formatCapacity(data.capacite) }}</template></Column>
         <Column header="Conducteur"><template #body="{ data }">{{ data.conducteur || "Non assigné" }}</template></Column>
         <Column header="Statut"><template #body="{ data }"><Tag :value="data.is_active ? 'Actif' : 'Inactif'" :severity="data.is_active ? 'success' : 'warn'" /></template></Column>
-        <Column header="Actions"><template #body="{ data }"><NuxtLink :to="`/espace-client/vehicules/${data.id}`" external :aria-label="`Voir ${data.nom}`"><Button icon="pi pi-eye" text rounded severity="secondary" /></NuxtLink></template></Column>
+        <Column header="Actions"><template #body="{ data }"><Button icon="pi pi-eye" text rounded severity="secondary" :aria-label="`Voir ${data.nom}`" @click="openVehicleDetail(data, $event)" /></template></Column>
       </DataTable>
     </template>
   </div>
@@ -173,6 +206,69 @@ const applyVehicleFilter = () => {
         <Button type="submit" form="client-vehicle-filter-form" label="Afficher les véhicules" />
       </div>
     </template>
+  </Drawer>
+
+  <Drawer
+    v-model:visible="detailVisible"
+    position="bottom"
+    modal
+    dismissable
+    close-on-escape
+    block-scroll
+    :show-close-icon="false"
+    class="client-delivery-detail-drawer"
+    @hide="lastVehicleTrigger?.focus()"
+  >
+    <template #header>
+      <div class="client-delivery-detail-header">
+        <span class="client-delivery-detail-handle" aria-hidden="true" />
+        <button type="button" class="client-delivery-detail-close" aria-label="Fermer les détails du véhicule" @click="detailVisible = false">
+          <i class="pi pi-times" />
+        </button>
+      </div>
+    </template>
+
+    <div v-if="selectedVehicle" class="client-delivery-detail">
+      <div class="client-delivery-detail__top">
+        <strong>{{ selectedVehicle.nom }}</strong>
+        <Tag :value="selectedVehicle.is_active ? 'Actif' : 'Inactif'" :severity="selectedVehicle.is_active ? 'success' : 'warn'" />
+      </div>
+
+      <!-- QR = immatriculation réelle, déjà affichée juste en dessous —
+        jamais un identifiant fabriqué. Même composant/pattern que
+        pages/espace-client/activite.vue (QR sur la référence de commande). -->
+      <div class="client-delivery-detail__qr">
+        <QrcodeVue :value="selectedVehicle.immatriculation" :size="176" level="M" render-as="svg" foreground="#111827" background="#ffffff" />
+        <span class="client-delivery-detail__qr-hint">Scannez pour identifier le véhicule</span>
+        <span class="client-delivery-detail__qr-ref">{{ selectedVehicle.immatriculation }}</span>
+      </div>
+
+      <div class="client-delivery-detail__rows">
+        <div class="client-delivery-detail__row">
+          <span>Immatriculation</span>
+          <strong>{{ selectedVehicle.immatriculation }}</strong>
+        </div>
+        <div class="client-delivery-detail__row">
+          <span>Type</span>
+          <strong>{{ selectedVehicle.type }}</strong>
+        </div>
+        <div class="client-delivery-detail__row">
+          <span>Capacité</span>
+          <strong>{{ formatCapacity(selectedVehicle.capacite) }}</strong>
+        </div>
+        <div v-if="selectedVehicle.en_livraison" class="client-delivery-detail__row">
+          <span>Livraison en cours</span>
+          <strong>Oui</strong>
+        </div>
+        <!-- "Conducteur" : un seul nom, jamais une liste ni un téléphone —
+          voir le commentaire sur openVehicleDetail() plus haut, cette
+          donnée n'existe pas dans le contrat backend réel. -->
+        <div class="client-delivery-detail__row">
+          <span>Conducteur</span>
+          <strong>{{ selectedVehicle.conducteur || "Non assigné" }}</strong>
+        </div>
+      </div>
+    </div>
   </Drawer>
   </div>
 </template>

@@ -119,6 +119,33 @@ test.describe("Dashboard — cartes KPI (tablette paysage / desktop)", () => {
     await expect(desktop.getByText(`${new Intl.NumberFormat("fr-FR").format(2_760_000)} GNF`).first()).toBeVisible({ timeout: 10_000 });
     await expect(desktop.getByText("100%")).toBeVisible();
   });
+
+  test("retour sur le dashboard après navigation : les données réelles restent visibles immédiatement (pas de page vide)", async ({ page }) => {
+    await loginAsTestUser(page);
+    const kpiRow = page.locator(".client-desktop-dashboard");
+    await expect(kpiRow.getByText(formatGnf(generated))).toBeVisible({ timeout: 10_000 });
+
+    await page.locator(".layout-menu").getByRole("link", { name: "Véhicules" }).click();
+    await expect(page).toHaveURL(/\/espace-client\/vehicules$/);
+    await expect(page.locator(".client-desktop-vehicles")).toBeVisible({ timeout: 10_000 });
+
+    // Ralentit artificiellement le refetch dashboard du retour (2s) — si la
+    // valeur réelle réapparaît quand même bien avant ce délai, c'est la
+    // preuve qu'elle vient de l'état déjà en mémoire (useState conservé
+    // entre navigations client-side, voir useClientDashboard.ts), jamais
+    // d'un nouveau fetch qu'il aurait fallu attendre. Un vrai réseau plus
+    // lent que 500ms rendrait ce test faussement rouge — c'est voulu : la
+    // page ne doit jamais dépendre du réseau pour réafficher une donnée déjà
+    // connue.
+    await page.route("**/api/client/dashboard**", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await route.continue();
+    });
+
+    await page.locator(".layout-menu").getByRole("link", { name: "Tableau de bord" }).click();
+    await expect(page).toHaveURL(/\/espace-client$/);
+    await expect(kpiRow.getByText(formatGnf(generated))).toBeVisible({ timeout: 500 });
+  });
 });
 
 test.describe("Dashboard — responsive des cartes KPI", () => {
