@@ -8,8 +8,15 @@ const { response, isLoading, error, hasLoaded, fetchExpenses } = useClientExpens
 const { vehicles: ownedVehicles, fetchVehicles } = useClientVehicles();
 
 const activeExpenseTab = ref<"general" | "details">("general");
-const statutFilter = ref<ExpenseStatus | "">("");
-const vehiculeFilter = ref<string>("");
+// "tous" plutôt que "" comme valeur du filtre par défaut : PrimeVue Select
+// traite une modelValue vide ("", null, undefined) comme "aucune sélection"
+// et affiche alors son placeholder (jamais défini ici) au lieu du libellé de
+// l'option correspondante — même avec une option `{ value: "" }` déjà
+// présente dans la liste, le Select restait visuellement vide. "tous" est une
+// valeur non vide comme une autre, donc affichée normalement.
+const ALL = "tous";
+const statutFilter = ref<ExpenseStatus | typeof ALL>(ALL);
+const vehiculeFilter = ref<string>(ALL);
 
 // Plafond documenté du backend (voir docs/api-espace-client-contract.md §4,
 // per_page 1-100) : un seul fetch couvre la quasi-totalité d'un usage réel
@@ -19,8 +26,8 @@ const vehiculeFilter = ref<string>("");
 async function loadExpenses() {
   await fetchExpenses({
     per_page: 100,
-    statut: statutFilter.value || undefined,
-    vehicule_id: vehiculeFilter.value || undefined,
+    statut: statutFilter.value !== ALL ? statutFilter.value : undefined,
+    vehicule_id: vehiculeFilter.value !== ALL ? vehiculeFilter.value : undefined,
   });
 }
 
@@ -43,8 +50,8 @@ const hasMoreThanShown = computed(() => Boolean(meta.value && meta.value.total >
 // l'affichage, pas recalculés.
 const validatedExpenses = computed(() => expenses.value.filter((expense) => expense.statut === "valide"));
 
-const statutOptions: Array<{ label: string; value: ExpenseStatus | "" }> = [
-  { label: "Tous les statuts", value: "" },
+const statutOptions: Array<{ label: string; value: ExpenseStatus | typeof ALL }> = [
+  { label: "Tous les statuts", value: ALL },
   { label: "Validée", value: "valide" },
   { label: "Soumise", value: "soumis" },
   { label: "Rejetée", value: "rejete" },
@@ -52,7 +59,7 @@ const statutOptions: Array<{ label: string; value: ExpenseStatus | "" }> = [
   { label: "Brouillon", value: "brouillon" },
 ];
 const vehiculeOptions = computed(() => [
-  { label: "Tous les véhicules", value: "" },
+  { label: "Tous les véhicules", value: ALL },
   ...ownedVehicles.value.map((vehicle) => ({ label: `${vehicle.nom} · ${vehicle.immatriculation}`, value: vehicle.id })),
 ]);
 
