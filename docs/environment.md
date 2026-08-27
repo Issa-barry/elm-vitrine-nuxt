@@ -10,7 +10,7 @@ une URL codée en dur dans le code applicatif.
 
 | Variable | Portée | Obligatoire | Rôle |
 |---|---|---|---|
-| `NUXT_PUBLIC_APP_NAME` | publique | non (défaut : `Eau La Maman`) | Nom affiché ; sert aussi au futur manifest PWA |
+| `NUXT_PUBLIC_APP_NAME` | publique | non (défaut : `Eau La Maman`) | Nom affiché ; sert aussi au manifest PWA (voir `docs/pwa.md`) |
 | `NUXT_PUBLIC_APP_VERSION` | publique | non (défaut : version de `package.json`) | Uniquement informatif |
 | `NUXT_PUBLIC_ENVIRONMENT` | publique | non (défaut : `local`) | `local` \| `preprod` \| `recette` \| `production` — pilote le SEO |
 | `NUXT_PUBLIC_SITE_URL` | publique | **oui** hors local | URL publique de ce site (canonique, robots.txt) |

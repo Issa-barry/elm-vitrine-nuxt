@@ -16,7 +16,7 @@ souvent déjà en cache local si un autre projet utilise Playwright).
 
 ## Ce qui est couvert
 
-7 parcours, dans `tests/e2e/` :
+8 parcours, dans `tests/e2e/` :
 
 | Fichier | Parcours |
 |---|---|
@@ -27,6 +27,7 @@ souvent déjà en cache local si un autre projet utilise Playwright).
 | `vehicules.spec.ts` | Tableau des véhicules (vue desktop) |
 | `activite.spec.ts` | Livraisons et commandes |
 | `profil.spec.ts` | Informations personnelles |
+| `pwa.spec.ts` | Manifest PWA, icônes, balises `<head>` associées (voir `docs/pwa.md`) |
 
 ## Portée réelle : pas de backend
 
