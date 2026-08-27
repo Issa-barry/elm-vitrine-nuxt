@@ -44,9 +44,24 @@ async function loadActivity() {
   });
 }
 
-onMounted(() => {
-  loadActivity();
-  fetchVehicles();
+// Redirection contextuelle depuis une notification "commande_validee" (voir
+// config/clientNotifications.ts::notificationActionRoute, chantier "centre
+// de notifications" du 27/08/2026) : `?commande=<id>` ouvre directement le
+// détail de l'opération concernée si elle fait partie du lot déjà chargé
+// (page 1, tri décroissant par date — toujours le cas pour une notification
+// tout juste reçue). Introuvable (opération plus ancienne, hors page 1) :
+// dégradation silencieuse, la page reste utile (liste + filtres), pas
+// d'erreur ni de donnée inventée.
+const route = useRoute();
+
+onMounted(async () => {
+  await Promise.all([loadActivity(), fetchVehicles()]);
+
+  const commandeId = route.query.commande;
+  if (typeof commandeId === "string") {
+    const match = items.value.find((item) => item.id === commandeId);
+    if (match) openDetail(match);
+  }
 });
 
 watch(appliedFilters, loadActivity);
@@ -121,8 +136,8 @@ const selectedItem = ref<ClientActivityItem | null>(null);
 const detailVisible = ref(false);
 const lastTrigger = ref<HTMLElement | null>(null);
 
-const openDetail = (item: ClientActivityItem, event: MouseEvent) => {
-  lastTrigger.value = event.currentTarget as HTMLElement;
+const openDetail = (item: ClientActivityItem, event?: MouseEvent) => {
+  lastTrigger.value = (event?.currentTarget as HTMLElement) ?? null;
   selectedItem.value = item;
   detailVisible.value = true;
 };

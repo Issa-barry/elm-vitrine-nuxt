@@ -9,10 +9,13 @@ interface CallMonolithOptions {
   /**
    * Query string (dashboard/depenses/activite/commandes — filtres et
    * pagination, voir docs/api-espace-client-contract.md côté elm-monolithe).
-   * `undefined` retire le paramètre (ofetch) — laisse l'appelant passer un
-   * objet de filtres sans avoir à retirer lui-même les clés absentes.
+   * `undefined`/`null` retirent le paramètre (ofetch) — laisse l'appelant
+   * passer un objet de filtres sans avoir à retirer lui-même les clés
+   * absentes. `null` inclus depuis le chantier "types OpenAPI" du
+   * 27/08/2026 : les query params générés (voir types/api.ts) sont typés
+   * nullable, pas seulement optionnels (ex. ApiDashboardQuery).
    */
-  query?: Record<string, string | number | undefined>;
+  query?: Record<string, string | number | null | undefined>;
 }
 
 // Client HTTP générique vers elm-monolithe — utilisé par server/api/auth/*

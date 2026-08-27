@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { ClientDashboardResponse } from "~/config/clientDashboard";
 import { clientSpaceRoleLabel } from "~/config/auth";
+import { notificationVisual } from "~/config/clientNotifications";
 
 definePageMeta({ layout: "client", middleware: "auth" });
 useHead({
@@ -20,7 +21,12 @@ useHead({
 
 const auth = useAuth();
 const { dashboard, isLoading, error, fetchDashboard } = useClientDashboard();
-const { notifications, fetchNotifications, markAllRead } = useClientNotifications();
+// fetchNotifications() n'est plus appelé ici : chargé une seule fois au
+// niveau du shell (layouts/client.vue), même état partagé (useState) —
+// nécessaire pour que la cloche du header ait un badge à jour sur TOUTE
+// page de l'espace client, pas seulement celle-ci (chantier "centre de
+// notifications" du 27/08/2026).
+const { notifications, markAllRead } = useClientNotifications();
 const requestFetch = useRequestFetch();
 // "Solde par véhicule" n'a de sens que pour un contexte proprietaire/livreur
 // (chantier "capacités" du 27/08/2026, voir config/clientCapabilities.ts) :
@@ -54,7 +60,6 @@ onMounted(async () => {
     requestFetch<ClientDashboardResponse>("/api/client/dashboard", { query: { period: "mois_passe" } })
       .then((data) => { previousDashboard.value = data; })
       .catch(() => { previousDashboard.value = null; }),
-    fetchNotifications(),
   ]);
 });
 
@@ -98,14 +103,6 @@ const kpiTrends = computed(() => {
 // côté Nuxt, voir demande du 26/08/2026, section 30). Remplacée par un champ
 // réel et distinct des 3 autres cartes : `operations_count`. La grille à 4
 // cartes (et les tests de mise en page associés) reste inchangée.
-const notificationVisuals: Record<string, { icon: string; background: string; iconColor: string }> = {
-  commande_validee: { icon: "pi pi-send", background: "bg-orange-100 dark:bg-orange-400/10", iconColor: "text-orange-500" },
-  livraison_terminee: { icon: "pi pi-check", background: "bg-blue-100 dark:bg-blue-400/10", iconColor: "text-blue-500" },
-  versement: { icon: "pi pi-wallet", background: "bg-green-100 dark:bg-green-400/10", iconColor: "text-green-500" },
-};
-const defaultNotificationVisual = { icon: "pi pi-bell", background: "bg-surface-100 dark:bg-surface-800", iconColor: "text-muted-color" };
-const notificationVisual = (type: string | null) => (type && notificationVisuals[type]) || defaultNotificationVisual;
-
 const notificationDateFormatter = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 const formatNotificationDate = (iso: string) => notificationDateFormatter.format(new Date(iso));
 

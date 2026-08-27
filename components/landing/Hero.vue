@@ -1,3 +1,11 @@
+<script setup lang="ts">
+// Mêmes CTA que components/landing/Navbar.vue, affichés ici sur mobile en
+// plus du header (accès direct sans ouvrir le menu hamburger) — chantier
+// "header auth" du 27/08/2026, même composable partagé, jamais une seconde
+// logique de résolution.
+const authState = useLandingAuthState();
+</script>
+
 <template>
   <main class="grid lg:grid-cols-2 place-items-center pt-16 pb-8 md:pt-8">
     <div class="p-24 md:order-1 hidden md:block">
@@ -20,9 +28,17 @@
         La Maman.
       </p>
       <div class="mt-6 flex flex-col sm:flex-row gap-3">
-        <LandingLink class="lg:hidden" href="/connexion">Connexion</LandingLink>
+        <template v-if="authState === 'loading'">
+          <Skeleton class="lg:hidden" width="100%" height="2.75rem" border-radius="6px" />
+        </template>
+        <LandingLink v-else-if="authState === 'authenticated'" class="lg:hidden" href="/espace-client">
+          <span class="inline-flex items-center justify-center gap-2 w-full"><i class="pi pi-user" aria-hidden="true" />Mon espace</span>
+        </LandingLink>
+        <template v-else>
+          <LandingLink class="lg:hidden" href="/connexion">Connexion</LandingLink>
+          <LandingLink class="lg:hidden" size="lg" style-name="outline" href="/inscription">Inscription</LandingLink>
+        </template>
         <LandingLink class="hidden lg:inline-flex" href="/contact">Contactez-nous</LandingLink>
-        <LandingLink class="lg:hidden" size="lg" style-name="outline" href="/inscription">Inscription</LandingLink>
         <LandingLink
           class="hidden lg:inline-flex"
           size="lg"

@@ -189,30 +189,53 @@ router.patch(
   }),
 );
 
+// equipe[]/capacites[]/proprietaire/statut : contrat réel enrichi le
+// 27/08/2026 côté elm-monolithe (App\Http\Controllers\Api\Client\
+// VehiculesController, vérifié directement dans le code + ses 11 tests) —
+// conducteur/capacite conservés en compat descendante, jamais lus par le
+// front tant que equipe[]/capacites[] ne sont pas vides (voir
+// pages/espace-client/vehicules.vue). veh-1 a une équipe/capacité/propriétaire
+// complets (cas riche) ; veh-2 n'a ni équipe ni capacité ni propriétaire
+// (cas "replis", véhicule sans propriétaire renseigné) — les deux cas sont
+// couverts par tests/e2e/vehicules.spec.ts.
 const TEST_VEHICLES = [
   {
     id: "veh-1",
     nom: "ABARRY",
     immatriculation: "OU3859",
     type: "Camion",
-    capacite: 500,
+    statut: "actif",
+    capacite: null,
     is_active: true,
     photo_url: null,
     en_livraison: false,
     role: "proprietaire",
-    conducteur: "Mamadou D.",
+    conducteur: "Mamadou Diallo",
+    proprietaire: { id: "prop-1", nom_complet: "Issa Barry", telephone: "+224620010203" },
+    equipe: [
+      { id: "liv-1", nom_complet: "Mamadou Diallo", telephone: "+224620111222", role: "chauffeur", ordre: 0 },
+      { id: "liv-2", nom_complet: "Ibrahima Sow", telephone: "+224620333444", role: "convoyeur", ordre: 1 },
+    ],
+    capacites: [
+      { categorie_id: "cat-1", categorie: "Sachet eau", capacite: 800 },
+      { categorie_id: "cat-2", categorie: "Bouteille", capacite: 540 },
+    ],
   },
   {
     id: "veh-2",
     nom: "ABARRY 2",
     immatriculation: "OU4217",
     type: "Minibus",
+    statut: "inactif",
     capacite: null,
     is_active: false,
     photo_url: null,
     en_livraison: true,
     role: "proprietaire",
     conducteur: null,
+    proprietaire: null,
+    equipe: [],
+    capacites: [],
   },
 ];
 
@@ -463,9 +486,17 @@ router.get(
 
 // État mutable en mémoire (comme profileState plus haut) : permet un vrai
 // cycle GET -> POST mark-all-read -> GET dans un test E2E.
+// `data.commande_id` de notif-2 correspond volontairement à l'`id` réel
+// (`act-1`) d'un item TEST_ACTIVITY (type "vente", reference "CMD-2847") —
+// même correspondance que le vrai contrat backend (App\Notifications\
+// CommandeValideeNotification::commande_id === CommandeVente::id, voir
+// config/clientNotifications.ts::notificationActionRoute), pour pouvoir
+// tester la redirection contextuelle "notification -> Livraisons -> détail
+// ouvert" de bout en bout (chantier "centre de notifications" du
+// 27/08/2026).
 const TEST_NOTIFICATIONS = [
   { id: "notif-1", type: "commande_validee", titre: "Livraison CMD-2841 terminée", message: "12 packs livrés aujourd'hui", data: {}, lu: false, created_at: "2026-08-26T10:00:00.000000Z" },
-  { id: "notif-2", type: "commande_validee", titre: "Nouvelle commande attribuée", message: "Commande CMD-2847", data: {}, lu: false, created_at: "2026-08-25T15:30:00.000000Z" },
+  { id: "notif-2", type: "commande_validee", titre: "Nouvelle commande attribuée", message: "Commande CMD-2847", data: { commande_id: "act-1", reference: "CMD-2847" }, lu: false, created_at: "2026-08-25T15:30:00.000000Z" },
   { id: "notif-3", type: "versement", titre: "Versement validé", message: "Montant de 850 000 GNF", data: {}, lu: true, created_at: "2026-08-24T09:12:00.000000Z" },
 ];
 
@@ -485,6 +516,17 @@ router.post(
   defineEventHandler((event) => {
     requireTestToken(event);
     for (const n of TEST_NOTIFICATIONS) n.lu = true;
+    return { success: true };
+  }),
+);
+
+router.post(
+  "/api/v1/mobile/notifications/:id/read",
+  defineEventHandler((event) => {
+    requireTestToken(event);
+    const id = getRouterParam(event, "id");
+    const notification = TEST_NOTIFICATIONS.find((n) => n.id === id);
+    if (notification) notification.lu = true;
     return { success: true };
   }),
 );
