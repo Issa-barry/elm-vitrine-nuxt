@@ -17,6 +17,7 @@ une URL codée en dur dans le code applicatif.
 | `NUXT_PUBLIC_API_BASE` | publique | **oui** hors local | URL du monolithe Laravel, appelée depuis le navigateur |
 | `NUXT_MONOLITH_API_BASE` | privée (serveur uniquement) | non (retombe sur `NUXT_PUBLIC_API_BASE` si absente) | URL utilisée par `server/api/*` et `server/utils/*` pour relayer vers Laravel |
 | `NUXT_VITRINE_SERVICE_TOKEN` | privée (serveur uniquement) | non, **pas encore utilisée** | Réservée pour le jour où le backend exigera un jeton serveur-à-serveur sur `/api/public/*` (middleware `vitrine.token`) |
+| `NUXT_AUTH_SESSION_PASSWORD` | privée (serveur uniquement) | **oui** hors local | Secret de scellement (chiffrement + signature) du cookie de session BFF qui porte le token Sanctum côté serveur — voir [`server/utils/authSession.ts`](../server/utils/authSession.ts). ≥ 32 caractères aléatoires, propre à chaque environnement, jamais réutilisé. Générer avec `openssl rand -hex 32` |
 
 Publique = sous `runtimeConfig.public`, donc visible dans le bundle envoyé au
 navigateur. Privée = au niveau racine de `runtimeConfig`, accessible
@@ -51,10 +52,11 @@ d'environnement`) :
 ```
 NUXT_PUBLIC_ENVIRONMENT=preprod
 NUXT_PUBLIC_APP_NAME=ELM Préprod
-NUXT_PUBLIC_SITE_URL=<URL du site préprod une fois connue>
+NUXT_PUBLIC_SITE_URL=https://test.eau-la-maman.com
 NUXT_PUBLIC_API_BASE=https://formation.eau-la-maman.com
 NUXT_MONOLITH_API_BASE=https://formation.eau-la-maman.com
 NUXT_VITRINE_SERVICE_TOKEN=
+NUXT_AUTH_SESSION_PASSWORD=<valeur générée, propre à cet environnement>
 ```
 
 ### Production
@@ -66,6 +68,7 @@ NUXT_PUBLIC_SITE_URL=https://eau-la-maman.com
 NUXT_PUBLIC_API_BASE=https://fello.eau-la-maman.com
 NUXT_MONOLITH_API_BASE=https://fello.eau-la-maman.com
 NUXT_VITRINE_SERVICE_TOKEN=
+NUXT_AUTH_SESSION_PASSWORD=<valeur générée, propre à cet environnement>
 ```
 
 ### Recette (plus tard)
@@ -91,6 +94,60 @@ justement l'intérêt de Nitro en mode serveur. Seule exception connue :
 `NUXT_PUBLIC_APP_VERSION`, quand elle n'est pas fournie, est lue dans
 `package.json` au moment du build (donc figée au build, ce qui est attendu
 pour un numéro de version).
+
+## Authentification (BFF)
+
+L'auth utilisateur (login/session/logout) passe par un BFF Nitro plutôt que
+par un appel direct navigateur → Laravel : voir
+[`composables/useAuth.ts`](../composables/useAuth.ts),
+[`server/api/auth/`](../server/api/auth/) et
+[`server/utils/authSession.ts`](../server/utils/authSession.ts). Le token
+Sanctum obtenu de Laravel (`POST /api/auth/login`, contrat détaillé dans
+`docs/api-auth-contract.md` côté `elm-monolithe`) n'est jamais exposé au
+JavaScript du navigateur ni stocké en clair côté client (ni `localStorage`,
+ni cookie lisible en JS). Il est contenu dans la session Nuxt scellée
+(chiffrée + signée avec `NUXT_AUTH_SESSION_PASSWORD` ci-dessus), transmise
+via un cookie httpOnly, et n'est manipulé en clair que par Nitro lui-même,
+après ouverture de la session (voir `server/utils/authSession.ts`). Ce choix
+évite aussi de toucher à la config CORS/Sanctum
+stateful de Laravel : voir l'audit du 26/08/2026 (section E) pour la
+justification complète et l'architecture alternative envisagée puis écartée
+(Sanctum SPA cookie-session).
+
+Décision motivée dans l'audit et acceptée le 26/08/2026 : voir la section
+"Prêt pour SPA directe ?" de `docs/api-auth-contract.md` côté `elm-monolithe`
+si cette architecture doit être reconsidérée plus tard.
+
+`POST /api/auth/login` et `GET /api/auth/me` côté Laravel ne vérifient aucun
+rôle (partagés avec le mobile) : un compte staff/admin/super_admin obtient un
+token Sanctum valide comme n'importe qui. C'est donc le frontend qui refuse
+explicitement l'accès (`config/auth.ts::hasClientSpaceAccess`, appliqué dans
+`composables/useAuth.ts::login()` et `middleware/auth.ts`) à tout compte sans
+rôle `client`/`proprietaire`/`livreur` — même règle que le middleware Laravel
+`role:client|proprietaire|livreur` sur les endpoints métier.
+
+**Aucun bypass d'auth runtime, y compris en `nuxt dev`** (décision du
+26/08/2026, revenant sur un choix antérieur) : `pages/connexion.vue`,
+`pages/inscription.vue`, `pages/mot-de-passe-oublie.vue`,
+`middleware/auth.ts` et `middleware/guest.ts` appellent tous réellement le
+backend dans tous les environnements — aucun ne simule un succès faute de
+backend disponible. Un `elm-monolithe` local joignable
+(`NUXT_MONOLITH_API_BASE`) est donc nécessaire pour utiliser ces parcours en
+`nuxt dev` ; sans lui, le backend renvoie une vraie erreur affichée à
+l'écran (voir `server/utils/monolithClient.ts`), jamais un accès silencieux.
+Les mocks restent réservés aux tests automatisés (`page.route()` dans
+Playwright pour les scénarios purement client, ou le mock backend dédié
+`tests/e2e/mock-backend.mjs` quand un test a besoin d'une vraie session).
+
+`logout`/`logout-all` (`server/api/auth/{logout,logout-all}.post.ts`)
+distinguent explicitement deux garanties : la session Nuxt (ce cookie, ce
+navigateur) est **toujours** supprimée, mais le token Sanctum n'est
+**effectivement révoqué côté Laravel** que si cet appel réussit
+(`revokedRemotely` dans la réponse). Pour `logout-all` en particulier, si
+Laravel échoue, le message renvoyé ne prétend jamais que "tous les appareils
+ont été déconnectés" — l'opération distante reste explicitement non
+confirmée. Les échecs de révocation sont logués côté serveur (jamais le
+token lui-même).
 
 ## Précautions de sécurité
 

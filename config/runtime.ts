@@ -13,6 +13,10 @@ export interface PublicRuntimeConfig {
 export interface AppRuntimeConfig {
   monolithApiBase: string;
   vitrineServiceToken: string;
+  // Secret de scellement du cookie de session BFF (server/utils/authSession.ts)
+  // — jamais sous `public` (voir le test dédié dans config/runtime.test.ts).
+  // >= 32 caractères imposés par h3 useSession (iron-webcrypto).
+  authSessionPassword: string;
   public: PublicRuntimeConfig;
   [key: string]: unknown;
 }
@@ -20,6 +24,7 @@ export interface AppRuntimeConfig {
 export const runtimeConfigDefaults: AppRuntimeConfig = {
   monolithApiBase: "",
   vitrineServiceToken: "",
+  authSessionPassword: "",
   public: {
     siteUrl: "",
     apiBase: "",
@@ -43,6 +48,23 @@ export function findMissingRequiredConfig(config: Pick<AppRuntimeConfig, "public
 
 export function isProductionEnvironment(environment: string): boolean {
   return environment === "production";
+}
+
+// authSessionPassword (server/utils/authSession.ts) est serveur-only —
+// jamais sous `public`, donc hors de REQUIRED_PUBLIC_KEYS/
+// findMissingRequiredConfig ci-dessus, qui ne portent que sur `public`.
+// >= 32 caractères imposés par h3 useSession (iron-webcrypto) pour le
+// scellement du cookie de session BFF.
+const MIN_AUTH_SESSION_PASSWORD_LENGTH = 32;
+
+export function checkAuthSessionPassword(password: string): string | null {
+  if (!password) {
+    return "NUXT_AUTH_SESSION_PASSWORD manquante.";
+  }
+  if (password.length < MIN_AUTH_SESSION_PASSWORD_LENGTH) {
+    return `NUXT_AUTH_SESSION_PASSWORD trop courte (${password.length} caractères, ${MIN_AUTH_SESSION_PASSWORD_LENGTH} minimum).`;
+  }
+  return null;
 }
 
 // Hors production (local, préprod, recette) : on ne veut jamais qu'un moteur

@@ -40,7 +40,6 @@ const error = ref("");
 const globalError = ref("");
 const isLoading = ref(false);
 const maskedEmail = ref("");
-const isUiPreview = import.meta.dev;
 
 const selectedCountry = computed(
   () => countries.find((country) => country.iso2 === selectedCode.value) ?? countries[0],
@@ -140,12 +139,6 @@ const submitPhone = async () => {
     return;
   }
 
-  if (isUiPreview) {
-    maskedEmail.value = "i***@exemple.com";
-    step.value = "otp";
-    return;
-  }
-
   isLoading.value = true;
 
   try {
@@ -189,11 +182,6 @@ const submitOtp = async () => {
     return;
   }
 
-  if (isUiPreview) {
-    step.value = "password";
-    return;
-  }
-
   isLoading.value = true;
 
   try {
@@ -220,11 +208,6 @@ const submitPassword = async () => {
 
   if (password.value !== passwordConfirmation.value) {
     error.value = "Les mots de passe ne correspondent pas.";
-    return;
-  }
-
-  if (isUiPreview) {
-    step.value = "done";
     return;
   }
 
