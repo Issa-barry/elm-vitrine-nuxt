@@ -9,6 +9,7 @@ const model = [
     items: [
       { label: "Mes véhicules", icon: "pi pi-fw pi-car", to: "/espace-client/vehicules" },
       { label: "Activité & livraisons", icon: "pi pi-fw pi-map-marker", to: "/espace-client/activite" },
+      { label: "Mes commissions", icon: "pi pi-fw pi-percentage", to: "/espace-client/commissions" },
       { label: "Mes dépenses", icon: "pi pi-fw pi-wallet", to: "/espace-client/depenses" },
     ],
   },

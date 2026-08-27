@@ -24,6 +24,12 @@ test.describe("Espace client — navigation", () => {
     await expect(page).toHaveURL(/\/espace-client\/activite$/);
   });
 
+  test("navigue vers Mes commissions depuis le menu", async ({ page }) => {
+    await loginAsTestUser(page);
+    await page.getByRole("link", { name: "Mes commissions" }).click();
+    await expect(page).toHaveURL(/\/espace-client\/commissions$/);
+  });
+
   test("navigue vers Mon profil depuis le menu", async ({ page }) => {
     await loginAsTestUser(page);
     await page.getByRole("link", { name: "Mon profil" }).click();

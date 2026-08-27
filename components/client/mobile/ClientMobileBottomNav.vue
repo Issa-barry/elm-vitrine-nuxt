@@ -3,6 +3,7 @@ const route = useRoute();
 
 const items = [
   { label: "Accueil", icon: "pi pi-home", to: "/espace-client", exact: true },
+  { label: "Commissions", icon: "pi pi-percentage", to: "/espace-client/commissions" },
   { label: "Livraisons", icon: "pi pi-box", to: "/espace-client/activite" },
   { label: "Véhicules", icon: "pi pi-car", to: "/espace-client/vehicules" },
 ];

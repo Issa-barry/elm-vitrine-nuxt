@@ -125,7 +125,11 @@ $bp-mobile-or-tablet-portrait: "#{$bp-mobile}, #{$bp-tablet-portrait}";
       bottom: 0;
       left: 0;
       display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      // 4 colonnes : Accueil, Commissions, Livraisons, Véhicules (voir
+      // components/client/mobile/ClientMobileBottomNav.vue) — garder ce
+      // nombre synchronisé avec le nombre réel d'items du menu, sinon le
+      // dernier item retombe sur une 2e ligne à moitié pleine.
+      grid-template-columns: repeat(4, 1fr);
       min-height: calc(var(--client-mobile-nav-height) + env(safe-area-inset-bottom));
       padding: 0.55rem 0.75rem calc(0.45rem + env(safe-area-inset-bottom));
       background: color-mix(in srgb, var(--surface-card) 96%, transparent);

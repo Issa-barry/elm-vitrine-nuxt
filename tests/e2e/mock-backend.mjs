@@ -20,6 +20,7 @@ import {
   defineEventHandler,
   getHeader,
   getQuery,
+  getRouterParam,
   readBody,
   toNodeListener,
 } from "h3";
@@ -220,6 +221,35 @@ router.get(
   defineEventHandler((event) => {
     requireTestToken(event);
     return TEST_VEHICLES;
+  }),
+);
+
+// Commissions par véhicule (contrat vérifié le 27/08/2026 contre le code réel
+// de App\Http\Controllers\Api\Client\VehiculeCommissionsController — voir
+// config/clientCommissions.ts). Scopé à un seul véhicule à la fois, comme le
+// vrai backend : /espace-client/commissions (composables/useClientCommissions.ts)
+// appelle cette route une fois par véhicule de TEST_VEHICLES et fusionne.
+const TEST_COMMISSIONS_BY_VEHICULE = {
+  "veh-1": [
+    { id: "comm-1", reference: "CMD-2847", date: "2026-08-20T00:00:00.000Z", montant_net: 50_000, montant_a_payer: 50_000, montant_verse: 50_000, montant_restant: 0, statut: "paye", mois: "Août 2026" },
+    { id: "comm-2", reference: "CMD-2820", date: "2026-07-15T00:00:00.000Z", montant_net: 42_000, montant_a_payer: 42_000, montant_verse: 20_000, montant_restant: 22_000, statut: "partiel", mois: "Juillet 2026" },
+  ],
+  "veh-2": [
+    { id: "comm-3", reference: "CMD-2839", date: "2026-08-17T00:00:00.000Z", montant_net: 38_000, montant_a_payer: 38_000, montant_verse: 0, montant_restant: 38_000, statut: "en_attente", mois: "Août 2026" },
+  ],
+};
+
+router.get(
+  "/api/v1/mobile/vehicules/:vehiculeId/commissions",
+  defineEventHandler((event) => {
+    requireTestToken(event);
+    const vehiculeId = getRouterParam(event, "vehiculeId");
+    // Même comportement que le vrai backend : véhicule inconnu -> 404,
+    // véhicule connu mais sans commission -> liste vide (jamais un 404).
+    if (!TEST_VEHICLES.some((v) => v.id === vehiculeId)) {
+      throw createError({ statusCode: 404, statusMessage: "Véhicule introuvable." });
+    }
+    return TEST_COMMISSIONS_BY_VEHICULE[vehiculeId] || [];
   }),
 );
 
