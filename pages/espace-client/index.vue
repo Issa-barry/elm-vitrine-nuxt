@@ -22,6 +22,12 @@ const auth = useAuth();
 const { dashboard, isLoading, error, fetchDashboard } = useClientDashboard();
 const { notifications, fetchNotifications, markAllRead } = useClientNotifications();
 const requestFetch = useRequestFetch();
+// "Solde par véhicule" n'a de sens que pour un contexte proprietaire/livreur
+// (chantier "capacités" du 27/08/2026, voir config/clientCapabilities.ts) :
+// masqué en dessous, pas seulement affiché vide, pour un compte sans ce
+// contexte (ex. client seul, ou futur prestataire seul) — distinction
+// "capacité métier" vs "aucune donnée" (demande du 27/08/2026, section 21).
+const capabilities = useClientCapabilities();
 
 // Identité réelle (GET /api/auth/me) — jamais "Issa M." (ancienne donnée de
 // démonstration). clientSpaceRoleLabel() reflète la même priorité que
@@ -147,29 +153,31 @@ const recentNotifications = computed(() => (notifications.value?.data ?? []).sli
         </NuxtLink>
       </div>
 
-      <div class="client-mobile-section-heading">
-        <h2>Commissions par véhicule</h2>
-        <NuxtLink to="/espace-client/vehicules">Tout voir <i class="pi pi-arrow-right" /></NuxtLink>
-      </div>
-      <div v-if="hasVehicles" class="client-mobile-vehicle-list">
-        <NuxtLink
-          v-for="vehicle in topVehicles"
-          :key="vehicle.vehicule_id"
-          :to="topVehicleLink(vehicle.vehicule_id)"
-          class="client-mobile-vehicle-row"
-          :aria-label="`Voir les commissions de ${vehicle.nom_vehicule}`"
-        >
-          <div>
-            <span class="client-mobile-vehicle-name">{{ vehicle.nom_vehicule }}</span>
-            <span class="client-mobile-vehicle-registration">{{ vehicle.immatriculation }}</span>
-          </div>
-          <div class="client-mobile-vehicle-finance">
-            <span class="client-mobile-vehicle-amount">{{ formatGnf(vehicle.total_earned) }}</span>
-          </div>
-          <i class="pi pi-chevron-right" />
-        </NuxtLink>
-      </div>
-      <p v-else class="client-mobile-empty-state">Aucun véhicule associé pour le moment.</p>
+      <template v-if="capabilities.vehicles">
+        <div class="client-mobile-section-heading">
+          <h2>Commissions par véhicule</h2>
+          <NuxtLink to="/espace-client/vehicules">Tout voir <i class="pi pi-arrow-right" /></NuxtLink>
+        </div>
+        <div v-if="hasVehicles" class="client-mobile-vehicle-list">
+          <NuxtLink
+            v-for="vehicle in topVehicles"
+            :key="vehicle.vehicule_id"
+            :to="topVehicleLink(vehicle.vehicule_id)"
+            class="client-mobile-vehicle-row"
+            :aria-label="`Voir les commissions de ${vehicle.nom_vehicule}`"
+          >
+            <div>
+              <span class="client-mobile-vehicle-name">{{ vehicle.nom_vehicule }}</span>
+              <span class="client-mobile-vehicle-registration">{{ vehicle.immatriculation }}</span>
+            </div>
+            <div class="client-mobile-vehicle-finance">
+              <span class="client-mobile-vehicle-amount">{{ formatGnf(vehicle.total_earned) }}</span>
+            </div>
+            <i class="pi pi-chevron-right" />
+          </NuxtLink>
+        </div>
+        <p v-else class="client-mobile-empty-state">Aucun véhicule associé pour le moment.</p>
+      </template>
     </template>
   </div>
 
@@ -227,7 +235,7 @@ const recentNotifications = computed(() => (notifications.value?.data ?? []).sli
       />
     </div>
 
-    <div class="col-span-12 xl:col-span-6">
+    <div v-if="capabilities.vehicles" class="col-span-12 xl:col-span-6">
       <div class="card">
         <div class="flex items-center justify-between mb-4">
           <div><div class="font-semibold text-xl">Solde par véhicule</div><span class="text-muted-color">Total des commissions générées</span></div>
@@ -245,7 +253,7 @@ const recentNotifications = computed(() => (notifications.value?.data ?? []).sli
       </div>
     </div>
 
-    <div class="col-span-12 xl:col-span-6">
+    <div class="col-span-12" :class="{ 'xl:col-span-6': capabilities.vehicles }">
       <div class="card">
         <div class="flex items-center justify-between mb-6">
           <div class="font-semibold text-xl">Notifications</div>

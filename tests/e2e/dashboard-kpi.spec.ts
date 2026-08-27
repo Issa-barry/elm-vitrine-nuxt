@@ -112,11 +112,12 @@ test.describe("Dashboard — cartes KPI (tablette paysage / desktop)", () => {
     await expect(page).toHaveURL(/\/espace-client\/commissions\?vehicule_id=veh-1$/);
 
     // Arrive déjà filtré sur ce véhicule (voir pages/espace-client/commissions.vue
-    // ?vehicule_id=...) : seules les commissions d'ABARRY (veh-1) apparaissent.
+    // ?vehicule_id=...) : le KPI et la répartition ne portent que sur ABARRY
+    // (veh-1) — page refondue le 27/08/2026 en vue statistique des gains,
+    // plus de liste de commissions individuelles (voir tests/e2e/commissions.spec.ts).
     const desktop = page.locator(".client-desktop-expenses");
-    await expect(desktop.getByText("CMD-2847")).toBeVisible({ timeout: 10_000 });
-    await expect(desktop.getByText("CMD-2820")).toBeVisible();
-    await expect(desktop.getByText("CMD-2839")).toHaveCount(0);
+    await expect(desktop.getByText(`${new Intl.NumberFormat("fr-FR").format(2_760_000)} GNF`).first()).toBeVisible({ timeout: 10_000 });
+    await expect(desktop.getByText("100%")).toBeVisible();
   });
 });
 
