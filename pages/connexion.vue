@@ -162,6 +162,13 @@ const buildCredentials = () => ({
   password: password.value,
 });
 
+// phoneInputRef sert aussi à fermer le clavier mobile avant l'ouverture du
+// sélecteur de pays (demande du 29/08/2026, voir @before-show sur le Select
+// plus bas) : sur mobile, le Select PrimeVue ne vole pas nativement le focus
+// au clic (il gère son propre focus interne), donc le clavier restait
+// ouvert par-dessus le panneau pays sans ce blur() explicite. `before-show`
+// émet avant l'ouverture du panneau (voir node_modules/primevue/select), le
+// blur précède donc bien visuellement l'ouverture, jamais l'inverse.
 const phoneInputRef = ref<HTMLInputElement | null>(null);
 const passwordInputRef = ref<HTMLInputElement | null>(null);
 
@@ -348,6 +355,7 @@ onBeforeUnmount(() => {
               filter-placeholder="Rechercher un pays"
               class="connexion-country-select"
               aria-label="Choisir l’indicatif du pays"
+              @before-show="phoneInputRef?.blur()"
             >
               <template #value>
                 <span class="connexion-country-value">
