@@ -47,6 +47,12 @@ const authState = useLandingAuthState();
         <LandingLink href="/connexion">Connexion</LandingLink>
         <LandingLink size="lg" style-name="outline" href="/inscription">Inscription</LandingLink>
       </template>
+
+      <!-- Action secondaire, sous le CTA principal ci-dessus (jamais un
+      remplacement de "Mon espace"/"Connexion") — masqué automatiquement si
+      déjà installée ou si aucun chemin d'installation n'est disponible, voir
+      composables/usePwaInstall.ts. -->
+      <PwaInstallButton />
     </div>
   </main>
 </template>
