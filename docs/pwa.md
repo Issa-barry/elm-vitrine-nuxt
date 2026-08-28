@@ -3,7 +3,8 @@
 V1 : installable sur mobile, tablette et ordinateur, en conservant le SSR et
 le SEO existants. **Volontairement sans offline métier** (pas de cache de
 commandes, véhicules, dépenses, gains/commissions, profil — voir
-[Garde-fous](#garde-fous) et [AGENTS.md](../AGENTS.md)).
+[Garde-fous](#garde-fous) et [AGENTS.md](../AGENTS.md)). Web Push (notifications
+système) fait exception depuis le 28/08/2026 — voir [Web Push](#web-push).
 
 ## Architecture
 
@@ -136,8 +137,9 @@ cache du service worker.
 
 Volontairement absents de cette V1 : cache de commandes, véhicules,
 dépenses, gains/commissions, profil ; IndexedDB métier ; Background Sync ;
-file d'attente offline ; notifications push. Pourront être étudiés plus
-tard, sur décision explicite — voir [Garde-fous](#garde-fous).
+file d'attente offline. Pourront être étudiés plus tard, sur décision
+explicite — voir [Garde-fous](#garde-fous). Les notifications push font
+exception depuis le 28/08/2026 — voir [Web Push](#web-push) ci-dessous.
 
 ## Vitrine + espace client
 
@@ -262,6 +264,132 @@ attendus (`name`, `start_url`, `scope`, `display`, icônes). La vérification
 du service worker lui-même (uniquement actif en build, voir ci-dessus) reste
 manuelle.
 
+## Web Push
+
+Chantier du 28/08/2026 — 3ᵉ canal de notifications côté backend
+(`NotificationDispatcher` → `DispatchPushNotificationsJob` → Expo + Web Push,
+voir `docs/api-espace-client-contract.md` §7.4 côté elm-monolithe), branché
+ici à l'existant PWA/BFF **sans** créer de second service worker ni migrer de
+stratégie Workbox.
+
+### Architecture
+
+```
+Browser (PushManager, Notification)
+   ↓
+composables/useWebPush.ts (logique pure : config/webPush.ts)
+   ↓
+server/api/client/web-push/*.ts (BFF Nitro, session httpOnly existante)
+   ↓
+Laravel /v1/mobile/web-push/* (Bearer Sanctum)
+```
+
+- `GET /api/client/web-push/vapid-public-key` → `GET
+  /v1/mobile/web-push/vapid-public-key` (`public_key: string | null` —
+  `null` = canal pas configuré côté serveur, jamais une erreur).
+- `POST /api/client/web-push/subscriptions` → `POST
+  /v1/mobile/web-push/subscriptions` (`{endpoint, keys: {p256dh, auth}}`,
+  idempotent — upsert par endpoint côté backend).
+- `DELETE /api/client/web-push/subscriptions?endpoint=...` → `DELETE
+  /v1/mobile/web-push/subscriptions?endpoint=...` (toujours 200, ne supprime
+  que l'abonnement de CET endpoint).
+
+Comme le reste du BFF : le token Sanctum ne quitte jamais le serveur Nitro
+(`server/utils/authSession.ts`), `server/utils/monolithClient.ts` réutilisé
+tel quel (juste élargi à la méthode `DELETE`).
+
+### Service worker : un seul, `importScripts` plutôt qu'`injectManifest`
+
+La stratégie reste `generateSW` (voir [Architecture](#architecture) plus
+haut) : `public/push-sw.js` (script classique, pas un module ES) est injecté
+dans le service worker généré par Workbox via `pwa.workbox.importScripts`
+(`nuxt.config.ts`) — mécanisme officiel `workbox-build` documenté pour
+exactement ce besoin ("include some additional code, such as a push event
+listener"). Il tourne dans le **même** `self`/scope que le SW généré : un
+seul service worker au total, jamais un second SW concurrent pour `/`.
+
+Conséquence assumée : `public/push-sw.js` ne peut pas importer
+`config/webPush.ts` (TypeScript, jamais bundlé pour ce fichier). Le mapping
+`type` d'événement → route (`notificationclick`) y est donc dupliqué à la
+main, avec un commentaire croisé des deux côtés — migrer vers
+`injectManifest` (qui permettrait un vrai import partagé) a été jugé
+disproportionné pour ce seul besoin, avec le risque de régression sur
+tout le pipeline PWA existant (precache, offline fallback, mise à jour) que
+ça implique. À reconsidérer si le mapping grossit significativement.
+
+### Payload (`push` event)
+
+Confirmé en lisant directement `DispatchPushNotificationsJob`/
+`WebPushService::sendToUser` côté elm-monolithe (le rapport backend était
+ambigu à ce sujet) : le JSON reçu par le navigateur est **aplati**,
+`{title, body, ...data}`, jamais `{title, body, data: {...}}` imbriqué. Les
+2 seuls événements aujourd'hui câblés produisent :
+
+```json
+{ "title": "Nouvelle commande assignée", "body": "Réf. ... — ...", "type": "commande_vente_validee", "commande_id": "..." }
+{ "title": "Nouvelle livraison assignée", "body": "Réf. ... — ...", "type": "transfert_created", "transfert_id": "..." }
+```
+
+Seul `commande_vente_validee` a une route connue côté Nuxt
+(`/espace-client/activite?commande=<id>`, même destination que
+`notificationResourceToRoute()` dans `config/clientNotifications.ts` pour la
+cloche database — vocabulaire différent, écran identique). `transfert_created`
+n'a pas de page dédiée : repli sur `/espace-client/notifications`, jamais une
+route inventée.
+
+### `useWebPush()` (`composables/useWebPush.ts`)
+
+État exposé : `state` (enum fermé — voir `config/webPush.ts::WebPushState` :
+`unsupported`, `requires_install`, `unavailable_server`, `permission_denied`,
+`subscribed`, `not_subscribed`), `isSupported`, `isSubscribed`, `isLoading`,
+`error`. Actions : `initialize()` (lecture seule + resync silencieuse, jamais
+de prompt), `subscribe()` (seule fonction qui appelle
+`Notification.requestPermission()`, uniquement depuis un clic explicite),
+`unsubscribe()` (désactivation explicite : DELETE serveur + abonnement
+navigateur), `syncSubscription()` (resync silencieuse, utilisée aussi par
+`useAuth.ts`), `unlinkFromAccount()` (DELETE serveur **seul**, jamais
+d'`unsubscribe()` navigateur — utilisée au logout).
+
+### Cycle de vie compte / appareil
+
+- **Login** (`useAuth.ts::completeLogin()`) : `syncSubscription()` en
+  best-effort — si un abonnement navigateur existe déjà (créé par ce compte
+  ou un précédent sur ce même navigateur), il est réassocié au compte qui
+  vient de se connecter. Ne crée jamais de nouvel abonnement, aucun prompt.
+- **Logout / perte de session** (`useAuth.ts::clear()`) : `unlinkFromAccount()`
+  en best-effort — supprime uniquement l'association serveur de cet endpoint.
+  L'abonnement navigateur n'est **pas** détruit : un login suivant (même
+  compte ou un autre) le resynchronise. Empêche qu'un compte A continue de
+  recevoir des notifications après logout puis connexion d'un compte B sur le
+  même navigateur, sans forcer un ré-abonnement complet à chaque connexion.
+- **Désactivation explicite** ("Notifications sur cet appareil" →
+  Désactiver, page Profil) : DELETE serveur **et**
+  `subscription.unsubscribe()` — la seule situation où l'abonnement
+  navigateur lui-même est détruit.
+
+### UX
+
+Carte "Notifications sur cet appareil" dans `pages/espace-client/profil.vue`
+— **distincte** de la carte "Notifications" existante (préférence
+`notification_preferences`, backend/globale au compte) : celle-ci est locale
+à ce navigateur/appareil, jamais présentée comme un réglage de compte. Pas de
+`Notification.requestPermission()` au chargement — uniquement depuis le clic
+sur "Activer". Sur iOS/iPadOS Safari non installé (PWA pas ajoutée à l'écran
+d'accueil), l'état `requires_install` affiche une consigne d'installation
+plutôt qu'un bouton qui échouerait silencieusement.
+
+### LIMITATION BACKEND ACTUELLE
+
+Web Push hérite exactement de la couverture Expo existante : seuls **2
+événements sur 7** fournissent aujourd'hui un `$pushPayload`
+(`NotificationDispatcher`) — commande validée et transfert créé. Commission
+générée/payée, dépense validée, transfert réceptionné et commission
+manquante restent `database`-only (visibles dans la cloche, jamais en
+notification système). **Volontairement pas de compensation côté Nuxt**
+(aucune simulation de push en observant la cloche) : étendre la couverture
+est un sujet backend (`$pushPayload` sur les 5 jobs/services restants), pas
+un correctif frontend.
+
 ## Garde-fous
 
 Voir aussi `AGENTS.md`. Pour tout agent qui reviendrait sur ce chantier :
@@ -275,3 +403,8 @@ Voir aussi `AGENTS.md`. Pour tout agent qui reviendrait sur ce chantier :
 - Pas d'offline métier (IndexedDB, Background Sync, file d'attente) sans
   décision explicite — ce n'est pas un oubli, c'est un choix de portée pour
   cette V1.
+- Web Push (voir [section dédiée](#web-push)) : un seul service worker au
+  total (`public/push-sw.js` chargé via `importScripts`, jamais un second SW
+  enregistré) ; ne jamais appeler `Notification.requestPermission()` hors
+  d'un clic explicite ; ne jamais étendre la couverture backend (2/7
+  événements) par une simulation côté Nuxt.

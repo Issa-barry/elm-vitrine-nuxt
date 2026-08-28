@@ -90,3 +90,13 @@ export type ApiNotificationsQuery = NonNullable<operations["client.notifications
 export type ApiNotification = ApiNotificationsResponse["data"][number];
 export type ApiNotificationMarkReadResponse = operations["client.notifications.mark-read"]["responses"][200]["content"]["application/json"];
 export type ApiNotificationsMarkAllReadResponse = operations["client.notifications.mark-all-read"]["responses"][200]["content"]["application/json"];
+
+// ── Web Push (PWA, chantier backend du 28/08/2026) ──────────────────────────
+export type ApiWebPushVapidPublicKeyResponse =
+  operations["client.web-push.vapid-public-key"]["responses"][200]["content"]["application/json"];
+export type ApiWebPushSubscribeRequestBody =
+  operations["client.web-push.subscriptions.store"]["requestBody"]["content"]["application/json"];
+export type ApiWebPushSubscribeResponse =
+  operations["client.web-push.subscriptions.store"]["responses"][200]["content"]["application/json"];
+export type ApiWebPushUnsubscribeResponse =
+  operations["client.web-push.subscriptions.destroy"]["responses"][200]["content"]["application/json"];
