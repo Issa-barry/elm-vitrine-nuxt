@@ -267,6 +267,55 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mobile/web-push/vapid-public-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Clé PUBLIQUE VAPID uniquement — la clé privée ne quitte jamais le
+         *     serveur. `null` si l'installation n'a pas encore généré de clés
+         *     (canal Web Push simplement indisponible, jamais une erreur)
+         */
+        get: operations["client.web-push.vapid-public-key"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mobile/web-push/subscriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Idempotent : upsert par `endpoint_hash` (unique globalement — cf.
+         *     migration). Un même endpoint réabonné par un autre compte (poste
+         *     partagé) lui est réassigné, jamais dupliqué
+         */
+        post: operations["client.web-push.subscriptions.store"];
+        /**
+         * Ne supprime QUE l'abonnement identifié par `endpoint`, scopé au compte
+         *     authentifié — jamais un "delete all" (un User peut avoir plusieurs
+         *     appareils). Idempotent : un endpoint déjà absent (ou appartenant à un
+         *     autre compte) renvoie le même succès, sans jamais confirmer/infirmer
+         *     son existence pour un tiers
+         */
+        delete: operations["client.web-push.subscriptions.destroy"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mobile/dashboard": {
         parameters: {
             query?: never;
@@ -1064,6 +1113,24 @@ export interface components {
             total_paid: number;
             balance: number;
         };
+        /**
+         * WebPushSubscriptionStoreRequest
+         * @description Payload standard `PushSubscription.toJSON()` — cf.
+         *     https://developer.mozilla.org/docs/Web/API/PushSubscription/toJSON.
+         *     Bornes de taille explicites (point sécurité du rapport Web Push) :
+         *     un `endpoint`/des clés anormalement longs sont rejetés plutôt
+         *     qu'acceptés silencieusement.
+         */
+        WebPushSubscriptionStoreRequest: {
+            /** Format: uri */
+            endpoint: string;
+            keys: {
+                p256dh: string;
+                auth: string;
+            };
+            /** @enum {string|null} */
+            content_encoding?: "aes128gcm" | "aesgcm" | null;
+        };
     };
     responses: {
         /** @description Validation error */
@@ -1808,6 +1875,80 @@ export interface operations {
                     };
                 };
             };
+        };
+    };
+    "client.web-push.vapid-public-key": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        public_key: string | null;
+                    };
+                };
+            };
+            401: components["responses"]["AuthenticationException"];
+        };
+    };
+    "client.web-push.subscriptions.store": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebPushSubscriptionStoreRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                    };
+                };
+            };
+            401: components["responses"]["AuthenticationException"];
+            422: components["responses"]["ValidationException"];
+        };
+    };
+    "client.web-push.subscriptions.destroy": {
+        parameters: {
+            query: {
+                endpoint: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        success: boolean;
+                    };
+                };
+            };
+            401: components["responses"]["AuthenticationException"];
+            422: components["responses"]["ValidationException"];
         };
     };
     "client.dashboard.mine": {

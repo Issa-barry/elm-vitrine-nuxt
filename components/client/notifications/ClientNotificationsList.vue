@@ -57,7 +57,12 @@ defineEmits<{ select: [notification: ClientNotification] }>();
             <i :class="[notificationVisual(notification.type).icon, notificationVisual(notification.type).iconColor]" class="!text-lg" />
           </span>
           <span class="flex-1 min-w-0 leading-normal text-surface-900 dark:text-surface-0" :class="{ 'font-semibold': !notification.lu }">
-            <strong class="block font-medium truncate">{{ notification.titre || "Notification" }}</strong>
+            <!-- Hiérarchie titre > montant > message > date (demande du
+                 28/08/2026) : titre = événement, message = contexte SEUL
+                 (jamais le montant concaténé dedans — celui-ci vient
+                 uniquement de notification.montant, jamais parsé depuis
+                 message), montant sur sa propre ligne, date la plus discrète. -->
+            <strong class="block font-semibold truncate">{{ notification.titre || "Notification" }}</strong>
             <span v-if="notification.message" class="block text-muted-color text-sm mt-0.5 truncate">{{ notification.message }}</span>
             <span v-if="notification.montant != null" class="block text-sm mt-0.5 font-medium text-surface-900 dark:text-surface-0">{{ formatGnf(notification.montant) }}</span>
             <span v-if="notification.created_at" class="block text-muted-color text-xs mt-0.5">{{ formatRelativeDate(notification.created_at) }}</span>

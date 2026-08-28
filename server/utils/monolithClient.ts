@@ -2,7 +2,7 @@ import type { IFetchError } from "ofetch";
 import { resolveMonolithBaseUrl } from "../../config/auth";
 
 interface CallMonolithOptions {
-  method?: "GET" | "POST" | "PATCH";
+  method?: "GET" | "POST" | "PATCH" | "DELETE";
   body?: unknown;
   /** Bearer token Sanctum — jamais lu depuis le navigateur, voir authSession.ts. */
   token?: string;

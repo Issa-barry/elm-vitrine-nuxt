@@ -263,6 +263,36 @@ router.patch(
   }),
 );
 
+// ── Web Push (chantier du 28/08/2026, voir docs/pwa.md § Web Push) ─────────
+// Clé factice fixe (jamais utilisée pour un vrai PushManager.subscribe() en
+// E2E : `pwa.devOptions.enabled: false` désactive le service worker en `nuxt
+// dev`, voir tests/e2e/pwa.spec.ts) — suffisante pour exercer l'état "carte
+// visible, bouton Activer" côté UI (tests/e2e/web-push.spec.ts), sans
+// prétendre tester un abonnement réel.
+router.get(
+  "/api/v1/mobile/web-push/vapid-public-key",
+  defineEventHandler((event) => {
+    requireTestToken(event);
+    return { public_key: "BPfakeE2EVapidPublicKeyNeverUsedForRealSubscribe0000000000000" };
+  }),
+);
+
+router.post(
+  "/api/v1/mobile/web-push/subscriptions",
+  defineEventHandler((event) => {
+    requireTestToken(event);
+    return { success: true };
+  }),
+);
+
+router.delete(
+  "/api/v1/mobile/web-push/subscriptions",
+  defineEventHandler((event) => {
+    requireTestToken(event);
+    return { success: true };
+  }),
+);
+
 // equipe[]/capacites[]/proprietaire/statut : contrat réel enrichi le
 // 27/08/2026 côté elm-monolithe (App\Http\Controllers\Api\Client\
 // VehiculesController, vérifié directement dans le code + ses 11 tests) —

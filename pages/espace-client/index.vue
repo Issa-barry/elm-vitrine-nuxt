@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { ClientDashboardResponse } from "~/config/clientDashboard";
 import { clientSpaceRoleLabel } from "~/config/auth";
-import { notificationVisual } from "~/config/clientNotifications";
+import { notificationResourceToRoute } from "~/config/clientNotifications";
+import type { ClientNotification } from "~/config/clientNotifications";
 
 definePageMeta({ layout: "client", middleware: "auth" });
 useHead({
@@ -26,8 +27,23 @@ const { dashboard, isLoading, error, fetchDashboard } = useClientDashboard();
 // nécessaire pour que la cloche du header ait un badge à jour sur TOUTE
 // page de l'espace client, pas seulement celle-ci (chantier "centre de
 // notifications" du 27/08/2026).
-const { items: notificationItems, markAllRead } = useClientNotifications();
+const { items: notificationItems, markAllRead, markRead } = useClientNotifications();
 const requestFetch = useRequestFetch();
+const router = useRouter();
+
+// Même comportement de clic que la cloche desktop (components/client/
+// notifications/ClientNotificationsPanel.vue::onSelect) — ce widget réutilise
+// désormais ClientNotificationsList.vue (demande du 28/08/2026 : un seul
+// rendu partagé plutôt que 3 implémentations différentes), donc chaque ligne
+// est un vrai bouton cliquable : sans ce handler, il resterait interactif en
+// apparence (hover) sans effet, jamais acceptable.
+async function onSelectNotification(notification: ClientNotification) {
+  const route = notificationResourceToRoute(notification.resource);
+  await markRead(notification.id);
+  if (route) {
+    await router.push(route);
+  }
+}
 // "Solde par véhicule" n'a de sens que pour un contexte proprietaire/livreur
 // (chantier "capacités" du 27/08/2026, voir config/clientCapabilities.ts) :
 // masqué en dessous, pas seulement affiché vide, pour un compte sans ce
@@ -254,20 +270,11 @@ const recentNotifications = computed(() => notificationItems.value.slice(0, 6));
           <div class="font-semibold text-xl">Notifications</div>
           <Button icon="pi pi-ellipsis-v" text rounded severity="secondary" aria-label="Tout marquer comme lu" @click="markAllRead" />
         </div>
-        <ul v-if="recentNotifications.length" class="p-0 m-0 list-none">
-          <li v-for="notification in recentNotifications" :key="notification.id" class="flex items-center py-3 border-b border-surface last:border-b-0">
-            <div :class="notificationVisual(notification.type).background" class="w-12 h-12 flex items-center justify-center rounded-full mr-4 shrink-0">
-              <i :class="[notificationVisual(notification.type).icon, notificationVisual(notification.type).iconColor]" class="!text-xl" />
-            </div>
-            <span class="text-surface-900 dark:text-surface-0 leading-normal" :class="{ 'font-semibold': !notification.lu }">
-              <strong class="font-medium">{{ notification.titre }}</strong>
-              <span class="block text-muted-color mt-1">
-                {{ notification.message }}<template v-if="notification.montant != null"> · {{ formatGnf(notification.montant) }}</template>
-                <template v-if="notification.created_at"> · {{ formatRelativeDate(notification.created_at) }}</template>
-              </span>
-            </span>
-          </li>
-        </ul>
+        <ClientNotificationsList
+          v-if="recentNotifications.length"
+          :notifications="recentNotifications"
+          @select="onSelectNotification"
+        />
         <p v-else class="text-muted-color">Aucune notification pour le moment.</p>
       </div>
     </div>
