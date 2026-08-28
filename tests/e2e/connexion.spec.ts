@@ -51,7 +51,7 @@ test.describe("Connexion", () => {
     await page.goto("/connexion", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("load");
     await page.waitForTimeout(300);
-    await page.getByRole("button", { name: "Se connecter" }).click();
+    await page.getByRole("button", { name: "Se connecter", exact: true }).click();
     await expect(page.locator(".connexion-error").first()).toBeVisible();
     await expect(page).toHaveURL(/\/connexion$/);
   });
@@ -64,7 +64,7 @@ test.describe("Connexion", () => {
     await page.waitForTimeout(300);
 
     await fillCredentials(page);
-    await page.getByRole("button", { name: "Se connecter" }).click();
+    await page.getByRole("button", { name: "Se connecter", exact: true }).click();
 
     await expect(page).toHaveURL(/\/espace-client$/, { timeout: 10_000 });
   });
@@ -89,7 +89,7 @@ test.describe("Connexion", () => {
     await page.waitForTimeout(300);
 
     await fillCredentials(page);
-    await page.getByRole("button", { name: "Se connecter" }).click();
+    await page.getByRole("button", { name: "Se connecter", exact: true }).click();
 
     await expect(page.getByText("Les identifiants fournis sont incorrects.")).toBeVisible();
     await expect(page).toHaveURL(/\/connexion$/);
@@ -114,7 +114,7 @@ test.describe("Connexion", () => {
     await page.waitForTimeout(300);
 
     await fillCredentials(page);
-    await page.getByRole("button", { name: "Se connecter" }).click();
+    await page.getByRole("button", { name: "Se connecter", exact: true }).click();
 
     await expect(page.getByText("Ce compte n'a pas accès à l'espace client.")).toBeVisible();
     await expect(page).toHaveURL(/\/connexion$/);
@@ -134,7 +134,7 @@ test.describe("Connexion", () => {
     await page.waitForTimeout(300);
 
     await fillCredentials(page);
-    await page.getByRole("button", { name: "Se connecter" }).click();
+    await page.getByRole("button", { name: "Se connecter", exact: true }).click();
 
     await expect(page).toHaveURL(/\/espace-client$/, { timeout: 10_000 });
   });
@@ -147,7 +147,7 @@ test.describe("Connexion", () => {
     await page.waitForTimeout(300);
 
     await fillCredentials(page);
-    await page.getByRole("button", { name: "Se connecter" }).click();
+    await page.getByRole("button", { name: "Se connecter", exact: true }).click();
 
     await expect(page).toHaveURL(/\/espace-client$/, { timeout: 10_000 });
   });

@@ -1,5 +1,5 @@
-import type { AuthContext, AuthErrorInfo, AuthUser, LoginInput } from "~/config/auth";
-import { hasClientSpaceAccess, normalizeAuthError } from "~/config/auth";
+import type { AuthContext, AuthErrorInfo, AuthUser, LoginInput, OtpVerifyInput } from "~/config/auth";
+import { buildOtpVerifyPayload, hasClientSpaceAccess, normalizeAuthError } from "~/config/auth";
 
 // État d'authentification partagé (useState = singleton réactif par clé,
 // hydraté du serveur vers le client sans re-fetch — voir ensureFetched() plus
@@ -47,6 +47,7 @@ export function useAuth() {
   // habituel : aucun comportement différent pour les appels déclenchés après
   // hydratation (ex. clic sur "Se connecter").
   const requestFetch = useRequestFetch();
+  const { reset: resetNotifications } = useClientNotifications();
 
   const isAuthenticated = computed(() => status.value === "authenticated");
   const hasClientAccess = computed(() => hasClientSpaceAccess(user.value?.roles));
@@ -58,10 +59,16 @@ export function useAuth() {
     status.value = "authenticated";
   }
 
+  // resetNotifications() ici (pas seulement dans logout()) : clear() est le
+  // SEUL chemin qui s'exécute à coup sûr sur toute perte de session, y
+  // compris un /api/auth/me qui échoue en 401 pendant refreshMe() (F5 avec un
+  // cookie expiré) — aucune notification du compte précédent ne doit rester
+  // visible avant la prochaine connexion (demande du 28/08/2026, section 23).
   function clear() {
     user.value = null;
     context.value = null;
     status.value = "unauthenticated";
+    resetNotifications();
   }
 
   // GET /api/auth/me (BFF) — seule source de vérité pour restaurer une
@@ -114,6 +121,61 @@ export function useAuth() {
     clear();
   }
 
+  // Étapes post-authentification communes à TOUT moyen de preuve accepté par
+  // ce front (mot de passe aujourd'hui, OTP depuis le 27/08/2026) : posées
+  // ici une seule fois pour que login() et loginWithOtp() convergent
+  // EXACTEMENT vers le même mécanisme (demande explicite du chantier OTP —
+  // jamais un second système d'authentification Nuxt en parallèle).
+  async function completeLogin(loginUser: AuthUser): Promise<LoginResult> {
+    user.value = loginUser;
+    status.value = "authenticated";
+
+    // La réponse de login/otp-verify ne porte pas `context` (voir
+    // LoginController/OtpLogin\VerifyController côté backend) : /me la
+    // complète immédiatement pour ne jamais la laisser désynchronisée de
+    // `user`. Ne PAS utiliser refreshMe() ici : celui-ci fait clear() sur
+    // échec (correct pour restaurer une session après F5, où l'on ne sait
+    // justement rien) — ici la connexion vient de réussir, donc un /me qui
+    // échoue ensuite (blip réseau...) ne doit jamais faire perdre l'état
+    // authentifié qui vient d'être établi. `context` reste simplement absent
+    // dans ce cas.
+    try {
+      const me = await requestFetch<MeResponse>("/api/auth/me");
+      applyMe(me);
+    } catch {
+      // user/status restent ceux posés ci-dessus.
+    }
+
+    // LoginController/OtpLogin\VerifyController/MeController ne vérifient
+    // AUCUN rôle côté backend (partagés avec le mobile) : un compte
+    // staff/admin/super_admin obtient un token Sanctum valide comme
+    // n'importe qui, quel que soit le moyen de preuve. Cet espace n'est pas
+    // l'application backoffice (Inertia, séparée) — refus explicite ici,
+    // avec révocation immédiate du token qui vient d'être émis (pas de
+    // session qui traîne pour un rôle qui n'a rien à faire dans cette app).
+    //
+    // hasClientSpaceAccess() est un OR sur les rôles présents (voir
+    // config/auth.ts) : un compte cumulant un rôle staff ET un rôle
+    // client/proprietaire/livreur (ex. admin_entreprise + proprietaire,
+    // supporté côté backend depuis le 26/08/2026 — App\Models\User::
+    // hasBackofficeAccess()/hasClientAccess()) est bien accepté ici. Ne
+    // JAMAIS transformer ceci en vérification exclusive ("roles.length===1"
+    // ou "roles[0] === 'client'") : les rôles sont cumulables, un rôle
+    // staff supplémentaire ne retire jamais l'accès espace client.
+    if (!hasClientSpaceAccess(user.value?.roles)) {
+      await logout();
+      const info: AuthErrorInfo = {
+        status: 403,
+        message: "Ce compte n'a pas accès à l'espace client.",
+        code: CLIENT_ACCESS_DENIED_CODE,
+      };
+      lastError.value = info;
+      return { ok: false, error: info };
+    }
+
+    return { ok: true };
+  }
+
   async function login(input: LoginInput): Promise<LoginResult> {
     status.value = "loading";
     lastError.value = null;
@@ -122,51 +184,29 @@ export function useAuth() {
         method: "POST",
         body: input,
       });
-      user.value = data.user;
-      status.value = "authenticated";
+      return await completeLogin(data.user);
+    } catch (error) {
+      const info = normalizeAuthError(error);
+      lastError.value = info;
+      clear();
+      return { ok: false, error: info };
+    }
+  }
 
-      // La réponse de login ne porte pas `context` (voir LoginController côté
-      // backend) : /me la complète immédiatement pour ne jamais la laisser
-      // désynchronisée de `user`. Ne PAS utiliser refreshMe() ici : celui-ci
-      // fait clear() sur échec (correct pour restaurer une session après F5,
-      // où l'on ne sait justement rien) — ici le login vient de réussir,
-      // donc un /me qui échoue ensuite (blip réseau...) ne doit jamais faire
-      // perdre l'état authentifié qui vient d'être établi. `context` reste
-      // simplement absent dans ce cas.
-      try {
-        const me = await requestFetch<MeResponse>("/api/auth/me");
-        applyMe(me);
-      } catch {
-        // user/status restent ceux posés par le login ci-dessus.
-      }
-
-      // LoginController/MeController ne vérifient AUCUN rôle côté backend
-      // (partagés avec le mobile) : un compte staff/admin/super_admin obtient
-      // un token Sanctum valide comme n'importe qui. Cet espace n'est pas
-      // l'application backoffice (Inertia, séparée) — refus explicite ici,
-      // avec révocation immédiate du token qui vient d'être émis (pas de
-      // session qui traîne pour un rôle qui n'a rien à faire dans cette app).
-      //
-      // hasClientSpaceAccess() est un OR sur les rôles présents (voir
-      // config/auth.ts) : un compte cumulant un rôle staff ET un rôle
-      // client/proprietaire/livreur (ex. admin_entreprise + proprietaire,
-      // supporté côté backend depuis le 26/08/2026 — App\Models\User::
-      // hasBackofficeAccess()/hasClientAccess()) est bien accepté ici. Ne
-      // JAMAIS transformer ceci en vérification exclusive ("roles.length===1"
-      // ou "roles[0] === 'client'") : les rôles sont cumulables, un rôle
-      // staff supplémentaire ne retire jamais l'accès espace client.
-      if (!hasClientSpaceAccess(user.value?.roles)) {
-        await logout();
-        const info: AuthErrorInfo = {
-          status: 403,
-          message: "Ce compte n'a pas accès à l'espace client.",
-          code: CLIENT_ACCESS_DENIED_CODE,
-        };
-        lastError.value = info;
-        return { ok: false, error: info };
-      }
-
-      return { ok: true };
+  // Étape 2 de la connexion OTP (composables/useOtpLogin.ts gère l'étape 1,
+  // la demande de code) — POST /api/auth/otp-login/verify (BFF) renvoie
+  // EXACTEMENT la même forme que POST /api/auth/login ({token, user}, voir
+  // config/auth.ts::OtpVerifyResponse), d'où la convergence vers
+  // completeLogin() ci-dessus plutôt qu'une logique dupliquée.
+  async function loginWithOtp(input: OtpVerifyInput): Promise<LoginResult> {
+    status.value = "loading";
+    lastError.value = null;
+    try {
+      const data = await requestFetch<LoginResponse>("/api/auth/otp-login/verify", {
+        method: "POST",
+        body: buildOtpVerifyPayload(input),
+      });
+      return await completeLogin(data.user);
     } catch (error) {
       const info = normalizeAuthError(error);
       lastError.value = info;
@@ -185,6 +225,7 @@ export function useAuth() {
     ensureFetched,
     refreshMe,
     login,
+    loginWithOtp,
     logout,
     logoutAll,
   };

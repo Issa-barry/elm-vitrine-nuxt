@@ -28,7 +28,12 @@ export async function loginAsTestUser(page: Page): Promise<void> {
 
   await page.getByLabel("Numéro de téléphone").fill(TEST_TELEPHONE_LOCAL);
   await page.getByPlaceholder("••••••••").fill(TEST_PASSWORD);
-  await page.getByRole("button", { name: "Se connecter" }).click();
+  // exact: true — depuis le chantier OTP du 27/08/2026, "Se connecter avec un
+  // code" matche aussi "Se connecter" en sous-chaîne (comportement par défaut
+  // non-exact de getByRole), ce qui causait une violation de mode strict
+  // (2 éléments) et faisait échouer TOUTE la suite E2E dépendant de ce helper
+  // partagé.
+  await page.getByRole("button", { name: "Se connecter", exact: true }).click();
 
   await page.waitForURL(/\/espace-client$/, { timeout: 20_000 });
 }

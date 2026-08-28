@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   DEVICE_NAME,
   buildLoginPayload,
+  buildOtpVerifyPayload,
   clientSpaceRoleLabel,
   hasClientSpaceAccess,
   isAccountStatusCode,
   normalizeAuthError,
+  otpChannelPresentation,
   resolveMonolithBaseUrl,
   shouldUseSecureCookies,
 } from "./auth";
@@ -36,6 +38,33 @@ describe("buildLoginPayload", () => {
 
   it("device_name identifie ce client précisément (contrat backend)", () => {
     expect(DEVICE_NAME).toBe("elm-nuxt-web");
+  });
+});
+
+describe("buildOtpVerifyPayload", () => {
+  it("ajoute device_name sans jamais le laisser au choix de l'appelant", () => {
+    const payload = buildOtpVerifyPayload({ telephone: "+224620000100", code: "123456" });
+    expect(payload).toEqual({
+      telephone: "+224620000100",
+      code: "123456",
+      device_name: DEVICE_NAME,
+    });
+  });
+});
+
+describe("otpChannelPresentation", () => {
+  it("propose un libellé et un préfixe de destination distincts par canal (jamais un if/else dispersé côté page)", () => {
+    expect(otpChannelPresentation("email")).toEqual({ heading: "Vérifiez votre email", destinationPrefix: "Code envoyé à" });
+    expect(otpChannelPresentation("whatsapp")).toEqual({ heading: "Vérifiez WhatsApp", destinationPrefix: "Code envoyé au" });
+    expect(otpChannelPresentation("sms")).toEqual({ heading: "Vérifiez vos SMS", destinationPrefix: "Code envoyé au" });
+  });
+
+  it("fonctionne sans refonte pour whatsapp/sms même désactivés dans l'UI aujourd'hui", () => {
+    // Le contrat est traité comme un enum ouvert (jamais `channel === 'email'`
+    // comme condition) : ces deux canaux doivent déjà avoir une présentation
+    // correcte, même si aucun bouton actif ne les déclenche encore.
+    expect(otpChannelPresentation("whatsapp").heading).not.toBe(otpChannelPresentation("email").heading);
+    expect(otpChannelPresentation("sms").heading).not.toBe(otpChannelPresentation("email").heading);
   });
 });
 
@@ -185,5 +214,24 @@ describe("normalizeAuthError", () => {
     const error = { statusCode: 422, data: { data: { errors: { password: ["Trop court.", "Ignoré."] } } } };
     const result = normalizeAuthError(error);
     expect(result.fieldErrors).toEqual({ password: "Trop court." });
+  });
+
+  // Anti-spam OTP (HasOtpRateLimitResponse côté backend, voir
+  // OtpLogin\RequestController) : 429 sur /otp-login/request porte
+  // `retry_after_seconds`, jamais une valeur devinée côté Nuxt (voir
+  // composables/useOtpLogin.ts).
+  it("extrait retryAfterSeconds d'un 429 anti-spam OTP", () => {
+    const error = {
+      statusCode: 429,
+      data: { data: { error: "Vous avez demandé trop de codes. Réessayez dans 1 minute.", retry_after_seconds: 42 } },
+    };
+    const result = normalizeAuthError(error);
+    expect(result.status).toBe(429);
+    expect(result.retryAfterSeconds).toBe(42);
+  });
+
+  it("retryAfterSeconds reste undefined quand le backend ne le fournit pas (pas de 0 par défaut trompeur)", () => {
+    const result = normalizeAuthError({ statusCode: 422, data: { data: { error: "Code incorrect ou expiré." } } });
+    expect(result.retryAfterSeconds).toBeUndefined();
   });
 });

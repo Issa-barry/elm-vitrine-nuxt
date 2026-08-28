@@ -1,19 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { ClientNotification } from "./clientNotifications";
-import { notificationActionRoute, notificationBadgeLabel } from "./clientNotifications";
-
-function makeNotification(overrides: Partial<ClientNotification>): ClientNotification {
-  return {
-    id: "notif-1",
-    type: null,
-    titre: null,
-    message: null,
-    data: {},
-    lu: false,
-    created_at: "2026-08-27T10:00:00Z",
-    ...overrides,
-  };
-}
+import { notificationBadgeLabel, notificationResourceToRoute, notificationVisual } from "./clientNotifications";
 
 describe("notificationBadgeLabel", () => {
   it("masque le badge quand il n'y a aucune non-lue", () => {
@@ -32,23 +18,39 @@ describe("notificationBadgeLabel", () => {
   });
 });
 
-describe("notificationActionRoute", () => {
-  it("redirige commande_validee vers Livraisons avec l'id réel de la commande", () => {
-    const notification = makeNotification({ type: "commande_validee", data: { commande_id: "cmd-123", reference: "REF-1" } });
-    expect(notificationActionRoute(notification)).toEqual({
+describe("notificationVisual", () => {
+  it("associe chaque type connu à une icône dédiée", () => {
+    expect(notificationVisual("delivery.assigned").icon).toBe("pi pi-truck");
+    expect(notificationVisual("commission.generated").icon).toBe("pi pi-wallet");
+    expect(notificationVisual("commission.paid").icon).toBe("pi pi-wallet");
+    expect(notificationVisual("commission.missing").icon).toBe("pi pi-exclamation-triangle");
+    expect(notificationVisual("expense.validated").icon).toBe("pi pi-receipt");
+    expect(notificationVisual("transfer.created").icon).toBe("pi pi-arrow-right-arrow-left");
+    expect(notificationVisual("transfer.received").icon).toBe("pi pi-arrow-right-arrow-left");
+  });
+
+  it("retombe sur l'icône neutre pour un type inconnu (jamais une icône inventée)", () => {
+    expect(notificationVisual("type_inconnu")).toEqual({
+      icon: "pi pi-bell",
+      background: "bg-surface-100 dark:bg-surface-800",
+      iconColor: "text-muted-color",
+    });
+  });
+});
+
+describe("notificationResourceToRoute", () => {
+  it("redirige une ressource commande_vente vers Livraisons avec son id réel", () => {
+    expect(notificationResourceToRoute({ type: "commande_vente", id: "cmd-123" })).toEqual({
       path: "/espace-client/activite",
       query: { commande: "cmd-123" },
     });
   });
 
-  it("ne redirige pas commande_validee sans commande_id exploitable (jamais inventé)", () => {
-    const notification = makeNotification({ type: "commande_validee", data: { reference: "REF-1" } });
-    expect(notificationActionRoute(notification)).toBeNull();
+  it("ne redirige pas quand la ressource est absente (jamais un lien cassé)", () => {
+    expect(notificationResourceToRoute(null)).toBeNull();
   });
 
-  it("ne redirige aucun autre type (aucune correspondance vérifiée côté backend)", () => {
-    expect(notificationActionRoute(makeNotification({ type: "commission_payee", data: { montant: 1000 } }))).toBeNull();
-    expect(notificationActionRoute(makeNotification({ type: null }))).toBeNull();
-    expect(notificationActionRoute(makeNotification({ type: "type_inconnu" }))).toBeNull();
+  it("ne redirige aucun autre type de ressource (aucune correspondance connue côté backend)", () => {
+    expect(notificationResourceToRoute({ type: "depense", id: "dep-1" })).toBeNull();
   });
 });
