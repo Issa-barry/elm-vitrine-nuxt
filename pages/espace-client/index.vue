@@ -26,7 +26,7 @@ const { dashboard, isLoading, error, fetchDashboard } = useClientDashboard();
 // nécessaire pour que la cloche du header ait un badge à jour sur TOUTE
 // page de l'espace client, pas seulement celle-ci (chantier "centre de
 // notifications" du 27/08/2026).
-const { notifications, markAllRead } = useClientNotifications();
+const { items: notificationItems, markAllRead } = useClientNotifications();
 const requestFetch = useRequestFetch();
 // "Solde par véhicule" n'a de sens que pour un contexte proprietaire/livreur
 // (chantier "capacités" du 27/08/2026, voir config/clientCapabilities.ts) :
@@ -103,12 +103,10 @@ const kpiTrends = computed(() => {
 // côté Nuxt, voir demande du 26/08/2026, section 30). Remplacée par un champ
 // réel et distinct des 3 autres cartes : `operations_count`. La grille à 4
 // cartes (et les tests de mise en page associés) reste inchangée.
-const notificationDateFormatter = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-const formatNotificationDate = (iso: string) => notificationDateFormatter.format(new Date(iso));
-
-// Les 6 plus récentes seulement (déjà triées par le backend, `latest()`) —
-// la carte dashboard reste un aperçu, pas la liste complète.
-const recentNotifications = computed(() => (notifications.value?.data ?? []).slice(0, 6));
+// Les 6 plus récentes seulement (page 1 du contrat paginé, déjà triées par
+// le backend) — la carte dashboard reste un aperçu, pas la liste complète
+// (voir pages/espace-client/notifications.vue pour l'historique paginé).
+const recentNotifications = computed(() => notificationItems.value.slice(0, 6));
 </script>
 
 <template>
@@ -263,7 +261,10 @@ const recentNotifications = computed(() => (notifications.value?.data ?? []).sli
             </div>
             <span class="text-surface-900 dark:text-surface-0 leading-normal" :class="{ 'font-semibold': !notification.lu }">
               <strong class="font-medium">{{ notification.titre }}</strong>
-              <span class="block text-muted-color mt-1">{{ notification.message }} · {{ formatNotificationDate(notification.created_at) }}</span>
+              <span class="block text-muted-color mt-1">
+                {{ notification.message }}<template v-if="notification.montant != null"> · {{ formatGnf(notification.montant) }}</template>
+                <template v-if="notification.created_at"> · {{ formatRelativeDate(notification.created_at) }}</template>
+              </span>
             </span>
           </li>
         </ul>

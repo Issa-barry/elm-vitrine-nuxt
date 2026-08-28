@@ -311,7 +311,7 @@ const openVehicleDetail = (vehicle: ClientVehicle, event: MouseEvent) => {
           :class="index > 0 ? 'mt-3 pt-3 border-t border-surface' : ''"
         >
           <div class="min-w-0">
-            <strong class="block text-surface-900 dark:text-surface-0 text-sm font-semibold truncate">{{ membre.nom_complet }}</strong>
+            <strong class="block text-surface-900 dark:text-surface-0 text-sm font-semibold truncate">{{ membre.nom_complet || "—" }}</strong>
             <span class="block text-muted-color text-xs mt-0.5">{{ membre.telephone || "—" }}</span>
           </div>
           <Tag :value="vehicleTeamRoleLabel(membre.role)" severity="secondary" />

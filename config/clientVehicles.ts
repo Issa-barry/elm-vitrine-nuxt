@@ -9,7 +9,11 @@ import type { ApiVehicule } from "~/types/api";
 // membres actifs, filtré côté backend).
 export interface ClientVehicleTeamMember {
   id: string;
-  nom_complet: string;
+  // Nullable : confirmé par le contrat OpenAPI régénéré le 27/08/2026
+  // (equipeData() renvoie `$membre->livreur->nom_complet`, un accessor
+  // pouvant réellement être vide) — corrigé ici après une première version
+  // trop optimiste (non-nullable).
+  nom_complet: string | null;
   telephone: string | null;
   role: string;
   ordre: number;

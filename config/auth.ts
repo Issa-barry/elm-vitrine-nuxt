@@ -95,11 +95,116 @@ export function buildLoginPayload(input: LoginInput): LoginPayload {
   };
 }
 
+// ── Connexion sans mot de passe par OTP (chantier du 27/08/2026) ───────────
+// Contrat vérifié directement contre elm-monolithe : App\Http\Controllers\
+// Api\Auth\OtpLogin\{RequestController,VerifyController}.php,
+// App\Enums\OtpChannel, routes/api.php (POST /api/auth/otp-login/request et
+// /verify). Deux appels distincts, jamais un seul (voir composables/
+// useOtpLogin.ts) :
+//   1. request : { telephone } -> { sent, channel, cooldown_seconds }
+//   2. verify  : { telephone, code, device_name } -> { token, user } (EXACTEMENT
+//      la même forme que POST /auth/login, via le trait backend partagé
+//      IssuesTelephoneLoginToken — voir composables/useAuth.ts::loginWithOtp()).
+//
+// `channel` : indique par quel canal le code a RÉELLEMENT été envoyé, jamais
+// un choix du frontend. Fermé à 3 valeurs par App\Enums\OtpChannel côté
+// backend ; traité comme un enum ouvert malgré tout (jamais
+// `if (channel === 'email')` comme condition de succès — le succès est
+// `sent === true`), au cas où une valeur future n'aurait pas encore de
+// libellé connu ici.
+export type OtpChannel = "email" | "sms" | "whatsapp";
+
+export interface OtpLoginRequestPayload {
+  telephone: string;
+}
+
+// IMPERFECTION OpenAPI CONSTATÉE (régénération du 27/08/2026, voir
+// types/generated/elm-api.ts, operations["auth.otp-login.request"]) :
+// `cooldown_seconds` est généré en littéral `30` (Scramble l'a inféré de
+// l'exemple de réponse du contrôleur, jamais du vrai type retour de
+// OtpService::resendCooldownSeconds(), qui reste un nombre configurable) —
+// retypé ici en `number` simple. `channel` est correctement généré en
+// `string` (pas narrowed) ; refermé ici sur les 3 valeurs réelles de
+// App\Enums\OtpChannel pour un typage utile côté front.
+//
+// `destination_masked` (ajouté le 27/08/2026, demande front) : la
+// coordonnée réellement utilisée pour CE canal, DÉJÀ masquée côté serveur
+// (App\Services\Otp\OtpDestinationMasker, elm-monolithe) — jamais
+// reconstruite/devinée côté Nuxt à partir d'une autre source (voir
+// pages/connexion.vue).
+export interface OtpLoginRequestResponse {
+  sent: true;
+  channel: OtpChannel;
+  destination_masked: string;
+  cooldown_seconds: number;
+}
+
+// Libellés d'affichage par canal — centralisés ici pour que
+// pages/connexion.vue n'écrive jamais `if (channel === 'email') ... else
+// if (channel === 'whatsapp') ...` dispersé dans le template (demande
+// explicite du 27/08/2026, section 15). `destinationPrefix` précède
+// `destination_masked` (ci-dessus) : "à" pour une adresse email, "au" pour
+// un numéro (SMS/WhatsApp) — pur accord grammatical, jamais un fait sur le
+// canal lui-même.
+export interface OtpChannelPresentation {
+  heading: string;
+  destinationPrefix: string;
+}
+
+const OTP_CHANNEL_PRESENTATION: Record<OtpChannel, OtpChannelPresentation> = {
+  email: { heading: "Vérifiez votre email", destinationPrefix: "Code envoyé à" },
+  whatsapp: { heading: "Vérifiez WhatsApp", destinationPrefix: "Code envoyé au" },
+  sms: { heading: "Vérifiez vos SMS", destinationPrefix: "Code envoyé au" },
+};
+
+// Repli neutre pour une valeur de `channel` future non encore connue ici
+// (contrat traité comme un enum ouvert, jamais une simple comparaison à
+// "email") — jamais une erreur d'affichage.
+const OTP_CHANNEL_PRESENTATION_FALLBACK: OtpChannelPresentation = {
+  heading: "Vérifiez votre code",
+  destinationPrefix: "Code envoyé à",
+};
+
+export function otpChannelPresentation(channel: OtpChannel): OtpChannelPresentation {
+  return OTP_CHANNEL_PRESENTATION[channel] ?? OTP_CHANNEL_PRESENTATION_FALLBACK;
+}
+
+export interface OtpVerifyInput {
+  telephone: string;
+  code: string;
+}
+
+export interface OtpVerifyPayload extends OtpVerifyInput {
+  device_name: string;
+}
+
+export function buildOtpVerifyPayload(input: OtpVerifyInput): OtpVerifyPayload {
+  return {
+    telephone: input.telephone,
+    code: input.code,
+    device_name: DEVICE_NAME,
+  };
+}
+
+// `user` : IssuesTelephoneLoginToken::userResource() est partagé mot pour mot
+// avec LoginController (mot de passe) — même AuthUser, mêmes imperfections
+// déjà documentées plus haut (email/is_active/qr_payload), jamais un second
+// type dupliqué.
+export interface OtpVerifyResponse {
+  token: string;
+  user: AuthUser;
+}
+
 export interface AuthErrorInfo {
   status: number;
   message: string;
   code?: string;
   fieldErrors?: Record<string, string>;
+  // Présent uniquement sur un 429 (anti-spam OTP, HasOtpRateLimitResponse
+  // côté backend — voir OtpLogin\RequestController) : délai exact avant de
+  // pouvoir redemander un code, jamais une valeur devinée/codée en dur côté
+  // Nuxt (voir composables/useOtpLogin.ts).
+  retryAfterSeconds?: number;
 }
 
 interface AuthErrorPayload {
@@ -107,6 +212,7 @@ interface AuthErrorPayload {
   error?: string;
   code?: string;
   errors?: Record<string, string[] | string>;
+  retry_after_seconds?: number;
   data?: AuthErrorPayload;
 }
 
@@ -143,6 +249,7 @@ export function normalizeAuthError(error: unknown): AuthErrorInfo {
       "Une erreur est survenue. Veuillez réessayer.",
     code: payload.code,
     fieldErrors,
+    retryAfterSeconds: payload.retry_after_seconds,
   };
 }
 

@@ -44,9 +44,9 @@ async function loadActivity() {
   });
 }
 
-// Redirection contextuelle depuis une notification "commande_validee" (voir
-// config/clientNotifications.ts::notificationActionRoute, chantier "centre
-// de notifications" du 27/08/2026) : `?commande=<id>` ouvre directement le
+// Redirection contextuelle depuis une notification "delivery.assigned" (voir
+// config/clientNotifications.ts::notificationResourceToRoute, chantier
+// "centre de notifications" du 27/08/2026) : `?commande=<id>` ouvre directement le
 // détail de l'opération concernée si elle fait partie du lot déjà chargé
 // (page 1, tri décroissant par date — toujours le cas pour une notification
 // tout juste reçue). Introuvable (opération plus ancienne, hors page 1) :

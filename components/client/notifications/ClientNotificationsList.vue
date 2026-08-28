@@ -26,9 +26,6 @@ defineProps<{
   loading?: boolean;
 }>();
 defineEmits<{ select: [notification: ClientNotification] }>();
-
-const dateFormatter = new Intl.DateTimeFormat("fr-FR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-const formatDate = (iso: string) => dateFormatter.format(new Date(iso));
 </script>
 
 <template>
@@ -62,7 +59,8 @@ const formatDate = (iso: string) => dateFormatter.format(new Date(iso));
           <span class="flex-1 min-w-0 leading-normal text-surface-900 dark:text-surface-0" :class="{ 'font-semibold': !notification.lu }">
             <strong class="block font-medium truncate">{{ notification.titre || "Notification" }}</strong>
             <span v-if="notification.message" class="block text-muted-color text-sm mt-0.5 truncate">{{ notification.message }}</span>
-            <span class="block text-muted-color text-xs mt-0.5">{{ formatDate(notification.created_at) }}</span>
+            <span v-if="notification.montant != null" class="block text-sm mt-0.5 font-medium text-surface-900 dark:text-surface-0">{{ formatGnf(notification.montant) }}</span>
+            <span v-if="notification.created_at" class="block text-muted-color text-xs mt-0.5">{{ formatRelativeDate(notification.created_at) }}</span>
           </span>
           <span class="sr-only">{{ notification.lu ? "Lue" : "Non lue" }}</span>
         </button>
