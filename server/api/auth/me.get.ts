@@ -14,7 +14,11 @@ export default defineEventHandler(async (event) => {
   const token = await getSessionToken(event);
 
   if (!token) {
-    throw createError({ statusCode: 401, statusMessage: "Non authentifié." });
+    // code: "no_session" — distingue ce cas (aucun cookie, visite anonyme
+    // normale) d'un token existant rejeté par le back plus bas (vraie perte
+    // de session) : composables/useAuth.ts::refreshMe() n'affiche le message
+    // d'erreur sur pages/connexion.vue que dans ce second cas.
+    throw createError({ statusCode: 401, statusMessage: "Non authentifié.", data: { code: "no_session" } });
   }
 
   try {
