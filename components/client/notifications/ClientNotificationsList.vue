@@ -31,7 +31,7 @@ defineEmits<{ select: [notification: ClientNotification] }>();
 <template>
   <div>
     <ul v-if="loading" class="p-0 m-0 list-none" aria-hidden="true">
-      <li v-for="n in 4" :key="n" class="flex items-center gap-3 py-3 border-b border-surface last:border-b-0">
+      <li v-for="n in 4" :key="n" class="flex items-center gap-3 py-4 border-b border-surface last:border-b-0">
         <Skeleton shape="circle" size="2.75rem" />
         <div class="flex-1 min-w-0">
           <Skeleton width="55%" height="0.85rem" class="mb-2" />
@@ -40,11 +40,17 @@ defineEmits<{ select: [notification: ClientNotification] }>();
       </li>
     </ul>
 
+    <!-- Espacement (demande du 28/08/2026) : plus de padding vertical +
+         ligne séparatrice légère (border-surface, déjà le token neutre ELM
+         utilisé partout ailleurs) plutôt qu'un margin-bottom entre lignes —
+         garde une liste dense lisible sans agrandir excessivement la cloche.
+         Toujours un seul <button> par notification (bloc entier cliquable),
+         jamais scindé par cet espacement. -->
     <ul v-else-if="notifications.length" class="p-0 m-0 list-none">
       <li v-for="notification in notifications" :key="notification.id">
         <button
           type="button"
-          class="w-full flex items-center gap-3 py-3 px-2 -mx-2 border-b border-surface last:border-b-0 text-left rounded-border hover:bg-surface-50 dark:hover:bg-surface-800/60"
+          class="w-full flex items-center gap-3 py-4 px-2 -mx-2 border-b border-surface last:border-b-0 text-left rounded-border hover:bg-surface-50 dark:hover:bg-surface-800/60"
           :class="!notification.lu ? 'bg-primary-50/60 dark:bg-primary-400/5' : ''"
           @click="$emit('select', notification)"
         >
@@ -61,11 +67,15 @@ defineEmits<{ select: [notification: ClientNotification] }>();
                  28/08/2026) : titre = événement, message = contexte SEUL
                  (jamais le montant concaténé dedans — celui-ci vient
                  uniquement de notification.montant, jamais parsé depuis
-                 message), montant sur sa propre ligne, date la plus discrète. -->
+                 message), montant sur sa propre ligne, date la plus discrète.
+                 Espacement interne volontairement asymétrique : petit espace
+                 après le titre, message/montant regroupés (quasi collés,
+                 même bloc "détail"), espace un peu plus marqué avant la date
+                 (méta, dissociée du contenu). -->
             <strong class="block font-semibold truncate">{{ notification.titre || "Notification" }}</strong>
-            <span v-if="notification.message" class="block text-muted-color text-sm mt-0.5 truncate">{{ notification.message }}</span>
+            <span v-if="notification.message" class="block text-muted-color text-sm mt-1 truncate">{{ notification.message }}</span>
             <span v-if="notification.montant != null" class="block text-sm mt-0.5 font-medium text-surface-900 dark:text-surface-0">{{ formatGnf(notification.montant) }}</span>
-            <span v-if="notification.created_at" class="block text-muted-color text-xs mt-0.5">{{ formatRelativeDate(notification.created_at) }}</span>
+            <span v-if="notification.created_at" class="block text-muted-color text-xs mt-1.5">{{ formatRelativeDate(notification.created_at) }}</span>
           </span>
           <span class="sr-only">{{ notification.lu ? "Lue" : "Non lue" }}</span>
         </button>

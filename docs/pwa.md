@@ -209,12 +209,31 @@ iOS (pas de bannière custom, pas de détection UA pour forcer un prompt).
 
 ### UX installation
 
-Aucun prompt d'installation personnalisé n'est déclenché au premier
-chargement : `pwa.workbox`/`client.installPrompt` n'est pas configuré, donc
-`@vite-pwa/nuxt` laisse le navigateur gérer nativement l'événement
-`beforeinstallprompt` (pas de `preventDefault()` custom). Proposer
-l'installation depuis l'espace client ou le profil est un sujet séparé, pour
-plus tard.
+Bouton "Installer l'application" sur la landing mobile (`components/
+PwaInstallButton.vue`, sous le CTA principal "Mon espace"/"Connexion" dans
+`components/landing/Hero.vue` — jamais un remplacement, l'installation reste
+facultative), branché du 29/08/2026. Toute la détection plateforme/état vit
+dans `composables/usePwaInstall.ts` (accès navigateur) et
+`config/pwaInstall.ts` (logique pure, testable sans DOM — même convention que
+`config/webPush.ts`) :
+
+- **Déjà installée** (`display: standalone`, y compris `navigator.standalone`
+  sur iOS) → bouton masqué.
+- **Android/Chrome, desktop Chrome/Edge** : `beforeinstallprompt` est
+  intercepté (`preventDefault()`) pour piloter l'invite depuis CE bouton
+  plutôt que la mini-infobar par défaut du navigateur ; le clic déclenche
+  `prompt()` sur l'événement capturé.
+- **iOS/iPadOS (Safari)** : `beforeinstallprompt` ne se déclenche jamais
+  (WebKit) — le clic ouvre une modale (PrimeVue `Dialog`) avec les 3 étapes
+  manuelles (Partager → Sur l'écran d'accueil → Ajouter). Aucune tentative de
+  déclencher automatiquement l'installation sur cette plateforme.
+- **Navigateur sans l'un ni l'autre chemin** (ex. Firefox desktop) → bouton
+  masqué plutôt qu'un bouton qui échouerait silencieusement.
+
+Vérification manuelle à faire contre un build réel (même limite que
+l'installabilité elle-même, voir [Vérifications
+effectuées](#vérifications-effectuées)) : iPhone/iPad Safari, Android Chrome,
+Chrome desktop, et le cas "déjà installée".
 
 ## Environnements
 

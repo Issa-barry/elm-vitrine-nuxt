@@ -94,7 +94,14 @@ export function useAuth() {
       applyMe(data);
       return true;
     } catch (error) {
-      lastError.value = normalizeAuthError(error);
+      const info = normalizeAuthError(error);
+      // "no_session" (server/api/auth/me.get.ts) : aucun cookie de session,
+      // visite anonyme normale — pas une perte de session à signaler sur
+      // /connexion (voir onMounted de pages/connexion.vue). Réservé aux cas
+      // où un token existait et a été rejeté/révoqué côté back.
+      if (info.code !== "no_session") {
+        lastError.value = info;
+      }
       clear();
       return false;
     }

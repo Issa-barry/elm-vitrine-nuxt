@@ -44,10 +44,15 @@ const groups: ProfileGroup[] = [
 ];
 
 const router = useRouter();
+const auth = useAuth();
 
 const logoutConfirmVisible = ref(false);
+const isLoggingOut = ref(false);
 
-const confirmLogout = () => {
+const confirmLogout = async () => {
+  if (isLoggingOut.value) return;
+  isLoggingOut.value = true;
+  await auth.logout();
   logoutConfirmVisible.value = false;
   router.push("/connexion");
 };
@@ -102,8 +107,8 @@ const confirmLogout = () => {
         <h2 id="logout-dialog-title">Se déconnecter ?</h2>
       </div>
       <div class="client-mobile-logout-dialog-actions">
-        <Button label="Annuler" severity="secondary" outlined @click="logoutConfirmVisible = false" />
-        <Button label="Oui" severity="danger" @click="confirmLogout" />
+        <Button label="Annuler" severity="secondary" outlined :disabled="isLoggingOut" @click="logoutConfirmVisible = false" />
+        <Button label="Oui" severity="danger" :loading="isLoggingOut" @click="confirmLogout" />
       </div>
     </Dialog>
   </div>
