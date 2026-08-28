@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { webPushStatePresentation } from "~/config/webPush";
+
 definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Mon profil — Eau La Maman" });
 
@@ -110,8 +112,42 @@ const onToggleNotifications = async (nextValue: boolean) => {
   notificationSaveMessage.value = result.ok ? "" : result.error.message;
 };
 
+// Web Push (chantier du 28/08/2026, voir composables/useWebPush.ts) —
+// DISTINCT de la carte "Notifications" ci-dessus : celle-ci pilote une
+// préférence backend/globale au compte (activite), le Web Push est un
+// réglage LOCAL à ce navigateur/appareil (section 19-20 du chantier, jamais
+// mélangés). `webPush.state`/`isLoading`/`error` sont déstructurés (pas
+// `webPush.state.value`) pour bénéficier du même auto-unwrap de refs dans le
+// template que `clientProfile`/`auth` plus haut.
+const webPush = useWebPush();
+const { state: webPushState, isLoading: isWebPushLoading } = webPush;
+const webPushPresentation = computed(() => webPushStatePresentation(webPushState.value));
+
+const webPushMessage = ref("");
+const webPushMessageIsError = ref(false);
+
+// Déclenché UNIQUEMENT par ce clic explicite (jamais automatiquement) :
+// Notification.requestPermission() ne doit jamais être appelé au chargement
+// de la page (section 17).
+const handleEnableWebPush = async () => {
+  webPushMessage.value = "";
+  const result = await webPush.subscribe();
+  webPushMessageIsError.value = !result.ok;
+  webPushMessage.value = result.ok ? "Notifications activées sur cet appareil." : result.error.message;
+};
+
+const handleDisableWebPush = async () => {
+  webPushMessage.value = "";
+  const result = await webPush.unsubscribe();
+  webPushMessageIsError.value = !result.ok;
+  webPushMessage.value = result.ok ? "" : result.error.message;
+};
+
 onMounted(() => {
   clientProfile.fetchProfile();
+  // Lecture seule (permission/abonnement déjà existants) + resync
+  // silencieuse — ne déclenche jamais Notification.requestPermission().
+  webPush.initialize();
 });
 </script>
 
@@ -197,6 +233,35 @@ onMounted(() => {
           />
         </div>
         <small v-if="notificationSaveMessage" class="block mt-2" :class="notificationSaveIsError ? 'text-red-600' : ''">{{ notificationSaveMessage }}</small>
+      </div>
+
+      <!-- Réglage LOCAL à ce navigateur/appareil, pas au compte (voir script :
+           distinct de la carte "Notifications" ci-dessus, section 19-20). -->
+      <div class="card">
+        <div class="font-semibold text-xl mb-6">Notifications sur cet appareil</div>
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <span class="font-medium">{{ webPushPresentation.label }}</span>
+            <span class="block text-muted-color mt-1">{{ webPushPresentation.description }}</span>
+          </div>
+          <Button
+            v-if="webPushState === 'not_subscribed'"
+            label="Activer"
+            size="small"
+            :loading="isWebPushLoading"
+            @click="handleEnableWebPush"
+          />
+          <Button
+            v-else-if="webPushState === 'subscribed'"
+            label="Désactiver"
+            severity="secondary"
+            outlined
+            size="small"
+            :loading="isWebPushLoading"
+            @click="handleDisableWebPush"
+          />
+        </div>
+        <small v-if="webPushMessage" class="block mt-2" :class="webPushMessageIsError ? 'text-red-600' : 'text-green-600'">{{ webPushMessage }}</small>
       </div>
 
       <div class="card">

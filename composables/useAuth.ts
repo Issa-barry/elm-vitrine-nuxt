@@ -48,6 +48,13 @@ export function useAuth() {
   // hydratation (ex. clic sur "Se connecter").
   const requestFetch = useRequestFetch();
   const { reset: resetNotifications } = useClientNotifications();
+  // Web Push (chantier du 28/08/2026, voir composables/useWebPush.ts) :
+  // syncWebPushSubscription resynchronise silencieusement un abonnement
+  // navigateur déjà existant vers le compte qui vient de se connecter
+  // (section 22/24) ; unlinkWebPushSubscription supprime UNIQUEMENT
+  // l'association serveur à la perte de session, jamais l'abonnement
+  // navigateur lui-même (section 23).
+  const { syncSubscription: syncWebPushSubscription, unlinkFromAccount: unlinkWebPushSubscription } = useWebPush();
 
   const isAuthenticated = computed(() => status.value === "authenticated");
   const hasClientAccess = computed(() => hasClientSpaceAccess(user.value?.roles));
@@ -69,6 +76,11 @@ export function useAuth() {
     context.value = null;
     status.value = "unauthenticated";
     resetNotifications();
+    // Best-effort, non bloquant (voir useWebPush.ts::unlinkFromAccount()) :
+    // ne retire QUE l'association serveur de cet endpoint, jamais
+    // l'abonnement navigateur — une connexion suivante le resynchronise (voir
+    // completeLogin() plus bas).
+    void unlinkWebPushSubscription();
   }
 
   // GET /api/auth/me (BFF) — seule source de vérité pour restaurer une
@@ -172,6 +184,13 @@ export function useAuth() {
       lastError.value = info;
       return { ok: false, error: info };
     }
+
+    // Best-effort, non bloquant : un abonnement Web Push déjà créé sur ce
+    // navigateur (compte précédent ou même compte) est réassocié au compte
+    // qui vient de se connecter (section 22/24). Ne crée jamais de nouvel
+    // abonnement ici (aucun prompt de permission) — voir
+    // useWebPush.ts::syncSubscription().
+    void syncWebPushSubscription();
 
     return { ok: true };
   }
