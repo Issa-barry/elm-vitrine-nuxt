@@ -1,5 +1,5 @@
 <template>
-  <footer class="my-20">
+  <footer class="my-20 hidden lg:block">
     <p class="text-center text-sm text-slate-500">
       Copyright © {{ new Date().getFullYear() }} Eau La Maman. All rights reserved.
     </p>

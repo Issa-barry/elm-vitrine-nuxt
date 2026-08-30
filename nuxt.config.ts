@@ -56,6 +56,14 @@ export default defineNuxtConfig({
       // mise en cache — voir docs/pwa.md § politique de cache.
       navigateFallback: null,
       cleanupOutdatedCaches: true,
+      // Web Push (chantier du 28/08/2026, voir docs/pwa.md § Web Push) :
+      // ajoute les listeners push/notificationclick (public/push-sw.js) au
+      // service worker généré par Workbox, SANS migrer generateSW ->
+      // injectManifest — mécanisme officiel documenté par workbox-build pour
+      // ce cas exact (GenerateSWOptions.importScripts). Un seul service
+      // worker au total : ce script tourne dans le MÊME scope `self`, jamais
+      // un second SW concurrent.
+      importScripts: ["push-sw.js"],
       // Seuls les assets statiques versionnés du build (JS/CSS/icônes/fonts)
       // sont précachés. Aucune route serveur (/api/*, /manifest.webmanifest,
       // /robots.txt) n'est un fichier de ce dossier : elles ne peuvent donc

@@ -100,9 +100,15 @@ icônes, mise à jour, environnements). Règles pour tout agent IA :
 4. Ne jamais définir `ssr: false`, même partiellement, pour les besoins de la
    PWA. Le SSR/SEO de la vitrine publique est non négociable.
 5. Pas d'offline métier (cache de données, IndexedDB métier, Background
-   Sync, file d'attente offline, notifications push) sans décision explicite
-   de l'utilisateur — l'absence de ces fonctionnalités en V1 est un choix de
-   portée assumé, pas un oubli à combler spontanément.
+   Sync, file d'attente offline) sans décision explicite de l'utilisateur —
+   l'absence de ces fonctionnalités en V1 est un choix de portée assumé, pas
+   un oubli à combler spontanément. Web Push (notifications système) fait
+   exception depuis le 28/08/2026 (décision explicite, voir docs/pwa.md §
+   Web Push) : ne pas l'étendre au-delà des 2 événements backend déjà câblés
+   (commande validée, transfert créé) sans nouvelle décision explicite — ce
+   n'est pas un oubli côté Nuxt, c'est une limite backend actuelle
+   (`$pushPayload` absent des 5 autres événements, voir
+   app/Services/Notification/NotificationDispatcher.php côté elm-monolithe).
 6. Le manifest est généré à la requête (`server/routes/manifest.webmanifest.ts`),
    pas au build (`pwa.manifest: false` dans `nuxt.config.ts`) : le même
    artefact `.output` peut tourner sur plusieurs environnements Hostinger, le
