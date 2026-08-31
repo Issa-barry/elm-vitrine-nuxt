@@ -108,6 +108,13 @@ export const OTP_TELEPHONE_UNAVAILABLE = "+224677777777";
 export const OTP_CODE_VALID = "111111";
 export const OTP_CODE_LOCKED = "000000"; // déclenche directement le 429 "Trop de tentatives"
 export const OTP_DESTINATION_MASKED = "j***@example.com";
+// Nimba SMS + fallback email automatique (revue UX du 31/08/2026) : canal
+// primaire résolu whatsapp > sms > email côté backend, whatsapp non
+// opérationnel — ce numéro dédié simule le cas désormais le plus courant
+// (channel: "sms"), jamais renvoyé pour TEST_TELEPHONE (qui reste le
+// scénario "email" déjà couvert par le reste de la suite).
+export const OTP_TELEPHONE_SMS_CHANNEL = "+224666666666";
+export const OTP_DESTINATION_MASKED_SMS = "+224 6•• •• •• 66";
 
 // setResponseStatus(event, code) + return {...}, PAS createError(...) : un
 // createError() ici serait sérialisé par h3 dans SON PROPRE enveloppe
@@ -137,6 +144,9 @@ router.post(
     if (telephone === OTP_TELEPHONE_UNAVAILABLE) {
       setResponseStatus(event, 503);
       return { error: "Aucun canal disponible pour recevoir un code de connexion pour le moment." };
+    }
+    if (telephone === OTP_TELEPHONE_SMS_CHANNEL) {
+      return { sent: true, channel: "sms", destination_masked: OTP_DESTINATION_MASKED_SMS, cooldown_seconds: 30 };
     }
     if (telephone !== TEST_TELEPHONE) {
       // Couvre OTP_TELEPHONE_NOT_FOUND et tout autre numéro non enregistré.

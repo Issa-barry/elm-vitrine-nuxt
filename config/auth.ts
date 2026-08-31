@@ -142,19 +142,51 @@ export interface OtpLoginRequestResponse {
 // Libellés d'affichage par canal — centralisés ici pour que
 // pages/connexion.vue n'écrive jamais `if (channel === 'email') ... else
 // if (channel === 'whatsapp') ...` dispersé dans le template (demande
-// explicite du 27/08/2026, section 15). `destinationPrefix` précède
-// `destination_masked` (ci-dessus) : "à" pour une adresse email, "au" pour
-// un numéro (SMS/WhatsApp) — pur accord grammatical, jamais un fait sur le
-// canal lui-même.
+// explicite du 27/08/2026, section 15).
+//
+// Révisé le 31/08/2026 (Nimba SMS + fallback email automatique côté backend,
+// ordre de résolution whatsapp > sms > email) : l'envoi SMS (Nimba) est
+// ASYNCHRONE — le backend peut répondre `sent: true, channel: "sms"` puis
+// voir Nimba échouer juste après, auquel cas il bascule automatiquement vers
+// un envoi email avec le même code (entièrement géré côté backend, jamais
+// reproduit ici). `destinationLine` ne doit donc JAMAIS affirmer une
+// livraison certaine pour un canal asynchrone (sms/whatsapp) — seul le canal
+// PRIMAIRE TENTÉ est connu du front, jamais la livraison finale réelle.
+// `email` reste la seule affirmation définitive possible : sa réponse HTTP
+// signifie un envoi synchrone effectif, sans filet de secours derrière.
 export interface OtpChannelPresentation {
   heading: string;
-  destinationPrefix: string;
+  destinationLine: (destinationMasked: string) => string;
+  // Complément affiché sous la ligne de destination, uniquement pour les
+  // canaux dont la livraison n'est pas garantie au moment de la réponse HTTP
+  // (sms aujourd'hui, whatsapp par cohérence si un jour opérationnel) —
+  // jamais présenté comme une erreur côté page, juste une information
+  // rassurante sur le filet de sécurité déjà géré côté backend. `undefined`
+  // pour un canal dont l'envoi est déjà garanti (email) : rien à rassurer.
+  fallbackHint?: string;
 }
 
+// Formulation volontairement prudente pour sms/whatsapp — jamais "envoyé
+// avec succès" ni "Code envoyé au ..." (affirmation que seul un canal
+// synchrone peut se permettre) : le back a seulement TENTÉ ce canal.
+const SMS_FALLBACK_HINT =
+  "En cas de problème avec le SMS, le code peut être envoyé par email si une adresse est enregistrée sur votre compte.";
+
 const OTP_CHANNEL_PRESENTATION: Record<OtpChannel, OtpChannelPresentation> = {
-  email: { heading: "Vérifiez votre email", destinationPrefix: "Code envoyé à" },
-  whatsapp: { heading: "Vérifiez WhatsApp", destinationPrefix: "Code envoyé au" },
-  sms: { heading: "Vérifiez vos SMS", destinationPrefix: "Code envoyé au" },
+  email: {
+    heading: "Vérifiez votre email",
+    destinationLine: (destination) => `Code envoyé à ${destination}`,
+  },
+  sms: {
+    heading: "Envoi de votre code par SMS",
+    destinationLine: (destination) => `Nous envoyons votre code par SMS au ${destination}.`,
+    fallbackHint: SMS_FALLBACK_HINT,
+  },
+  whatsapp: {
+    heading: "Envoi de votre code par WhatsApp",
+    destinationLine: (destination) => `Nous envoyons votre code par WhatsApp au ${destination}.`,
+    fallbackHint: SMS_FALLBACK_HINT,
+  },
 };
 
 // Repli neutre pour une valeur de `channel` future non encore connue ici
@@ -162,11 +194,23 @@ const OTP_CHANNEL_PRESENTATION: Record<OtpChannel, OtpChannelPresentation> = {
 // "email") — jamais une erreur d'affichage.
 const OTP_CHANNEL_PRESENTATION_FALLBACK: OtpChannelPresentation = {
   heading: "Vérifiez votre code",
-  destinationPrefix: "Code envoyé à",
+  destinationLine: (destination) => `Code envoyé à ${destination}`,
 };
 
 export function otpChannelPresentation(channel: OtpChannel): OtpChannelPresentation {
   return OTP_CHANNEL_PRESENTATION[channel] ?? OTP_CHANNEL_PRESENTATION_FALLBACK;
+}
+
+// Message générique pour tout ce que le contrat OTP n'habille pas déjà d'un
+// texte pensé pour l'utilisateur (404/429/503 ont leur propre message dédié
+// côté pages/connexion.vue ; 422 porte un message backend déjà destiné à
+// l'utilisateur, ex. "Code incorrect ou expiré.") — réservé aux pannes 5xx et
+// réseau (normalizeAuthError() replie déjà les deux sur status >= 500, voir
+// plus bas), jamais une trace Laravel/Nimba brute affichée au client.
+const OTP_GENERIC_ERROR_MESSAGE = "Impossible d'envoyer le code pour le moment. Réessayez dans quelques instants.";
+
+export function otpFriendlyErrorMessage(info: AuthErrorInfo): string {
+  return info.status >= 500 ? OTP_GENERIC_ERROR_MESSAGE : info.message;
 }
 
 export interface OtpVerifyInput {

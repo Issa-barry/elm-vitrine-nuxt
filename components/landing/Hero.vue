@@ -4,6 +4,16 @@
 // "header auth" du 27/08/2026, même composable partagé, jamais une seconde
 // logique de résolution.
 const authState = useLandingAuthState();
+
+// Lu ici (en plus de PwaInstallButton, qui lit le même état partagé via
+// useState) uniquement pour resituer Connexion/Inscription/Mon espace en
+// CTA secondaires quand l'installation devient le CTA principal — demande du
+// 29/08/2026 : "Installer l'application" ne doit plus ressembler à une
+// option accessoire sous les boutons d'auth. N'appelle jamais initialize()
+// ici : PwaInstallButton s'en charge déjà dans son propre onMounted, ce qui
+// suffit à faire réagir ce computed (même useState partagé).
+const { state: installState } = usePwaInstall();
+const installAvailable = computed(() => installState.value !== "hidden");
 </script>
 
 <template>
@@ -37,22 +47,29 @@ const authState = useLandingAuthState();
     plutôt qu'à la suite du texte de présentation — demande du 29/08/2026.
     Uniquement < lg : au-delà, les CTA desktop ci-dessus prennent le relais. -->
     <div class="landing-hero-mobile-cta lg:hidden">
+      <!-- CTA principal quand une installation est disponible (demande du
+      29/08/2026) : passe AVANT Mon espace/Connexion, qui redescendent alors
+      en second rang (outline) — jamais un doublon de gros bouton bleu. Se
+      masque automatiquement (v-if INTERNE à PwaInstallButton, pas ici) sans
+      laisser de trou : jamais de v-if sur le composant lui-même, sinon son
+      onMounted -> initialize() ne tourne jamais et installAvailable
+      resterait bloqué à false (composables/usePwaInstall.ts). -->
+      <PwaInstallButton variant="primary" />
+
       <template v-if="authState === 'loading'">
         <Skeleton width="100%" height="2.75rem" border-radius="6px" />
       </template>
-      <LandingLink v-else-if="authState === 'authenticated'" href="/espace-client">
+      <LandingLink
+        v-else-if="authState === 'authenticated'"
+        :style-name="installAvailable ? 'outline' : 'primary'"
+        href="/espace-client"
+      >
         <span class="inline-flex items-center justify-center gap-2 w-full"><i class="pi pi-user" aria-hidden="true" />Mon espace</span>
       </LandingLink>
       <template v-else>
-        <LandingLink href="/connexion">Connexion</LandingLink>
-        <LandingLink size="lg" style-name="outline" href="/inscription">Inscription</LandingLink>
+        <LandingLink :style-name="installAvailable ? 'outline' : 'primary'" href="/connexion">Connexion</LandingLink>
+        <LandingLink size="lg" :style-name="installAvailable ? 'muted' : 'outline'" href="/inscription">Inscription</LandingLink>
       </template>
-
-      <!-- Action secondaire, sous le CTA principal ci-dessus (jamais un
-      remplacement de "Mon espace"/"Connexion") — masqué automatiquement si
-      déjà installée ou si aucun chemin d'installation n'est disponible, voir
-      composables/usePwaInstall.ts. -->
-      <PwaInstallButton />
     </div>
   </main>
 </template>
