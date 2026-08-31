@@ -8,6 +8,7 @@ import {
   isAccountStatusCode,
   normalizeAuthError,
   otpChannelPresentation,
+  otpFriendlyErrorMessage,
   resolveMonolithBaseUrl,
   shouldUseSecureCookies,
 } from "./auth";
@@ -53,18 +54,60 @@ describe("buildOtpVerifyPayload", () => {
 });
 
 describe("otpChannelPresentation", () => {
-  it("propose un libellé et un préfixe de destination distincts par canal (jamais un if/else dispersé côté page)", () => {
-    expect(otpChannelPresentation("email")).toEqual({ heading: "Vérifiez votre email", destinationPrefix: "Code envoyé à" });
-    expect(otpChannelPresentation("whatsapp")).toEqual({ heading: "Vérifiez WhatsApp", destinationPrefix: "Code envoyé au" });
-    expect(otpChannelPresentation("sms")).toEqual({ heading: "Vérifiez vos SMS", destinationPrefix: "Code envoyé au" });
+  // Revue UX du 31/08/2026 (Nimba SMS + fallback email automatique) : email
+  // reste la seule affirmation définitive ("Code envoyé à ...") — un envoi
+  // synchrone, sans filet de secours derrière. sms/whatsapp sont asynchrones
+  // côté backend (Nimba peut échouer après la réponse HTTP, auquel cas un
+  // fallback email avec le même code prend le relais automatiquement) :
+  // jamais une affirmation de livraison, seulement une formulation en cours
+  // d'envoi + une ligne de secours rassurante.
+  it("email : affirmation définitive, jamais de complément de secours (envoi déjà garanti)", () => {
+    const presentation = otpChannelPresentation("email");
+    expect(presentation.heading).toBe("Vérifiez votre email");
+    expect(presentation.destinationLine("j***@example.com")).toBe("Code envoyé à j***@example.com");
+    expect(presentation.fallbackHint).toBeUndefined();
   });
 
-  it("fonctionne sans refonte pour whatsapp/sms même désactivés dans l'UI aujourd'hui", () => {
+  it("sms : formulation prudente (jamais \"envoyé\"/\"avec succès\"), avec complément de secours email", () => {
+    const presentation = otpChannelPresentation("sms");
+    const line = presentation.destinationLine("+224 6•• •• •• 12");
+    expect(line).toBe("Nous envoyons votre code par SMS au +224 6•• •• •• 12.");
+    expect(line).not.toMatch(/envoyé/i);
+    expect(line).not.toMatch(/succès/i);
+    expect(presentation.fallbackHint).toMatch(/email/i);
+  });
+
+  it("whatsapp : même prudence que sms (canal asynchrone), même complément de secours", () => {
+    const presentation = otpChannelPresentation("whatsapp");
+    expect(presentation.destinationLine("+224 6•• •• •• 12")).not.toMatch(/envoyé/i);
+    expect(presentation.fallbackHint).toMatch(/email/i);
+  });
+
+  it("fonctionne sans refonte pour whatsapp/sms même si un seul est réellement opérationnel aujourd'hui", () => {
     // Le contrat est traité comme un enum ouvert (jamais `channel === 'email'`
     // comme condition) : ces deux canaux doivent déjà avoir une présentation
-    // correcte, même si aucun bouton actif ne les déclenche encore.
+    // correcte, même si whatsapp n'est pas encore opérationnel côté backend.
     expect(otpChannelPresentation("whatsapp").heading).not.toBe(otpChannelPresentation("email").heading);
     expect(otpChannelPresentation("sms").heading).not.toBe(otpChannelPresentation("email").heading);
+  });
+});
+
+describe("otpFriendlyErrorMessage", () => {
+  it("remplace un message de panne serveur (5xx) par un texte générique, jamais une trace Laravel/Nimba brute", () => {
+    const message = otpFriendlyErrorMessage({ status: 500, message: "SQLSTATE[HY000]: General error, Nimba timeout" });
+    expect(message).toBe("Impossible d'envoyer le code pour le moment. Réessayez dans quelques instants.");
+  });
+
+  it("remplace aussi une erreur réseau (normalizeAuthError la replie déjà sur status 500)", () => {
+    const message = otpFriendlyErrorMessage(normalizeAuthError(new Error("network down")));
+    expect(message).toBe("Impossible d'envoyer le code pour le moment. Réessayez dans quelques instants.");
+  });
+
+  it("laisse passer inchangé un message déjà pensé pour l'utilisateur (4xx, ex. code incorrect)", () => {
+    expect(otpFriendlyErrorMessage({ status: 422, message: "Code incorrect ou expiré." })).toBe("Code incorrect ou expiré.");
+    expect(otpFriendlyErrorMessage({ status: 429, message: "Trop de tentatives. Demandez un nouveau code." })).toBe(
+      "Trop de tentatives. Demandez un nouveau code.",
+    );
   });
 });
 

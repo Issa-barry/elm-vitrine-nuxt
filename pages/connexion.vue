@@ -191,36 +191,47 @@ const otpCode = ref("");
 // composant) et y placer le focus après l'envoi du code.
 const otpCodeInputRef = ref<{ $el?: HTMLElement } | null>(null);
 
-// Canaux affichés — Email seul réellement câblé aujourd'hui côté backend
-// (voir docs/api-espace-client-contract.md, OtpChannelResolver côté
-// elm-monolithe) : WhatsApp/SMS visibles mais désactivés, jamais un faux
-// appel. `selectedChannel` est purement visuel (le corps de
-// POST /otp-login/request n'accepte d'ailleurs aucun paramètre de canal,
-// vérifié dans OtpLogin\RequestController — le backend choisit seul) ; le
-// canal réellement utilisé vient de la réponse serveur (otpLogin.channel).
-// Présentation compacte (demande du 27/08/2026, reprise UI/UX) : plus de
-// grandes cartes, juste un petit chip par canal — "Bientôt" uniquement pour
-// les deux indisponibles, rien sous Email.
+// Canaux affichés — SMS (Nimba) et Email sont réellement câblés côté backend
+// (whatsapp non opérationnel, voir OtpChannelResolver côté elm-monolithe,
+// ordre de résolution whatsapp > sms > email) : liste purement INFORMATIVE,
+// jamais un sélecteur. POST /otp-login/request n'accepte d'ailleurs aucun
+// paramètre de canal (vérifié dans OtpLogin\RequestController — le backend
+// choisit seul) ; présenter ces trois entrées comme des boutons cliquables
+// prétendrait donc contrôler un choix que le front n'a pas — d'où de simples
+// badges (pas de bouton, pas d'état "sélectionné", voir template). Le canal
+// réellement tenté vient uniquement de la réponse serveur (otpLogin.channel),
+// jamais d'un choix fait ici.
 type OtpChannelOption = { value: OtpChannel; label: string; icon: string; available: boolean };
 const OTP_CHANNEL_OPTIONS: OtpChannelOption[] = [
+  { value: "sms", label: "SMS", icon: "pi-comments", available: true },
   { value: "email", label: "Email", icon: "pi-envelope", available: true },
   { value: "whatsapp", label: "WhatsApp", icon: "pi-whatsapp", available: false },
-  { value: "sms", label: "SMS", icon: "pi-comments", available: false },
 ];
-const selectedChannel = ref<OtpChannel>("email");
 
-// Titre + libellé de destination du canal RÉELLEMENT utilisé (otpLogin.channel,
-// otpLogin.destinationMasked, tous deux renvoyés par le backend) — jamais le
-// canal sélectionné visuellement ci-dessus, qui n'influence pas l'envoi réel.
-// Logique de présentation centralisée dans config/auth.ts::otpChannelPresentation
-// (jamais dispersée en if/else ici).
+// Titre + ligne de destination du canal RÉELLEMENT tenté (otpLogin.channel,
+// otpLogin.destinationMasked, tous deux renvoyés par le backend) — jamais un
+// choix fait dans la liste purement informative ci-dessus, qui n'influence
+// pas l'envoi réel. Logique de présentation centralisée dans
+// config/auth.ts::otpChannelPresentation (jamais dispersée en if/else ici) —
+// notamment la formulation prudente pour sms/whatsapp (canal seulement
+// TENTÉ, l'envoi Nimba étant asynchrone : un fallback email avec le même
+// code peut prendre le relais automatiquement côté backend après cette
+// réponse HTTP, voir fallbackHint ci-dessous).
 const otpCodeScreenTitle = computed(() =>
   otpLogin.channel.value ? otpChannelPresentation(otpLogin.channel.value).heading : "Connexion avec un code",
 );
 const otpDestinationLine = computed(() => {
   if (!otpLogin.channel.value || !otpLogin.destinationMasked.value) return "";
-  return `${otpChannelPresentation(otpLogin.channel.value).destinationPrefix} ${otpLogin.destinationMasked.value}`;
+  return otpChannelPresentation(otpLogin.channel.value).destinationLine(otpLogin.destinationMasked.value);
 });
+// Information secondaire UNIQUE sous otpDestinationLine (jamais une deuxième
+// alerte ni un toast redondant) — seulement pour un canal dont la livraison
+// n'est pas garantie au moment de la réponse HTTP (sms aujourd'hui). Jamais
+// présentée comme une erreur : le fallback email est un filet de sécurité
+// normal, entièrement géré côté backend (voir composables/useOtpLogin.ts).
+const otpFallbackHint = computed(() =>
+  otpLogin.channel.value ? otpChannelPresentation(otpLogin.channel.value).fallbackHint ?? "" : "",
+);
 
 const switchToOtp = () => {
   globalError.value = "";
@@ -243,6 +254,12 @@ const OTP_PHONE_EDITABLE_PHASES: OtpPhase[] = ["request", "sending", "not_found"
 const phoneEditable = computed(() => mode.value === "password" || OTP_PHONE_EDITABLE_PHASES.includes(otpLogin.phase.value));
 
 const requestOtpCode = async () => {
+  // Bouton "Renvoyer le code" désactivé seulement par le cooldown, jamais par
+  // cet appel lui-même (voir template) — garde explicite ici, en plus de
+  // celle interne à otpLogin.requestCode() : jamais 2 requêtes concurrentes
+  // pour une seule action utilisateur.
+  if (otpLogin.phase.value === "sending") return;
+
   if (phoneError.value) {
     hasAttemptedSubmit.value = true;
     await nextTick();
@@ -258,6 +275,11 @@ const requestOtpCode = async () => {
 };
 
 const verifyOtpCode = async () => {
+  // Même principe que requestOtpCode() ci-dessus : le bouton "Valider et se
+  // connecter" se désactive de façon réactive (:disabled), mais un double-clic
+  // très rapproché peut survenir avant ce re-rendu — cette garde synchrone
+  // empêche 2 POST /otp-login/verify concurrents pour le même code.
+  if (otpLogin.phase.value === "verifying") return;
   if (otpCode.value.length !== 6) return;
   const result = await otpLogin.verifyCode(otpTelephone.value, otpCode.value);
   if (!result.ok) {
@@ -397,7 +419,14 @@ onBeforeUnmount(() => {
           destination RÉELLE du code (jamais le téléphone, qui induirait en
           erreur si le canal est l'email, cf. demande section 11) s'affiche
           à la place. -->
-        <p v-else-if="otpDestinationLine" class="connexion-otp-destination">{{ otpDestinationLine }}</p>
+        <div v-else-if="otpDestinationLine" class="connexion-otp-destination-block">
+          <p class="connexion-otp-destination">{{ otpDestinationLine }}</p>
+          <!-- Information secondaire UNIQUE (jamais une alerte, jamais un
+            doublon toast+inline, cf. config/auth.ts::otpFallbackHint) :
+            uniquement pour sms/whatsapp, dont la livraison n'est pas garantie
+            à ce stade — rien pour email, déjà définitif. -->
+          <p v-if="otpFallbackHint" class="connexion-otp-fallback-hint">{{ otpFallbackHint }}</p>
+        </div>
 
         <template v-if="mode === 'password'">
           <label class="connexion-field">
@@ -476,22 +505,23 @@ onBeforeUnmount(() => {
           <p v-else-if="otpLogin.error.value" class="connexion-global-error" role="alert" aria-live="assertive">{{ otpLogin.error.value.message }}</p>
 
           <div class="connexion-field connexion-otp-channel-field">
-            <span id="connexion-otp-channel-label">Recevoir par :</span>
-            <div class="connexion-otp-channels" aria-labelledby="connexion-otp-channel-label">
-              <button
+            <span id="connexion-otp-channel-label">Canaux possibles :</span>
+            <!-- Purement informatif (jamais un sélecteur, voir le
+              commentaire sur OTP_CHANNEL_OPTIONS plus haut) : pas de bouton,
+              pas d'état "sélectionné" — le backend choisit seul le canal
+              réellement tenté, connu seulement après la réponse. -->
+            <div class="connexion-otp-channels" aria-labelledby="connexion-otp-channel-label" role="list">
+              <span
                 v-for="option in OTP_CHANNEL_OPTIONS"
                 :key="option.value"
-                type="button"
                 class="connexion-otp-channel"
-                :class="{ 'is-selected': selectedChannel === option.value, 'is-disabled': !option.available }"
-                :disabled="!option.available"
-                :aria-pressed="selectedChannel === option.value"
-                @click="option.available && (selectedChannel = option.value)"
+                :class="{ 'is-unavailable': !option.available }"
+                role="listitem"
               >
                 <i :class="['pi', option.icon]" aria-hidden="true" />
                 <span>{{ option.label }}</span>
-                <small v-if="!option.available">Bientôt</small>
-              </button>
+                <small v-if="!option.available">Bientôt disponible</small>
+              </span>
             </div>
           </div>
 
@@ -813,12 +843,34 @@ onBeforeUnmount(() => {
 // Destination réelle du code ("Code envoyé à j***@example.com") — texte
 // simple correctement hiérarchisé, jamais une grosse carte (section 14 de
 // la demande : "pas besoin d'une grosse carte contenant la destination").
+// Un seul enfant flex (gap standard de .connexion-form, 1.1rem, comme tout
+// autre champ) plutôt que otpDestinationLine/otpFallbackHint séparés : évite
+// de cumuler deux fois cet espacement quand le complément sms/whatsapp
+// s'affiche (voir template ci-dessus).
+.connexion-otp-destination-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
 .connexion-otp-destination {
-  margin: 0 0 1.5rem;
+  margin: 0;
   color: var(--p-text-muted-color);
   text-align: center;
   font-size: 0.9rem;
   font-weight: 600;
+}
+
+// Information secondaire (canal sms/whatsapp seulement, cf. otpFallbackHint) :
+// nettement plus discrète que otpDestinationLine juste au-dessus — une seule
+// information principale, une secondaire maximum (jamais deux affirmations de
+// même poids visuel).
+.connexion-otp-fallback-hint {
+  margin: 0;
+  color: var(--p-text-muted-color);
+  text-align: center;
+  font-size: 0.78rem;
+  font-weight: 500;
 }
 
 .connexion-otp-code-field {
@@ -928,6 +980,9 @@ onBeforeUnmount(() => {
   gap: 0.5rem;
 }
 
+// Badges purement informatifs, jamais interactifs (voir OTP_CHANNEL_OPTIONS
+// et le template : plus de bouton, plus d'état "sélectionné" — aucun de ces
+// trois canaux n'est un choix contrôlé par le front).
 .connexion-otp-channel {
   display: flex;
   flex: 1 1 0;
@@ -938,12 +993,10 @@ onBeforeUnmount(() => {
   padding: 0.6rem 0.4rem;
   color: var(--p-text-color);
   text-align: center;
-  cursor: pointer;
   background: var(--p-content-background);
   border: 1px solid var(--p-content-border-color);
   border-radius: 0.85rem;
   font: inherit;
-  transition: border-color 0.15s ease, background-color 0.15s ease;
 }
 
 .connexion-otp-channel i {
@@ -964,19 +1017,10 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
-.connexion-otp-channel.is-selected {
-  background: color-mix(in srgb, var(--p-primary-color) 8%, var(--p-content-background));
-  border-color: var(--p-primary-color);
-}
-
-.connexion-otp-channel.is-selected span {
-  color: var(--p-primary-color);
-}
-
-.connexion-otp-channel.is-disabled,
-.connexion-otp-channel:disabled {
+// Seul état visuel restant : "pas encore disponible" (whatsapp aujourd'hui),
+// jamais "non sélectionné" (aucune sélection n'existe).
+.connexion-otp-channel.is-unavailable {
   color: var(--p-text-muted-color);
-  cursor: default;
   opacity: 0.6;
 }
 
