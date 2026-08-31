@@ -1,9 +1,13 @@
 <script setup lang="ts">
-// Action secondaire, plus discrète que le CTA principal (Mon espace /
-// Connexion) sous lequel ce bouton s'affiche — jamais un remplacement,
-// l'installation reste facultative (demande du 29/08/2026). Toute la
-// détection plateforme/état vit dans composables/usePwaInstall.ts, ce
-// composant ne fait qu'afficher le bon état.
+// `variant="primary"` (défaut) : CTA principal mis en avant, mêmes classes
+// `landing-theme-action` que components/landing/Link.vue pour une qualité
+// visuelle strictement identique aux autres CTA landing (demande du
+// 29/08/2026 — l'install ne doit plus ressembler à une option accessoire).
+// `variant="secondary"` conservé pour un futur placement plus discret
+// (ex. carte Profil, jamais utilisé aujourd'hui) — jamais un remplacement du
+// CTA d'authentification, l'installation reste facultative.
+withDefaults(defineProps<{ variant?: "primary" | "secondary" }>(), { variant: "primary" });
+
 const { state: installState, showIosSheet, initialize, promptInstall, closeIosSheet } = usePwaInstall();
 
 onMounted(() => {
@@ -13,9 +17,16 @@ onMounted(() => {
 
 <template>
   <template v-if="installState !== 'hidden'">
-    <button type="button" class="pwa-install-button" @click="promptInstall">
-      <i class="pi pi-download" aria-hidden="true" />
-      <span>Installer l'application</span>
+    <button
+      type="button"
+      :class="variant === 'primary'
+        ? 'landing-theme-action landing-theme-action--primary rounded text-center transition border-2 px-5 py-2.5'
+        : 'pwa-install-button'"
+      @click="promptInstall"
+    >
+      <span class="inline-flex items-center justify-center gap-2 w-full">
+        <i class="pi pi-download" aria-hidden="true" />Installer l'application
+      </span>
     </button>
 
     <Dialog

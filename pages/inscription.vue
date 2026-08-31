@@ -121,6 +121,15 @@ const onPhoneInput = (event: Event) => {
   globalError.value = "";
 };
 
+// Ferme le clavier mobile avant l'ouverture du sélecteur de pays (demande du
+// 29/08/2026) : sur mobile, le Select PrimeVue ne vole pas nativement le
+// focus au clic (il gère son propre focus interne), donc le clavier restait
+// ouvert par-dessus le panneau pays sans ce blur() explicite. `before-show`
+// émet avant l'ouverture du panneau (voir node_modules/primevue/select),
+// donc le blur précède bien visuellement l'ouverture, jamais l'inverse.
+const phoneInputRef = ref<HTMLInputElement | null>(null);
+const blurPhoneInput = () => phoneInputRef.value?.blur();
+
 watch(selectedCode, () => {
   phoneLocal.value = "";
   errors.value.telephone = "";
@@ -365,6 +374,7 @@ const actionLabel = computed(() =>
                 option-value="iso2"
                 class="registration-country"
                 aria-label="Choisir l’indicatif du pays"
+                @before-show="blurPhoneInput"
               >
                 <template #value>
                   <span class="registration-country-value">
@@ -381,6 +391,7 @@ const actionLabel = computed(() =>
                 </template>
               </Select>
               <input
+                ref="phoneInputRef"
                 :value="phoneLocal"
                 type="tel"
                 inputmode="numeric"

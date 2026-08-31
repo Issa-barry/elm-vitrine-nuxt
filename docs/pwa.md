@@ -210,12 +210,17 @@ iOS (pas de bannière custom, pas de détection UA pour forcer un prompt).
 ### UX installation
 
 Bouton "Installer l'application" sur la landing mobile (`components/
-PwaInstallButton.vue`, sous le CTA principal "Mon espace"/"Connexion" dans
-`components/landing/Hero.vue` — jamais un remplacement, l'installation reste
-facultative), branché du 29/08/2026. Toute la détection plateforme/état vit
-dans `composables/usePwaInstall.ts` (accès navigateur) et
-`config/pwaInstall.ts` (logique pure, testable sans DOM — même convention que
-`config/webPush.ts`) :
+PwaInstallButton.vue`), branché du 29/08/2026, mis en avant comme CTA
+**principal** de la barre d'actions fixe (`components/landing/Hero.vue`)
+quand une installation est disponible — Mon espace/Connexion redescendent
+alors en `outline`, Inscription en `muted` (design déjà utilisé ailleurs sur
+la landing, `assets/css/main.css::.landing-theme-action--*`), jamais 3 gros
+boutons bleus concurrents. Sans installation disponible (déjà installée,
+navigateur non compatible), le bouton disparaît et la hiérarchie retombe
+telle qu'avant (Mon espace, ou Connexion primaire + Inscription outline) sans
+laisser de trou. Toute la détection plateforme/état vit dans
+`composables/usePwaInstall.ts` (accès navigateur) et `config/pwaInstall.ts`
+(logique pure, testable sans DOM — même convention que `config/webPush.ts`) :
 
 - **Déjà installée** (`display: standalone`, y compris `navigator.standalone`
   sur iOS) → bouton masqué.

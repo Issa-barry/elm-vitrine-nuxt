@@ -16,6 +16,10 @@ const RATE_LIMITED_LOCAL = "688888888";
 const UNAVAILABLE_LOCAL = "677777777";
 const CODE_VALID = "111111";
 const CODE_LOCKED = "000000";
+// OTP_TELEPHONE_SMS_CHANNEL / OTP_DESTINATION_MASKED_SMS du mock backend
+// (revue UX Nimba SMS + fallback email du 31/08/2026).
+const SMS_CHANNEL_LOCAL = "666666666";
+const SMS_DESTINATION_MASKED = "+224 6•• •• •• 66";
 
 async function gotoConnexion(page: Page) {
   await page.goto("/connexion", { waitUntil: "domcontentloaded" });
@@ -82,25 +86,32 @@ test.describe("Connexion — sans mot de passe par OTP", () => {
     await expect(page.getByPlaceholder("••••••••")).toBeVisible();
   });
 
-  test("Email est sélectionné par défaut, WhatsApp et SMS sont visibles mais désactivés", async ({ page }) => {
+  test("liste des canaux purement informative : SMS et Email affichés disponibles, WhatsApp affiché bientôt disponible, aucun n'est un bouton", async ({ page }) => {
     await gotoConnexion(page);
     await switchToOtp(page);
 
-    const email = page.getByRole("button", { name: /^Email/ });
-    const whatsapp = page.getByRole("button", { name: /^WhatsApp/ });
-    const sms = page.getByRole("button", { name: /^SMS/ });
+    const channels = page.locator(".connexion-otp-channels");
+    const email = channels.getByText("Email", { exact: true });
+    const whatsapp = channels.getByText("WhatsApp", { exact: true });
+    const sms = channels.getByText("SMS", { exact: true });
+
+    // Le contrat backend ne permet toujours pas de choisir un canal (voir
+    // config/auth.ts) : cette liste ne doit donc plus prétendre en offrir un
+    // — aucun de ces trois éléments n'est un <button>/role="button".
+    await expect(page.getByRole("button", { name: /^Email/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^WhatsApp/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^SMS/ })).toHaveCount(0);
 
     await expect(email).toBeVisible();
-    await expect(email).toHaveAttribute("aria-pressed", "true");
-    await expect(email).toBeEnabled();
-
-    await expect(whatsapp).toBeVisible();
-    await expect(whatsapp).toBeDisabled();
-    await expect(whatsapp.getByText("Bientôt")).toBeVisible();
-
     await expect(sms).toBeVisible();
-    await expect(sms).toBeDisabled();
-    await expect(sms.getByText("Bientôt")).toBeVisible();
+    await expect(whatsapp).toBeVisible();
+
+    // Nimba est configuré : SMS est réellement opérationnel aujourd'hui,
+    // contrairement à WhatsApp — seul WhatsApp porte encore "Bientôt".
+    await expect(channels.getByText("Bientôt disponible")).toHaveCount(1);
+    await expect(channels.locator(".connexion-otp-channel", { hasText: "WhatsApp" })).toContainText("Bientôt disponible");
+    await expect(channels.locator(".connexion-otp-channel", { hasText: "SMS" })).not.toContainText("Bientôt disponible");
+    await expect(channels.locator(".connexion-otp-channel", { hasText: "Email" })).not.toContainText("Bientôt disponible");
   });
 
   test("le gros header (logo + Connexion + Eau la maman) disparaît en mode OTP", async ({ page }) => {
@@ -227,5 +238,108 @@ test.describe("Connexion — sans mot de passe par OTP", () => {
 
     await expect(page.getByRole("button", { name: "Recevoir le code" })).toBeVisible();
     await expect(page.getByLabel("Numéro de téléphone")).toHaveValue(TEST_TELEPHONE_LOCAL);
+  });
+
+  // ── Revue UX Nimba SMS + fallback email automatique (31/08/2026) ─────────
+  test.describe("channel=sms : formulation prudente (Nimba est asynchrone, fallback email géré côté backend)", () => {
+    test("téléphone affiché, jamais une affirmation de livraison, mention du fallback email", async ({ page }) => {
+      await gotoConnexion(page);
+      await switchToOtp(page);
+      await fillPhone(page, SMS_CHANNEL_LOCAL);
+
+      await page.getByRole("button", { name: "Recevoir le code" }).click();
+
+      await expect(page.getByRole("heading", { name: "Envoi de votre code par SMS" })).toBeVisible({ timeout: 10_000 });
+      const destination = page.locator(".connexion-otp-destination");
+      await expect(destination).toHaveText(`Nous envoyons votre code par SMS au ${SMS_DESTINATION_MASKED}.`);
+
+      // Jamais une affirmation de livraison certaine pour un canal
+      // asynchrone sur la ligne PRINCIPALE — "envoyé"/"avec succès" ne
+      // doivent apparaître nulle part dedans (le complément de secours
+      // ci-dessous mentionne légitimement "envoyé", mais à propos de
+      // l'email de secours, jamais du SMS lui-même).
+      await expect(destination).not.toContainText(/envoyé/i);
+      await expect(destination).not.toContainText(/avec succès/i);
+
+      // Complément de secours rassurant, jamais présenté comme une erreur —
+      // une seule information secondaire, pas d'alerte en plus.
+      await expect(page.getByText("En cas de problème avec le SMS, le code peut être envoyé par email si une adresse est enregistrée sur votre compte.")).toBeVisible();
+      await expect(page.getByRole("alert")).toHaveCount(0);
+    });
+
+    test("verify réutilise le même contrat (device_name, code à 6 chiffres) : parcours complet jusqu'à l'espace client", async ({ page }) => {
+      await gotoConnexion(page);
+      await switchToOtp(page);
+      await fillPhone(page, SMS_CHANNEL_LOCAL);
+      await page.getByRole("button", { name: "Recevoir le code" }).click();
+      await expect(page.getByRole("heading", { name: "Envoi de votre code par SMS" })).toBeVisible({ timeout: 10_000 });
+
+      // Le mock backend n'accepte le code valide que pour TEST_TELEPHONE ;
+      // ce test ne vérifie donc que la présentation de l'écran de saisie
+      // (champ, bouton, formulation) reste correcte pour ce canal, pas une
+      // connexion réussie avec ce numéro dédié.
+      await expect(page.locator(".connexion-otp-code-field input").first()).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByRole("button", { name: "Valider et se connecter" })).toBeVisible();
+    });
+  });
+
+  test("aucune mention du canal choisi/tenté n'est envoyée par le front : le corps de la requête ne contient que telephone", async ({ page }) => {
+    await gotoConnexion(page);
+    await switchToOtp(page);
+    await fillPhone(page, TEST_TELEPHONE_LOCAL);
+
+    const [request] = await Promise.all([
+      page.waitForRequest((req) => req.url().includes("/api/auth/otp-login/request") && req.method() === "POST"),
+      page.getByRole("button", { name: "Recevoir le code" }).click(),
+    ]);
+
+    expect(Object.keys(request.postDataJSON())).toEqual(["telephone"]);
+  });
+
+  test("double-clic sur \"Recevoir le code\" : une seule requête POST envoyée", async ({ page }) => {
+    await gotoConnexion(page);
+    await switchToOtp(page);
+    await fillPhone(page, TEST_TELEPHONE_LOCAL);
+
+    let requestCount = 0;
+    await page.route("**/api/auth/otp-login/request", async (route) => {
+      requestCount += 1;
+      await route.continue();
+    });
+
+    // Deux clics natifs déclenchés dans la même tâche synchrone (jamais deux
+    // appels .click() de Playwright séparés, qui ne reproduisent pas de façon
+    // fiable la course réelle d'un double-clic) : reproduit fidèlement le cas
+    // qu'empêche la garde de composables/useOtpLogin.ts::requestCode().
+    await page.getByRole("button", { name: "Recevoir le code" }).evaluate((el: HTMLElement) => {
+      (el as HTMLButtonElement).click();
+      (el as HTMLButtonElement).click();
+    });
+
+    await expect(page.getByRole("heading", { name: "Vérifiez votre email" })).toBeVisible({ timeout: 10_000 });
+    expect(requestCount).toBe(1);
+  });
+
+  test("double-clic sur \"Valider et se connecter\" : une seule requête POST envoyée", async ({ page }) => {
+    await gotoConnexion(page);
+    await switchToOtp(page);
+    await fillPhone(page, TEST_TELEPHONE_LOCAL);
+    await page.getByRole("button", { name: "Recevoir le code" }).click();
+    await expect(page.getByRole("heading", { name: "Vérifiez votre email" })).toBeVisible({ timeout: 10_000 });
+    await fillOtpCode(page, CODE_VALID);
+
+    let requestCount = 0;
+    await page.route("**/api/auth/otp-login/verify", async (route) => {
+      requestCount += 1;
+      await route.continue();
+    });
+
+    await page.getByRole("button", { name: "Valider et se connecter" }).evaluate((el: HTMLElement) => {
+      (el as HTMLButtonElement).click();
+      (el as HTMLButtonElement).click();
+    });
+
+    await expect(page).toHaveURL(/\/espace-client$/, { timeout: 10_000 });
+    expect(requestCount).toBe(1);
   });
 });
