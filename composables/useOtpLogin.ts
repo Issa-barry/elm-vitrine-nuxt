@@ -1,5 +1,5 @@
 import type { AuthErrorInfo, OtpChannel, OtpLoginRequestResponse } from "~/config/auth";
-import { normalizeAuthError } from "~/config/auth";
+import { normalizeAuthError, otpFriendlyErrorMessage } from "~/config/auth";
 
 // Machine à états de la connexion sans mot de passe par OTP (chantier du
 // 27/08/2026, voir pages/connexion.vue) — un seul `phase` (pas une
@@ -74,6 +74,14 @@ export function useOtpLogin() {
   // effet : un nouveau code, un nouveau cooldown). `telephone` déjà normalisé
   // (E.164) par l'appelant, voir pages/connexion.vue.
   async function requestCode(telephone: string): Promise<boolean> {
+    // Garde interne (pas seulement l'attribut `disabled` du template) : ce
+    // composable a deux points d'appel dans pages/connexion.vue ("Recevoir le
+    // code" ET "Renvoyer le code", ce dernier n'étant désactivé QUE par
+    // cooldownRemaining, pas par une requête déjà en vol) — sans cette garde,
+    // un double-clic sur "Renvoyer" pendant l'envoi précédent (avant que la
+    // réponse ne relance le cooldown) déclenchait 2 requêtes concurrentes.
+    if (phase.value === "sending") return false;
+
     phase.value = "sending";
     error.value = null;
     try {
@@ -88,7 +96,10 @@ export function useOtpLogin() {
       return true;
     } catch (err) {
       const info = normalizeAuthError(err);
-      error.value = info;
+      // otpFriendlyErrorMessage() ne réécrit que les pannes 5xx/réseau (voir
+      // config/auth.ts) : les messages 404/429/503/422 ci-dessous, déjà
+      // pensés pour l'utilisateur par le backend, traversent inchangés.
+      error.value = { ...info, message: otpFriendlyErrorMessage(info) };
 
       if (info.status === 404) {
         phase.value = "not_found";
@@ -120,7 +131,11 @@ export function useOtpLogin() {
       return result;
     }
 
-    error.value = result.error;
+    // Même repli que requestCode() : jamais une trace 5xx/réseau brute pour
+    // l'utilisateur (voir config/auth.ts::otpFriendlyErrorMessage) — le 422
+    // "Code incorrect ou expiré." et le 429 de verrouillage ci-dessous, déjà
+    // pensés pour l'utilisateur, traversent inchangés.
+    error.value = { ...result.error, message: otpFriendlyErrorMessage(result.error) };
 
     if (result.error.status === 429) {
       // Verrouillé après 5 essais (OtpService::tooManyAttempts côté backend) :
