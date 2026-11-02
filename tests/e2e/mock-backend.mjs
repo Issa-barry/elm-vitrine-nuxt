@@ -336,7 +336,8 @@ const TEST_VEHICLES = [
     conducteur: "Mamadou Diallo",
     proprietaire: { id: "prop-1", nom_complet: "Issa Barry", telephone: "+224620010203" },
     equipe: [
-      { id: "liv-1", nom_complet: "Mamadou Diallo", telephone: "+224620111222", role: "chauffeur", ordre: 0 },
+      // Désignation provisoire du back-office : l'écran doit afficher prénom + nom.
+      { id: "liv-1", nom_complet: "Chauffeur-1", prenom: "Mamadou", nom: "Diallo", telephone: "+224620111222", role: "chauffeur", ordre: 0 },
       { id: "liv-2", nom_complet: "Ibrahima Sow", telephone: "+224620333444", role: "convoyeur", ordre: 1 },
     ],
     capacites: [

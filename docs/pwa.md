@@ -164,18 +164,42 @@ branchement réel de l'auth.
 
 ## Mise à jour
 
-`registerType: "prompt"` (pas `autoUpdate`) : un nouveau déploiement
-n'écrase jamais silencieusement le JS en cours d'exécution. Quand un nouveau
-service worker est prêt, `components/PwaUpdatePrompt.vue` affiche un bandeau
-discret « Nouvelle version disponible — Mettre à jour », piloté par
-`usePWA().needRefresh` (composable exposé par `@vite-pwa/nuxt`). Le clic
-appelle `updateServiceWorker(true)`, qui active le nouveau service worker et
-recharge la page. Sans action de l'utilisateur, l'ancienne version continue
-de fonctionner normalement (pas de rupture forcée en plein usage).
+Depuis le 02/11/2026 (décision explicite) : plus de bandeau « Nouvelle version
+disponible », aucun clic demandé et aucun rechargement pendant une saisie. Le
+mode `prompt` précédent demandait un clic à chaque déploiement, alors que le
+service worker ne sert jamais le HTML (`navigateFallback: null`) : une page
+ouverte après un déploiement exécutait déjà le nouveau code.
 
-Pas de bandeau au premier chargement : `needRefresh` ne devient vrai que
-lorsqu'un service worker plus récent est effectivement en attente, jamais à
-l'installation initiale.
+| Situation | Ce qui se passe |
+|---|---|
+| Page ouverte après un déploiement | HTML et JS récents viennent du réseau. Le nouveau service worker s'active en arrière-plan (`skipWaiting`), sans rechargement. |
+| Onglet resté ouvert pendant un déploiement | Il garde l'ancienne version sans interruption. Nuxt vérifie `/_nuxt/builds/latest.json` toutes les heures (`experimental.checkOutdatedBuildInterval`) et, si la version a changé, recharge au **prochain changement de page** (`chunk-reload.client`). |
+| Ancien fichier JS introuvable lors d'un changement de page | Nuxt recharge sur la page demandée (`emitRouteChunkError: "automatic"`, valeur par défaut). |
+
+Le service worker est enregistré par `plugins/pwa-register.client.ts` et non
+par le plugin de `@vite-pwa/nuxt` (`client.registerPlugin: false`). Ce dernier
+s'appuie sur `workbox-window`, qui recharge la page dès qu'un nouveau service
+worker prend le contrôle : `registerType: "autoUpdate"` seul effacerait donc
+une saisie en cours (code OTP, inscription...). Ne pas le réactiver sans
+re-vérifier ce point. Conséquence : `usePWA()` et `$pwa` ne sont plus
+disponibles, utiliser `navigator.serviceWorker` directement.
+
+Limite : tant que l'utilisateur ne change pas de page et ne recharge pas, un
+onglet ouvert reste sur l'ancienne version. Une évolution d'API doit donc
+rester compatible avec le JS de la version précédente le temps de la transition.
+
+Autre limite : Nitro répond `304` à `/sw.js` si la date du build servi n'est pas
+plus récente que celle du service worker installé. Après un retour à un build
+plus ancien, le service worker en place reste donc actif jusqu'au build suivant.
+Les pages restent servies par le réseau, donc dans la version redéployée.
+
+Vérifié le 02/11/2026 sous Chromium, sur de vrais builds successifs servis par
+`.output/server/index.mjs` : pas de bandeau ni de rechargement à la réouverture,
+saisie conservée dans un onglet ouvert pendant un déploiement (y compris un
+onglet encore sur l'ancien code à bandeau), rechargement au changement de page
+après la vérification horaire, et rechargement sur la page demandée quand un
+ancien fichier JS manque. Non vérifié : Safari iOS et Android réel, à contrôler
+après déploiement sur `test.eau-la-maman.com`.
 
 ## Installation
 

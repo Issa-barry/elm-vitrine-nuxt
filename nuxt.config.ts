@@ -40,10 +40,15 @@ export default defineNuxtConfig({
   },
   modules: ["nuxt-icon", "@primevue/nuxt-module", "@nuxt/eslint", "@vite-pwa/nuxt"],
   pwa: {
-    // Prompt maîtrisé (voir components/PwaUpdatePrompt.vue) : jamais de
-    // rechargement silencieux qui mélangerait un ancien JS avec un nouveau
-    // backend, jamais l'inverse non plus.
-    registerType: "prompt",
+    // Mise à jour sans clic ni rechargement forcé (voir docs/pwa.md § mise à
+    // jour) : le nouveau service worker s'active seul (skipWaiting, plus bas),
+    // et le plugin d'enregistrement du module est remplacé par
+    // plugins/pwa-register.client.ts, car le sien recharge la page sans
+    // condition, même pendant une saisie.
+    registerType: "autoUpdate",
+    client: {
+      registerPlugin: false,
+    },
     // Le manifest est servi dynamiquement par
     // server/routes/manifest.webmanifest.ts (même artefact .output réutilisable
     // sur plusieurs environnements Hostinger, voir docs/environment.md) : on
@@ -56,6 +61,8 @@ export default defineNuxtConfig({
       // mise en cache — voir docs/pwa.md § politique de cache.
       navigateFallback: null,
       cleanupOutdatedCaches: true,
+      skipWaiting: true,
+      clientsClaim: true,
       // Web Push (chantier du 28/08/2026, voir docs/pwa.md § Web Push) :
       // ajoute les listeners push/notificationclick (public/push-sw.js) au
       // service worker généré par Workbox, SANS migrer generateSW ->
