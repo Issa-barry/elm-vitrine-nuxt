@@ -21,5 +21,4 @@ useHead({
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>
-  <PwaUpdatePrompt />
 </template>
