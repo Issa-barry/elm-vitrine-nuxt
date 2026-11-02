@@ -1,7 +1,9 @@
 import type {
   ClientProfile,
+  ClientProfileEmailConfirmation,
   ClientProfileResponse,
-  UpdateClientProfileLocalisationPayload,
+  UpdateClientProfilePayload,
+  UpdateClientProfileResponse,
   UpdateNotificationPreferencesResponse,
 } from "~/config/clientProfile";
 import type { AuthErrorInfo } from "~/config/auth";
@@ -12,7 +14,9 @@ import { normalizeAuthError } from "~/config/auth";
 // fusionner : voir config/clientProfile.ts.
 export function useClientProfile() {
   const profile = useState<ClientProfile | null>("client:profile", () => null);
+  const paysDisponibles = useState<string[]>("client:profile:paysDisponibles", () => []);
   const isLoading = useState<boolean>("client:profile:loading", () => false);
+  const isSavingIdentity = useState<boolean>("client:profile:savingIdentity", () => false);
   const isSavingLocalisation = useState<boolean>("client:profile:savingLocalisation", () => false);
   const isSavingNotifications = useState<boolean>("client:profile:savingNotifications", () => false);
   const error = useState<AuthErrorInfo | null>("client:profile:error", () => null);
@@ -27,6 +31,8 @@ export function useClientProfile() {
     try {
       const data = await requestFetch<ClientProfileResponse>("/api/client/profile");
       profile.value = data.profile;
+      // Repli : une API pas encore à jour ne doit pas faire planter l'écran.
+      paysDisponibles.value = data.pays_disponibles ?? [];
       return true;
     } catch (fetchError) {
       error.value = normalizeAuthError(fetchError);
@@ -37,20 +43,38 @@ export function useClientProfile() {
     }
   }
 
-  // Seuls pays/code_pays/ville/adresse sont acceptés par le backend (voir
-  // config/clientProfile.ts) — n'envoie jamais autre chose, même si l'appelant
-  // en fournit par erreur : le type du paramètre l'empêche déjà à la
-  // compilation.
+  async function patchProfile(payload: UpdateClientProfilePayload): Promise<UpdateClientProfileResponse> {
+    const data = await requestFetch<UpdateClientProfileResponse>("/api/client/profile", {
+      method: "PATCH",
+      body: payload,
+    });
+    profile.value = data.profile;
+    paysDisponibles.value = data.pays_disponibles ?? [];
+    return data;
+  }
+
+  // prenom/nom sont appliqués tout de suite, l'e-mail seulement après ouverture
+  // du lien reçu : `emailConfirmation` dit à l'écran quoi annoncer.
+  async function updateIdentity(
+    payload: Pick<UpdateClientProfilePayload, "prenom" | "nom" | "email">,
+  ): Promise<{ ok: true; emailConfirmation: ClientProfileEmailConfirmation | null } | { ok: false; error: AuthErrorInfo }> {
+    isSavingIdentity.value = true;
+    try {
+      const data = await patchProfile(payload);
+      return { ok: true, emailConfirmation: data.email_confirmation };
+    } catch (fetchError) {
+      return { ok: false, error: normalizeAuthError(fetchError) };
+    } finally {
+      isSavingIdentity.value = false;
+    }
+  }
+
   async function updateLocalisation(
-    payload: UpdateClientProfileLocalisationPayload,
+    payload: Pick<UpdateClientProfilePayload, "pays" | "ville" | "adresse">,
   ): Promise<{ ok: true } | { ok: false; error: AuthErrorInfo }> {
     isSavingLocalisation.value = true;
     try {
-      const data = await requestFetch<ClientProfileResponse>("/api/client/profile", {
-        method: "PATCH",
-        body: payload,
-      });
-      profile.value = data.profile;
+      await patchProfile(payload);
       return { ok: true };
     } catch (fetchError) {
       const info = normalizeAuthError(fetchError);
@@ -87,11 +111,14 @@ export function useClientProfile() {
 
   return {
     profile,
+    paysDisponibles,
     isLoading,
+    isSavingIdentity,
     isSavingLocalisation,
     isSavingNotifications,
     error,
     fetchProfile,
+    updateIdentity,
     updateLocalisation,
     updateNotificationPreference,
   };

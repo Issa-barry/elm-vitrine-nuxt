@@ -107,6 +107,17 @@ export function useAuth() {
     }
   }
 
+  // Recharge l'identité après une modification du profil. Pas refreshMe() : un
+  // /me qui échoue ici (blip réseau) ne doit pas faire perdre la session, même
+  // raison que dans completeLogin() plus bas.
+  async function reloadUser(): Promise<void> {
+    try {
+      applyMe(await requestFetch<MeResponse>("/api/auth/me"));
+    } catch {
+      // user reste celui déjà affiché, corrigé au prochain chargement.
+    }
+  }
+
   // Idempotent : à appeler depuis un garde de route (middleware/auth.ts,
   // middleware/guest.ts) sans provoquer un appel réseau à chaque navigation
   // une fois le statut déjà connu pour ce cycle serveur/client.
@@ -250,6 +261,7 @@ export function useAuth() {
     hasClientAccess,
     ensureFetched,
     refreshMe,
+    reloadUser,
     login,
     loginWithOtp,
     logout,

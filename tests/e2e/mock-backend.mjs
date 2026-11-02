@@ -249,11 +249,19 @@ const profileState = {
   notifications: { activite: true },
 };
 
+const PAYS_DISPONIBLES = ["Guinée", "Sénégal", "Mali", "France"];
+
+const profileResponse = () => ({
+  user: { id: TEST_USER.id, telephone: TEST_USER.telephone, email: TEST_USER.email },
+  profile: profileState,
+  pays_disponibles: PAYS_DISPONIBLES,
+});
+
 router.get(
   "/api/v1/mobile/profile",
   defineEventHandler((event) => {
     requireTestToken(event);
-    return { user: { id: TEST_USER.id, telephone: TEST_USER.telephone, email: TEST_USER.email }, profile: profileState };
+    return profileResponse();
   }),
 );
 
@@ -261,12 +269,38 @@ router.patch(
   "/api/v1/mobile/profile",
   defineEventHandler(async (event) => {
     requireTestToken(event);
-    const body = await readBody(event);
-    // Même filtre que UpdateProfileRequest côté backend : seuls ces 4 champs.
-    for (const key of ["pays", "code_pays", "ville", "adresse"]) {
-      if (key in (body || {})) profileState.localisation[key] = body[key];
+    const body = (await readBody(event)) || {};
+
+    // Même filtre et mêmes refus que UpdateProfileRequest côté backend.
+    const errors = {};
+    for (const key of ["prenom", "nom"]) {
+      if (key in body && !String(body[key] ?? "").trim()) errors[key] = [`Le champ ${key} est obligatoire.`];
     }
-    return { user: { id: TEST_USER.id, telephone: TEST_USER.telephone, email: TEST_USER.email }, profile: profileState };
+    if ("email" in body && !String(body.email ?? "").trim()) errors.email = ["Saisissez une adresse e-mail."];
+    if (body.email === "prise@example.com") errors.email = ["Cette adresse e-mail est déjà utilisée."];
+    if ("pays" in body && !PAYS_DISPONIBLES.includes(body.pays)) errors.pays = ["Sélectionnez un pays dans la liste."];
+    if (Object.keys(errors).length > 0) {
+      // Corps plat, comme une vraie réponse 422 de Laravel.
+      setResponseStatus(event, 422);
+      return { message: "Données invalides.", errors };
+    }
+
+    for (const key of ["prenom", "nom"]) {
+      if (key in body) {
+        TEST_USER[key] = body[key];
+        profileState.identite[key] = body[key];
+      }
+    }
+    for (const key of ["pays", "ville", "adresse"]) {
+      if (key in body) profileState.localisation[key] = body[key];
+    }
+
+    // L'adresse ne change qu'à l'ouverture du lien : jamais dans ce PATCH.
+    const emailChange = "email" in body && body.email !== TEST_USER.email;
+    return {
+      ...profileResponse(),
+      email_confirmation: emailChange ? { adresse: body.email, envoyee: body.email !== "smtp-ko@example.com" } : null,
+    };
   }),
 );
 

@@ -267,6 +267,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/confirm-email/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["auth.confirm-email"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/mobile/web-push/vapid-public-key": {
         parameters: {
             query?: never;
@@ -662,14 +678,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Aucun champ `siret`/identifiant légal (absent du modèle ELM, ne jamais l'inventer côté frontend). Aucun champ "quartier" séparé — seuls `pays`, `ville`, `adresse` existent, un quartier doit être saisi dans `adresse` en texte libre. `profile` vaut `null` si le rôle est présent mais qu'aucune fiche métier n'est réellement rattachée (cas limite). Seuls `pays`/`code_pays`/`ville`/`adresse` sont modifiables via `PATCH` — voir cet endpoint pour le détail exact. */
+        /** @description Aucun champ `siret`/identifiant légal (absent du modèle ELM, ne jamais l'inventer côté frontend). Aucun champ "quartier" séparé — seuls `pays`, `ville`, `adresse` existent, un quartier doit être saisi dans `adresse` en texte libre. `profile` vaut `null` si le rôle est présent mais qu'aucune fiche métier n'est réellement rattachée (cas limite). `pays_disponibles` liste les pays sélectionnables. Les champs modifiables sont détaillés sur le `PATCH` de cette route. */
         get: operations["client.profile.mine"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Seuls `pays`, `code_pays`, `ville`, `adresse` sont modifiables ici (tous optionnels, seuls les champs envoyés sont modifiés). **Volontairement non modifiables par ce endpoint** (silencieusement ignorés si envoyés) : `nom`/`prenom`/`surnom` (identité civile), `telephone`/`email` (identifiants de connexion, unicité par organisation à revalider), `raison_sociale`/`type` (identité légale), `actif` (jamais en self-service) — réservés au backoffice. `404` si aucun profil n'est rattaché au compte. */
+        /** @description Tous les champs sont optionnels, seuls les champs envoyés sont modifiés. `prenom`/`nom` : appliqués immédiatement, ne peuvent pas être vidés. `email` : appliqué seulement à l'ouverture du lien envoyé à la nouvelle adresse (valable 24 h) ; `email_confirmation` indique l'adresse concernée et si l'envoi a réussi, `null` sans demande. `pays` : un libellé de `pays_disponibles`. **Non modifiables** (silencieusement ignorés si envoyés) : `telephone`, `code_pays`, `code_phone_pays`, `surnom`, `raison_sociale`, `type`, `actif`. `404` si la localisation est envoyée sans fiche métier rattachée. */
         patch: operations["client.profile.update"];
         trace?: never;
     };
@@ -1060,18 +1076,19 @@ export interface components {
         };
         /**
          * UpdateProfileRequest
-         * @description Champs modifiables par le titulaire du compte lui-même — uniquement la
-         *     localisation. Volontairement exclus (décision du 26/08/2026, cf. rapport) :
-         *     nom/prenom (identité civile), telephone/email (identifiants de connexion,
-         *     unicité par organisation à revalider), raison_sociale/type (identité légale)
-         *     et is_active (jamais en self-service) — ces champs restent réservés au
-         *     backoffice, cohérent avec la séparation déjà en place partout ailleurs dans
-         *     l'application entre édition "propriétaire" (self-service) et édition "staff"
-         *     (ProprietaireController, ClientController...).
+         * @description Champs modifiables par le titulaire du compte lui-même (ADR 0051) : prénom, nom,
+         *     e-mail (appliqué après confirmation par lien) et localisation. Le pays est un
+         *     libellé choisi dans une liste fermée. Volontairement exclus : telephone (identifiant
+         *     de connexion), code_pays/code_phone_pays (recomposent le téléphone dans les
+         *     formulaires du back-office), raison_sociale/type (identité légale) et is_active.
          */
         UpdateProfileRequest: {
-            pays?: string | null;
-            code_pays?: string | null;
+            prenom?: string;
+            nom?: string;
+            /** Format: email */
+            email?: string;
+            /** @enum {string|null} */
+            pays?: "Guinée" | "Guinée-Bissau" | "Sénégal" | "Mali" | "Côte d'Ivoire" | "Liberia" | "Sierra Leone" | "France" | "Chine" | "Émirats arabes unis" | "Inde" | "Canada" | "Autriche" | "Belgique" | "Bulgarie" | "Croatie" | "Tchéquie" | "Danemark" | "Estonie" | "Finlande" | "Allemagne" | "Grèce" | "Hongrie" | "Islande" | "Italie" | "Lettonie" | "Liechtenstein" | "Lituanie" | "Luxembourg" | "Malte" | "Pays-Bas" | "Norvège" | "Pologne" | "Portugal" | "Roumanie" | "Slovaquie" | "Slovénie" | "Espagne" | "Suède" | "Suisse" | null;
             ville?: string | null;
             adresse?: string | null;
         };
@@ -1873,6 +1890,27 @@ export interface operations {
                         /** @constant */
                         error: "Trop de tentatives. Demandez un nouveau code.";
                     };
+                };
+            };
+        };
+    };
+    "auth.confirm-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
                 };
             };
         };
