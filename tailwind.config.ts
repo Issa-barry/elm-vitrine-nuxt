@@ -1,7 +1,10 @@
 import defaultTheme from "tailwindcss/defaultTheme";
+import typography from "@tailwindcss/typography";
+import PrimeUI from "tailwindcss-primeui";
 
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: ["selector", '[class~="app-dark"]'],
   content: [
     "./components/**/*.{js,vue,ts}",
     "./layouts/**/*.vue",
@@ -17,5 +20,5 @@ export default {
       },
     },
   },
-  plugins: [require("@tailwindcss/typography")],
+  plugins: [typography, PrimeUI],
 };

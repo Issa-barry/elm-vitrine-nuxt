@@ -14,7 +14,7 @@ onMounted(() => {
     const object = Object.fromEntries(formData);
     const json = JSON.stringify(object);
 
-    result.innerHTML = "Sending...";
+    result.innerHTML = "Envoi en cours...";
 
     fetch("https://api.web3forms.com/submit", {
       method: "POST",
@@ -25,7 +25,7 @@ onMounted(() => {
       body: json,
     })
       .then(async (response) => {
-        let json = await response.json();
+        const json = await response.json();
         if (response.status == 200) {
           result.classList.add("text-green-500");
           result.innerHTML = json.message;
@@ -37,7 +37,7 @@ onMounted(() => {
       })
       .catch((error) => {
         console.log(error);
-        result.innerHTML = "Something went wrong!";
+        result.innerHTML = "Une erreur est survenue !";
       })
       .then(function () {
         form.reset();
@@ -54,62 +54,62 @@ onMounted(() => {
   <!-- To make this contact form work, create your free access key from https://web3forms.com/
      Then you will get all form submissions in your email inbox. -->
   <form
+    id="form"
     action="https://api.web3forms.com/submit"
     method="POST"
-    id="form"
     class="needs-validation"
     novalidate
   >
-    <input type="hidden" name="access_key" value="YOUR_ACCESS_KEY_HERE" />
+    <input type="hidden" name="access_key" value="YOUR_ACCESS_KEY_HERE" >
     <!-- Create your free access key from https://web3forms.com/ -->
     <input
       type="checkbox"
       class="hidden"
       style="display: none"
       name="botcheck"
-    />
+    >
     <div class="mb-5">
       <input
         type="text"
-        placeholder="Full Name"
+        placeholder="Nom complet"
         required
         class="w-full px-4 py-3 border-2 placeholder:text-gray-800 rounded-md outline-none focus:ring-4 border-gray-300 focus:border-gray-600 ring-gray-100"
         name="name"
-      />
+      >
       <div class="empty-feedback invalid-feedback text-red-400 text-sm mt-1">
-        Please provide your full name.
+        Merci d'indiquer votre nom complet.
       </div>
     </div>
     <div class="mb-5">
-      <label for="email_address" class="sr-only">Email Address</label
+      <label for="email_address" class="sr-only">Adresse e-mail</label
       ><input
         id="email_address"
         type="email"
-        placeholder="Email Address"
+        placeholder="Adresse e-mail"
         name="email"
         required
         class="w-full px-4 py-3 border-2 placeholder:text-gray-800 rounded-md outline-none focus:ring-4 border-gray-300 focus:border-gray-600 ring-gray-100"
-      />
+      >
       <div class="empty-feedback text-red-400 text-sm mt-1">
-        Please provide your email address.
+        Merci d'indiquer votre adresse e-mail.
       </div>
       <div class="invalid-feedback text-red-400 text-sm mt-1">
-        Please provide a valid email address.
+        Merci d'indiquer une adresse e-mail valide.
       </div>
     </div>
     <div class="mb-3">
       <textarea
         name="message"
         required
-        placeholder="Your Message"
+        placeholder="Votre message"
         class="w-full px-4 py-3 border-2 placeholder:text-gray-800 rounded-md outline-none h-36 focus:ring-4 border-gray-300 focus:border-gray-600 ring-gray-100"
-      ></textarea>
+      />
       <div class="empty-feedback invalid-feedback text-red-400 text-sm mt-1">
-        Please enter your message.
+        Merci de saisir votre message.
       </div>
     </div>
-    <LandingButton type="submit" size="lg" block>Send Message</LandingButton>
-    <div id="result" class="mt-3 text-center"></div>
+    <LandingButton type="submit" size="lg" block>Envoyer le message</LandingButton>
+    <div id="result" class="mt-3 text-center"/>
   </form>
 </template>
 

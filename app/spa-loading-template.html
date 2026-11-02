@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Eau La Maman</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --elm-bg: #f8fafc;
+        --elm-text: #64748b;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --elm-bg: #0f172a;
+          --elm-text: #94a3b8;
+        }
+      }
+
+      html,
+      body {
+        height: 100%;
+        margin: 0;
+      }
+
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        min-height: 100dvh;
+        background: var(--elm-bg);
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
+      }
+
+      .elm-loading-mark {
+        width: 4.5rem;
+        height: 4.5rem;
+        border-radius: 1.1rem;
+        box-shadow: 0 0.75rem 2rem rgba(15, 23, 42, 0.14);
+      }
+
+      .elm-loading-label {
+        color: var(--elm-text);
+        font-size: 0.9rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .elm-loading-mark {
+          animation: elm-pulse 1.8s ease-in-out infinite;
+        }
+      }
+
+      @keyframes elm-pulse {
+        0%,
+        100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.72;
+          transform: scale(0.94);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <img class="elm-loading-mark" src="/logo_grand.png" alt="" />
+    <span class="elm-loading-label">Eau La Maman</span>
+  </body>
+</html>

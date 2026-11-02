@@ -1,0 +1,50 @@
+name: ci
+
+# Contrôle qualité bloquant sur toute PR touchant une branche du flux de
+# promotion (dev -> pre-prod -> production -> main). Le déploiement reste
+# géré nativement par Hostinger (intégration Git côté panneau) : ce workflow
+# ne fait que garder la CI/CD honnête — voir AGENTS.md.
+on:
+  pull_request:
+    branches:
+      - dev
+      - pre-prod
+      - production
+      - main
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      # --legacy-peer-deps nécessaire depuis Nuxt 3.21.x : le sous-arbre
+      # @nuxt/devtools -> vite-plugin-vue-tracer déclare des peerDependencies
+      # sur vite conflictuelles avec @nuxt/vite-builder (versions différentes
+      # de vite selon le consommateur). En résolution stricte, npm 10 plante
+      # avec « Cannot read properties of null (reading 'edgesOut') » — bug
+      # d'Arborist reproduit à la fois sur Windows et sur ubuntu-latest, pas
+      # un problème d'environnement. Le lock a été généré avec le même flag
+      # (voir docs/nuxt-3.21-migration.md) ; sans lui, `npm ci` refuserait le
+      # lock (résolution stricte ≠ résolution ayant produit le lock).
+      - name: Install dependencies
+        run: npm ci --legacy-peer-deps
+
+      - name: Lint (ESLint)
+        run: npm run lint
+
+      - name: Typecheck (nuxt typecheck)
+        run: npm run typecheck
+
+      - name: Unit tests (Vitest)
+        run: npm run test
+
+      - name: Build (nuxt build)
+        run: npm run build

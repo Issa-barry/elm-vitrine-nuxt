@@ -1,0 +1,24 @@
+.elm-client-shell {
+  .clearfix::after {
+    display: block;
+    clear: both;
+    content: " ";
+  }
+
+  .card {
+    padding: 2rem;
+    margin-bottom: 2rem;
+    background: var(--surface-card);
+    border-radius: var(--content-border-radius);
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  .p-toast.p-toast-top-right,
+  .p-toast.p-toast-top-left,
+  .p-toast.p-toast-top-center {
+    top: 100px;
+  }
+}
