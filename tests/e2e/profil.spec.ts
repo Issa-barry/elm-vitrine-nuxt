@@ -43,6 +43,24 @@ test.describe("Espace client — profil", () => {
     expect(errors).toEqual([]);
   });
 
+  // Régression 02/11 : le panneau mobile affichait "Issa M." pour tous les comptes.
+  test("le panneau de profil mobile affiche le compte connecté", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginAsTestUser(page);
+    await page.goto("/espace-client", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(1000);
+
+    await page.getByRole("button", { name: "Ouvrir mon profil et mes paramètres" }).click();
+
+    const panel = page.locator(".client-mobile-profile-identity-info");
+    await expect(panel.getByText("Test E2E", { exact: true })).toBeVisible({ timeout: 10_000 });
+    await expect(panel.getByText("Propriétaire", { exact: true })).toBeVisible();
+    await expect(panel.getByText("+224 601 02 03 04", { exact: true })).toBeVisible();
+    await expect(page.getByText("Issa M.")).toHaveCount(0);
+    await expect(page.getByText("+224 622 60 26 93")).toHaveCount(0);
+  });
+
   test("modifie la localisation réellement (PATCH /v1/mobile/profile)", async ({ page }) => {
     await loginAsTestUser(page);
     await page.goto("/espace-client/profil", { waitUntil: "domcontentloaded", timeout: 30_000 });

@@ -7,6 +7,30 @@ import { loginAsTestUser } from "./helpers";
 test.describe("Espace client — dépenses", () => {
   test.describe.configure({ timeout: 90_000 });
 
+  test("le lien Dépenses du menu bas (mobile) ouvre la page", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginAsTestUser(page);
+
+    await page.locator(".client-mobile-bottom-nav").getByRole("link", { name: "Dépenses" }).click();
+    await expect(page).toHaveURL(/\/espace-client\/depenses$/);
+    await expect(page).toHaveTitle(/Dépenses/);
+  });
+
+  test("le menu bas à 5 onglets ne déborde pas sur un petit écran (320px)", async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await loginAsTestUser(page);
+
+    const items = page.locator(".client-mobile-bottom-nav .client-mobile-nav-item");
+    await expect(items).toHaveCount(5);
+    for (const box of await items.evaluateAll((elements) => elements.map((element) => {
+      const label = element.querySelector("span")!;
+      return { itemWidth: element.clientWidth, labelWidth: label.scrollWidth, right: element.getBoundingClientRect().right };
+    }))) {
+      expect(box.labelWidth).toBeLessThanOrEqual(box.itemWidth);
+      expect(box.right).toBeLessThanOrEqual(320);
+    }
+  });
+
   test("affiche les vraies dépenses (pas de mock)", async ({ page }) => {
     await loginAsTestUser(page);
     await page.goto("/espace-client/depenses", { waitUntil: "domcontentloaded", timeout: 30_000 });

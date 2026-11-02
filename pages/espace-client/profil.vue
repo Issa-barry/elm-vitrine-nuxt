@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { clientDisplayName } from "~/config/auth";
 import { webPushStatePresentation } from "~/config/webPush";
 
 definePageMeta({ layout: "client", middleware: "auth" });
@@ -36,10 +37,7 @@ const initials = computed(() => {
   return (first + last).toUpperCase() || "?";
 });
 
-const fullName = computed(() => {
-  const parts = [user.value?.prenom, user.value?.nom].filter(Boolean);
-  return parts.length ? parts.join(" ") : "—";
-});
+const fullName = computed(() => clientDisplayName(user.value));
 
 // Regroupement d'affichage uniquement (utils/phone.ts, testé
 // indépendamment) — la valeur envoyée à Laravel reste toujours celle
