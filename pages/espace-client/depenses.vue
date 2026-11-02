@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import type { ExpenseStatus } from "~/config/clientExpenses";
+import type { ExpensePeriod, ExpenseStatus } from "~/config/clientExpenses";
+import { EXPENSE_PERIOD_OPTIONS, customPeriodError, expensePeriodBounds, groupExpensesByMonth } from "~/config/clientExpenses";
 
 definePageMeta({ layout: "client", middleware: "auth" });
-useHead({ title: "Dépenses de mes véhicules — Eau La Maman" });
+useHead({ title: "Dépenses — Eau La Maman" });
 
 const { response, isLoading, error, hasLoaded, fetchExpenses } = useClientExpenses();
 const { vehicles: ownedVehicles, fetchVehicles } = useClientVehicles();
@@ -15,19 +16,47 @@ const activeExpenseTab = ref<"general" | "details">("general");
 // présente dans la liste, le Select restait visuellement vide. "tous" est une
 // valeur non vide comme une autre, donc affichée normalement.
 const ALL = "tous";
-const statutFilter = ref<ExpenseStatus | typeof ALL>(ALL);
-const vehiculeFilter = ref<string>(ALL);
+
+interface ExpenseFiltersState {
+  period: ExpensePeriod;
+  customStart: string;
+  customEnd: string;
+  statut: ExpenseStatus | typeof ALL;
+  typeLabel: string;
+  vehiculeId: string;
+}
+
+const createEmptyFilters = (): ExpenseFiltersState => ({
+  period: "all",
+  customStart: "",
+  customEnd: "",
+  statut: ALL,
+  typeLabel: ALL,
+  vehiculeId: ALL,
+});
+
+const appliedFilters = reactive<ExpenseFiltersState>(createEmptyFilters());
+const draftFilters = reactive<ExpenseFiltersState>(createEmptyFilters());
+const filterPanelVisible = ref(false);
+const periodError = ref("");
+const search = ref("");
 
 // Plafond documenté du backend (voir docs/api-espace-client-contract.md §4,
 // per_page 1-100) : un seul fetch couvre la quasi-totalité d'un usage réel
 // (flotte d'une petite/moyenne organisation). meta.total (réel, jamais
 // deviné) permet de signaler honnêtement le dépassement plutôt que de
-// prétendre que la liste est complète — voir bandeau plus bas.
+// prétendre que la liste est complète — voir bandeau plus bas. Période, statut
+// et véhicule sont filtrés par le backend ; type et recherche sur le lot chargé,
+// faute de liste des types exposée à l'espace client.
 async function loadExpenses() {
   await fetchExpenses({
     per_page: 100,
-    statut: statutFilter.value !== ALL ? statutFilter.value : undefined,
-    vehicule_id: vehiculeFilter.value !== ALL ? vehiculeFilter.value : undefined,
+    statut: appliedFilters.statut !== ALL ? appliedFilters.statut : undefined,
+    vehicule_id: appliedFilters.vehiculeId !== ALL ? appliedFilters.vehiculeId : undefined,
+    ...expensePeriodBounds(appliedFilters.period, new Date().toISOString().slice(0, 10), {
+      start: appliedFilters.customStart,
+      end: appliedFilters.customEnd,
+    }),
   });
 }
 
@@ -36,11 +65,40 @@ onMounted(() => {
   fetchVehicles();
 });
 
-watch([statutFilter, vehiculeFilter], loadExpenses);
+watch(
+  () => [appliedFilters.period, appliedFilters.customStart, appliedFilters.customEnd, appliedFilters.statut, appliedFilters.vehiculeId],
+  loadExpenses,
+);
 
 const expenses = computed(() => response.value?.data ?? []);
 const meta = computed(() => response.value?.meta ?? null);
 const hasMoreThanShown = computed(() => Boolean(meta.value && meta.value.total > meta.value.per_page));
+
+const filteredExpenses = computed(() => (appliedFilters.typeLabel === ALL
+  ? expenses.value
+  : expenses.value.filter((expense) => expense.type_label === appliedFilters.typeLabel)));
+
+const normalizeText = (value: string) => value.trim().toLocaleLowerCase("fr");
+const searchedExpenses = computed(() => {
+  const query = normalizeText(search.value);
+  if (!query) return filteredExpenses.value;
+  return filteredExpenses.value.filter((expense) => [
+    expense.type_label,
+    expense.commentaire,
+    expense.vehicule?.nom_vehicule,
+    expense.vehicule?.immatriculation,
+  ].some((value) => value && normalizeText(value).includes(query)));
+});
+
+const monthGroups = computed(() => groupExpensesByMonth(searchedExpenses.value));
+const collapsedMonths = ref(new Set<string>());
+const toggleMonth = (key: string) => {
+  const next = new Set(collapsedMonths.value);
+  if (!next.delete(key)) next.add(key);
+  collapsedMonths.value = next;
+};
+
+const expenseCountLabel = (count: number) => `${count} ${count > 1 ? "dépenses" : "dépense"}`;
 
 // "Validées" reste le sous-ensemble affiché par défaut dans le résumé
 // général (même comportement que l'ancienne maquette), calculé côté client
@@ -48,7 +106,7 @@ const hasMoreThanShown = computed(() => Boolean(meta.value && meta.value.total >
 // second calcul financier (voir demande du 26/08/2026, section 30) : ce sont
 // des montants déjà fournis par le backend, seulement filtrés/sommés pour
 // l'affichage, pas recalculés.
-const validatedExpenses = computed(() => expenses.value.filter((expense) => expense.statut === "valide"));
+const validatedExpenses = computed(() => filteredExpenses.value.filter((expense) => expense.statut === "valide"));
 
 const statutOptions: Array<{ label: string; value: ExpenseStatus | typeof ALL }> = [
   { label: "Tous les statuts", value: ALL },
@@ -62,6 +120,17 @@ const vehiculeOptions = computed(() => [
   { label: "Tous les véhicules", value: ALL },
   ...ownedVehicles.value.map((vehicle) => ({ label: `${vehicle.nom} · ${vehicle.immatriculation}`, value: vehicle.id })),
 ]);
+// Types réellement présents dans le lot chargé, jamais une liste inventée. Le
+// type déjà filtré reste proposé même s'il disparaît du lot après un changement
+// de période.
+const typeOptions = computed(() => {
+  const labels = new Set(expenses.value.map((expense) => expense.type_label));
+  if (appliedFilters.typeLabel !== ALL) labels.add(appliedFilters.typeLabel);
+  return [
+    { label: "Tous les types", value: ALL },
+    ...[...labels].sort((a, b) => a.localeCompare(b, "fr")).map((label) => ({ label, value: label })),
+  ];
+});
 
 const formatDate = (date: string) => new Intl.DateTimeFormat("fr-FR", {
   day: "numeric",
@@ -69,6 +138,51 @@ const formatDate = (date: string) => new Intl.DateTimeFormat("fr-FR", {
   year: "numeric",
   timeZone: "UTC",
 }).format(new Date(`${date}T00:00:00Z`));
+
+const periodFilterLabel = computed(() => (appliedFilters.period === "custom"
+  ? `${formatDate(appliedFilters.customStart)} – ${formatDate(appliedFilters.customEnd)}`
+  : EXPENSE_PERIOD_OPTIONS.find((option) => option.value === appliedFilters.period)?.label ?? ""));
+
+const activeFilters = computed(() => {
+  const filters: Array<{ key: "period" | "statut" | "typeLabel" | "vehiculeId"; label: string; value: string }> = [
+    { key: "period", label: "Période", value: appliedFilters.period !== "all" ? periodFilterLabel.value : "" },
+    { key: "statut", label: "Statut", value: statutOptions.find((option) => option.value === appliedFilters.statut && option.value !== ALL)?.label ?? "" },
+    { key: "typeLabel", label: "Type", value: appliedFilters.typeLabel !== ALL ? appliedFilters.typeLabel : "" },
+    { key: "vehiculeId", label: "Véhicule", value: appliedFilters.vehiculeId !== ALL
+      ? vehiculeOptions.value.find((option) => option.value === appliedFilters.vehiculeId)?.label || appliedFilters.vehiculeId
+      : "" },
+  ];
+  return filters.filter((filter) => Boolean(filter.value));
+});
+
+const openFilterPanel = () => {
+  Object.assign(draftFilters, appliedFilters);
+  periodError.value = "";
+  filterPanelVisible.value = true;
+};
+const applyFilters = () => {
+  periodError.value = draftFilters.period === "custom" ? customPeriodError(draftFilters.customStart, draftFilters.customEnd) : "";
+  if (periodError.value) return;
+  Object.assign(appliedFilters, draftFilters);
+  filterPanelVisible.value = false;
+};
+const resetDraftFilters = () => {
+  Object.assign(draftFilters, createEmptyFilters());
+  periodError.value = "";
+};
+const removeFilter = (key: "period" | "statut" | "typeLabel" | "vehiculeId") => {
+  const empty = createEmptyFilters();
+  if (key === "period") {
+    Object.assign(appliedFilters, { period: empty.period, customStart: empty.customStart, customEnd: empty.customEnd });
+  } else {
+    Object.assign(appliedFilters, { [key]: empty[key] });
+  }
+};
+const clearAppliedFilters = () => Object.assign(appliedFilters, createEmptyFilters());
+const resetAllFilters = () => {
+  search.value = "";
+  clearAppliedFilters();
+};
 
 const statutSeverity = (statut: ExpenseStatus): "success" | "info" | "danger" | "secondary" => {
   if (statut === "valide") return "success";
@@ -109,12 +223,30 @@ const expenseComparisonMax = computed(() => Math.max(...expenseComparison.value.
 <template>
   <div>
   <section class="client-mobile-expenses" aria-labelledby="mobile-expenses-title">
-    <ClientMobilePageTopbar title="Dépenses" title-id="mobile-expenses-title" />
+    <ClientMobilePageTopbar
+      title="Dépenses"
+      title-id="mobile-expenses-title"
+      filter-label="Filtrer les dépenses"
+      :filter-count="activeFilters.length"
+      @filter="openFilterPanel"
+    />
 
     <div v-if="error" class="p-4 text-red-500" role="alert">{{ error.message }}</div>
     <div v-else-if="isLoading && !hasLoaded" class="p-4 text-muted-color" role="status">Chargement des dépenses…</div>
 
     <template v-else>
+      <div v-if="activeFilters.length" class="client-delivery-active-filters client-mobile-expenses__active-filters" aria-label="Filtres actifs">
+        <button v-for="filter in activeFilters" :key="filter.key" type="button" :aria-label="`Retirer le filtre ${filter.label} : ${filter.value}`" @click="removeFilter(filter.key)">
+          <span>{{ filter.label }} : {{ filter.value }}</span>
+          <i class="pi pi-times" aria-hidden="true" />
+        </button>
+        <button type="button" class="is-reset" @click="clearAppliedFilters">Tout effacer</button>
+      </div>
+
+      <p v-if="hasMoreThanShown" class="client-mobile-expenses__limit">
+        Affichage limité aux {{ meta!.per_page }} dépenses les plus récentes sur {{ meta!.total }} : le plus ancien mois affiché peut être incomplet. Choisissez une période pour voir les autres.
+      </p>
+
       <div class="client-mobile-expenses__tabs" role="tablist" aria-label="Sections des dépenses">
         <button
           id="expense-tab-general"
@@ -150,7 +282,7 @@ const expenseComparisonMax = computed(() => Math.max(...expenseComparison.value.
         <div class="client-mobile-expenses__summary">
           <span>Total validé</span>
           <strong>{{ formatGnf(totalValidatedExpenses) }}</strong>
-          <small>{{ validatedExpenses.length }} dépenses validées pour vos véhicules</small>
+          <small>{{ validatedExpenses.length }} {{ validatedExpenses.length > 1 ? "dépenses validées" : "dépense validée" }}</small>
         </div>
 
         <section v-if="expenseComparison.length" class="client-mobile-expenses__chart" aria-labelledby="expense-comparison-title">
@@ -188,22 +320,59 @@ const expenseComparisonMax = computed(() => Math.max(...expenseComparison.value.
       >
         <div class="client-mobile-expenses__heading">
           <h2>Toutes les dépenses</h2>
-          <span>{{ expenses.length }}</span>
+          <span>{{ isLoading ? "…" : searchedExpenses.length }}</span>
         </div>
 
-        <div v-if="expenses.length" class="client-mobile-expenses__list">
-          <article v-for="expense in expenses" :key="expense.id" class="client-mobile-expenses__card">
-            <span class="client-mobile-expenses__icon" aria-hidden="true"><i :class="expenseIcon(expense.type_code)" /></span>
-            <div class="client-mobile-expenses__content">
-              <div class="client-mobile-expenses__card-top">
-                <strong>{{ expense.type_label }}</strong>
-                <span :class="`is-${expense.statut}`">{{ expense.statut_label }}</span>
-              </div>
-              <span v-if="expense.vehicule">{{ expense.vehicule.nom_vehicule }} · {{ expense.vehicule.immatriculation }}</span>
-              <small>{{ formatDate(expense.date) }}</small>
+        <div class="client-mobile-deliveries__toolbar is-search-only client-mobile-expenses__search">
+          <label class="client-mobile-deliveries__search">
+            <i class="pi pi-search" aria-hidden="true" />
+            <span class="sr-only">Rechercher une dépense</span>
+            <input v-model="search" type="search" inputmode="search" placeholder="Type, motif ou véhicule" autocomplete="off">
+            <button v-if="search" type="button" aria-label="Effacer la recherche" @click="search = ''">
+              <i class="pi pi-times" aria-hidden="true" />
+            </button>
+          </label>
+        </div>
+
+        <div v-if="monthGroups.length" class="client-mobile-expenses__months">
+          <section v-for="group in monthGroups" :key="group.key" class="client-mobile-expenses__month">
+            <button
+              type="button"
+              class="client-mobile-expenses__month-toggle"
+              :aria-expanded="!collapsedMonths.has(group.key)"
+              :aria-controls="`expense-month-${group.key}`"
+              @click="toggleMonth(group.key)"
+            >
+              <span>
+                <strong>{{ group.label }}</strong>
+                <small>{{ expenseCountLabel(group.expenses.length) }} · Validé : {{ formatGnf(group.validatedTotal) }}</small>
+              </span>
+              <i :class="['pi', collapsedMonths.has(group.key) ? 'pi-chevron-right' : 'pi-chevron-down']" aria-hidden="true" />
+            </button>
+
+            <div v-show="!collapsedMonths.has(group.key)" :id="`expense-month-${group.key}`" class="client-mobile-expenses__list">
+              <article v-for="expense in group.expenses" :key="expense.id" class="client-mobile-expenses__card">
+                <span class="client-mobile-expenses__icon" aria-hidden="true"><i :class="expenseIcon(expense.type_code)" /></span>
+                <div class="client-mobile-expenses__content">
+                  <div class="client-mobile-expenses__card-top">
+                    <strong>{{ expense.type_label }}</strong>
+                    <span :class="`is-${expense.statut}`">{{ expense.statut_label }}</span>
+                  </div>
+                  <span v-if="expense.vehicule">{{ expense.vehicule.nom_vehicule }} · {{ expense.vehicule.immatriculation }}</span>
+                  <span v-else>Dépense personnelle</span>
+                  <small>{{ formatDate(expense.date) }}</small>
+                </div>
+                <strong class="client-mobile-expenses__amount">{{ formatGnf(expense.montant) }}</strong>
+              </article>
             </div>
-            <strong class="client-mobile-expenses__amount">{{ formatGnf(expense.montant) }}</strong>
-          </article>
+          </section>
+        </div>
+
+        <div v-else-if="search || activeFilters.length" class="client-mobile-expenses__empty" role="status">
+          <i class="pi pi-filter-slash" aria-hidden="true" />
+          <strong>Aucune dépense ne correspond</strong>
+          <span>Modifiez votre recherche ou vos filtres.</span>
+          <Button label="Réinitialiser" severity="secondary" outlined size="small" @click="resetAllFilters" />
         </div>
 
         <div v-else class="client-mobile-expenses__empty" role="status">
@@ -220,17 +389,17 @@ const expenseComparisonMax = computed(() => Math.max(...expenseComparison.value.
     <div v-else-if="isLoading && !hasLoaded" class="col-span-12"><div class="card text-muted-color" role="status">Chargement des dépenses…</div></div>
 
     <template v-else>
-      <div class="col-span-12 lg:col-span-4"><div class="card !mb-0"><span class="block text-muted-color font-medium mb-4">Total validé</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ formatGnf(totalValidatedExpenses) }}</div><span class="text-muted-color">Dépenses de vos véhicules</span></div></div>
+      <div class="col-span-12 lg:col-span-4"><div class="card !mb-0"><span class="block text-muted-color font-medium mb-4">Total validé</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ formatGnf(totalValidatedExpenses) }}</div><span class="text-muted-color">Dépenses validées</span></div></div>
       <div class="col-span-12 lg:col-span-4"><div class="card !mb-0"><span class="block text-muted-color font-medium mb-4">Dépenses affichées</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ expenses.length }}</div><span class="text-muted-color">{{ meta ? `sur ${meta.total} au total` : "—" }}</span></div></div>
       <div class="col-span-12 lg:col-span-4"><div class="card !mb-0"><span class="block text-muted-color font-medium mb-4">Accès</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">Consultation</div><span class="text-muted-color">Aucune modification autorisée</span></div></div>
 
       <div class="col-span-12">
         <div class="card">
           <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4">
-            <div><div class="font-semibold text-xl">Dépenses de mes véhicules</div><p class="text-muted-color mt-2 mb-0">Filtrez par statut ou par véhicule.</p></div>
+            <div><div class="font-semibold text-xl">Mes dépenses</div><p class="text-muted-color mt-2 mb-0">Filtrez par statut ou par véhicule.</p></div>
             <div class="flex gap-2 w-full sm:w-auto">
-              <Select v-model="statutFilter" :options="statutOptions" option-label="label" option-value="value" class="w-full sm:w-52" />
-              <Select v-model="vehiculeFilter" :options="vehiculeOptions" option-label="label" option-value="value" class="w-full sm:w-56" />
+              <Select v-model="appliedFilters.statut" :options="statutOptions" option-label="label" option-value="value" class="w-full sm:w-52" />
+              <Select v-model="appliedFilters.vehiculeId" :options="vehiculeOptions" option-label="label" option-value="value" class="w-full sm:w-56" />
             </div>
           </div>
           <p v-if="hasMoreThanShown" class="text-muted-color text-sm mb-4">
@@ -238,7 +407,7 @@ const expenseComparisonMax = computed(() => Math.max(...expenseComparison.value.
           </p>
           <DataTable :value="expenses" data-key="id" responsive-layout="scroll" striped-rows paginator :rows="10">
             <Column header="Dépense"><template #body="{ data }"><div class="flex items-center gap-3"><div class="w-10 h-10 flex items-center justify-center bg-green-100 dark:bg-green-400/10 rounded-full"><i :class="expenseIcon(data.type_code)" class="text-green-500" /></div><span class="font-medium">{{ data.type_label }}</span></div></template></Column>
-            <Column header="Véhicule"><template #body="{ data }">{{ data.vehicule ? `${data.vehicule.nom_vehicule} · ${data.vehicule.immatriculation}` : "—" }}</template></Column>
+            <Column header="Véhicule"><template #body="{ data }">{{ data.vehicule ? `${data.vehicule.nom_vehicule} · ${data.vehicule.immatriculation}` : "Dépense personnelle" }}</template></Column>
             <Column header="Date"><template #body="{ data }">{{ formatDate(data.date) }}</template></Column>
             <Column header="Montant"><template #body="{ data }">{{ formatGnf(data.montant) }}</template></Column>
             <Column header="Statut"><template #body="{ data }"><Tag :value="data.statut_label" :severity="statutSeverity(data.statut)" /></template></Column>
@@ -248,5 +417,55 @@ const expenseComparisonMax = computed(() => Math.max(...expenseComparison.value.
       </div>
     </template>
   </div>
+
+  <Drawer
+    v-model:visible="filterPanelVisible"
+    position="right"
+    modal
+    dismissable
+    close-on-escape
+    block-scroll
+    header="Filtrer les dépenses"
+    class="client-delivery-filter-drawer"
+  >
+    <form id="client-expense-filter-form" class="client-delivery-filter" @submit.prevent="applyFilters">
+      <p>Affinez la liste avec un ou plusieurs critères.</p>
+      <div class="client-delivery-filter__grid">
+        <label class="client-delivery-filter__field">
+          <span>Période</span>
+          <Select v-model="draftFilters.period" :options="EXPENSE_PERIOD_OPTIONS" option-label="label" option-value="value" fluid />
+        </label>
+        <template v-if="draftFilters.period === 'custom'">
+          <label class="client-delivery-filter__field">
+            <span>Date de début</span>
+            <input v-model="draftFilters.customStart" type="date" class="client-delivery-filter__date">
+          </label>
+          <label class="client-delivery-filter__field">
+            <span>Date de fin</span>
+            <input v-model="draftFilters.customEnd" type="date" class="client-delivery-filter__date">
+          </label>
+          <p v-if="periodError" class="m-0 text-sm text-red-500" role="alert">{{ periodError }}</p>
+        </template>
+        <label class="client-delivery-filter__field">
+          <span>Statut</span>
+          <Select v-model="draftFilters.statut" :options="statutOptions" option-label="label" option-value="value" fluid />
+        </label>
+        <label class="client-delivery-filter__field">
+          <span>Type</span>
+          <Select v-model="draftFilters.typeLabel" :options="typeOptions" option-label="label" option-value="value" fluid />
+        </label>
+        <label class="client-delivery-filter__field">
+          <span>Véhicule</span>
+          <Select v-model="draftFilters.vehiculeId" :options="vehiculeOptions" option-label="label" option-value="value" fluid />
+        </label>
+      </div>
+    </form>
+    <template #footer>
+      <div class="client-delivery-filter__actions">
+        <Button type="button" label="Réinitialiser" severity="secondary" text @click="resetDraftFilters" />
+        <Button type="submit" form="client-expense-filter-form" label="Appliquer" />
+      </div>
+    </template>
+  </Drawer>
   </div>
 </template>

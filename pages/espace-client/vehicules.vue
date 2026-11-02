@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import QrcodeVue from "qrcode.vue";
+import { clientDisplayName } from "~/config/auth";
 import { vehicleTeamRoleLabel, type ClientVehicle } from "~/config/clientVehicles";
 
 definePageMeta({ layout: "client", middleware: "auth" });
@@ -38,7 +39,7 @@ const formatCapacity = (capacite: number | null) =>
 // la source canonique ; `conducteur`/`capacite` ne sont lus qu'en repli
 // quand les nouveaux tableaux sont vides.
 const vehicleDriverSummary = (vehicle: ClientVehicle) =>
-  vehicle.equipe[0]?.nom_complet || vehicle.conducteur || "Non assigné";
+  vehicle.equipe.length ? clientDisplayName(vehicle.equipe[0]) : vehicle.conducteur || "Non assigné";
 
 const vehicleCapacitySummary = (vehicle: ClientVehicle) => {
   if (vehicle.capacites.length === 1) {
@@ -311,7 +312,7 @@ const openVehicleDetail = (vehicle: ClientVehicle, event: MouseEvent) => {
           :class="index > 0 ? 'mt-3 pt-3 border-t border-surface' : ''"
         >
           <div class="min-w-0">
-            <strong class="block text-surface-900 dark:text-surface-0 text-sm font-semibold truncate">{{ membre.nom_complet || "—" }}</strong>
+            <strong class="block text-surface-900 dark:text-surface-0 text-sm font-semibold truncate">{{ clientDisplayName(membre) }}</strong>
             <span class="block text-muted-color text-xs mt-0.5">{{ membre.telephone || "—" }}</span>
           </div>
           <Tag :value="vehicleTeamRoleLabel(membre.role)" severity="secondary" />

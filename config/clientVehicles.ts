@@ -14,6 +14,10 @@ export interface ClientVehicleTeamMember {
   // pouvant réellement être vide) — corrigé ici après une première version
   // trop optimiste (non-nullable).
   nom_complet: string | null;
+  // Optionnels tant que la vitrine peut être déployée avant le backend. Afficher
+  // le nom d'un membre passe par clientDisplayName() (config/auth.ts).
+  prenom?: string | null;
+  nom?: string | null;
   telephone: string | null;
   role: string;
   ordre: number;

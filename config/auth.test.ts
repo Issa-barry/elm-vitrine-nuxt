@@ -46,13 +46,28 @@ describe("clientSpaceRoleLabel", () => {
 });
 
 describe("clientDisplayName", () => {
-  it("privilégie le nom d'affichage du backend", () => {
+  it("préfère le prénom et le nom à une désignation provisoire", () => {
+    expect(clientDisplayName({ nom_complet: "Chauffeur 1", prenom: "Mamadou", nom: "Diallo" })).toBe("Mamadou Diallo");
+    expect(clientDisplayName({ nom_complet: "Convoyeur 2", prenom: "Amadou", nom: "Barry" })).toBe("Amadou Barry");
+    expect(clientDisplayName({ nom_affichage: "Chauffeur-1", prenom: "Mamadou", nom: "Diallo" })).toBe("Mamadou Diallo");
+    expect(clientDisplayName({ nom_complet: "Mamadou Diallo", prenom: "Mamadou", nom: "Diallo" })).toBe("Mamadou Diallo");
+  });
+
+  it("garde le nom complet si le prénom ou le nom manque", () => {
+    expect(clientDisplayName({ nom_complet: "Chauffeur 1", prenom: "Mamadou", nom: "" })).toBe("Chauffeur 1");
+    expect(clientDisplayName({ nom_complet: "Chauffeur 1", prenom: null, nom: "Diallo" })).toBe("Chauffeur 1");
     expect(clientDisplayName({ prenom: null, nom: null, nom_affichage: "Camara Ya Moussa" })).toBe("Camara Ya Moussa");
   });
 
-  it("revient au prénom et au nom si le backend ne fournit pas encore nom_affichage", () => {
-    expect(clientDisplayName({ prenom: " Test ", nom: "E2E" })).toBe("Test E2E");
+  it("affiche le seul prénom ou nom connu sans nom complet", () => {
+    expect(clientDisplayName({ nom_complet: "", prenom: "Mamadou", nom: "" })).toBe("Mamadou");
+    expect(clientDisplayName({ nom_complet: null, prenom: null, nom: "Diallo" })).toBe("Diallo");
     expect(clientDisplayName({ prenom: null, nom: "SYLLA", nom_affichage: null })).toBe("SYLLA");
+  });
+
+  it("retire les espaces et traite un champ d'espaces comme vide", () => {
+    expect(clientDisplayName({ prenom: " Test ", nom: "E2E" })).toBe("Test E2E");
+    expect(clientDisplayName({ nom_complet: "  Chauffeur 1 ", prenom: "   ", nom: "Diallo" })).toBe("Chauffeur 1");
   });
 
   it("n'affiche jamais \"null null\" pour une identité vide", () => {

@@ -369,18 +369,17 @@ export function clientSpaceRoleLabel(
   return "Compte";
 }
 
-// Nom à afficher pour le compte connecté. `nom_affichage` (GET /api/auth/me)
-// d'abord : prenom/nom valent null pour une fiche connue par son seul
-// nom_complet. Prénom + nom en repli, car /auth/login ne renvoie pas ce champ.
+// Nom à afficher dans l'espace client : prénom + nom s'ils sont tous les deux
+// connus, même si le nom complet contient une désignation provisoire du
+// back-office ("Chauffeur-1"). Sinon le nom complet, puis le seul prénom ou nom
+// connu. `nom_affichage` (GET /api/auth/me) ou `nom_complet` (membre d'équipe)
+// portent ce nom complet. Le back-office garde sa propre règle.
 export function clientDisplayName(
-  user: { prenom?: string | null; nom?: string | null; nom_affichage?: string | null } | null | undefined,
+  person: { prenom?: string | null; nom?: string | null; nom_affichage?: string | null; nom_complet?: string | null } | null | undefined,
 ): string {
-  const fromBackend = user?.nom_affichage?.trim();
-  if (fromBackend) return fromBackend;
+  const prenom = person?.prenom?.trim();
+  const nom = person?.nom?.trim();
+  if (prenom && nom) return `${prenom} ${nom}`;
 
-  const civilName = [user?.prenom, user?.nom]
-    .map((part) => part?.trim())
-    .filter(Boolean)
-    .join(" ");
-  return civilName || "—";
+  return person?.nom_affichage?.trim() || person?.nom_complet?.trim() || prenom || nom || "—";
 }
