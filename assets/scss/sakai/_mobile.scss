@@ -2298,6 +2298,50 @@ $bp-mobile-or-tablet-portrait: "#{$bp-mobile}, #{$bp-tablet-portrait}";
   font-weight: 700;
 }
 
+.client-delivery-filter__periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.client-delivery-filter__periods button {
+  min-height: 2.5rem;
+  padding: 0.4rem 0.85rem;
+  color: var(--p-text-color);
+  background: var(--p-content-background);
+  border: 1px solid var(--p-content-border-color);
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.client-delivery-filter__periods button.is-active {
+  color: var(--p-primary-contrast-color);
+  background: var(--p-primary-color);
+  border-color: var(--p-primary-color);
+}
+
+.client-delivery-filter__periods button:focus-visible {
+  outline: 2px solid var(--p-primary-color);
+  outline-offset: 2px;
+}
+
+.client-delivery-load-more {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 0;
+}
+
+.client-delivery-load-more p {
+  margin: 0;
+  color: var(--p-red-500);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
 .client-delivery-filter__date {
   width: 100%;
   height: 2.65rem;

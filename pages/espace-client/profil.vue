@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { clientDisplayName } from "~/config/auth";
+import { buildIdentityPatch, type UpdateClientProfilePayload } from "~/config/clientProfile";
 import { webPushStatePresentation } from "~/config/webPush";
 
 definePageMeta({ layout: "client", middleware: "auth" });
@@ -16,7 +17,7 @@ const auth = useAuth();
 const { user, context } = auth;
 
 const clientProfile = useClientProfile();
-const { profile, isLoading: isProfileLoading, isSavingLocalisation, isSavingNotifications, error: profileError } = clientProfile;
+const { profile, paysDisponibles, isLoading: isProfileLoading, isSavingIdentity, isSavingLocalisation, isSavingNotifications, error: profileError } = clientProfile;
 
 const router = useRouter();
 const isLoggingOut = ref(false);
@@ -62,31 +63,85 @@ const accountTypeLabel = computed(() => {
   return labels.join(" · ");
 });
 
-// Champs de localisation : les 3 seuls modifiables par l'espace client
-// (UpdateProfileRequest côté backend n'accepte que pays/code_pays/ville/
-// adresse — code_pays volontairement pas exposé ici, un simple champ texte
-// ne suffirait pas à le renseigner correctement sans un vrai sélecteur pays,
-// hors périmètre de cette page). Initialisés dès que /profile répond, et à
-// chaque fois qu'il est rechargé/mis à jour — jamais une valeur de
-// démonstration en repli.
-const localisationForm = reactive({ pays: "", ville: "", adresse: "" });
+// Prénom/nom/e-mail : le téléphone reste le seul champ verrouillé de cette
+// carte. Formulaire initialisé depuis /me, source de l'identité du compte.
+const identityForm = reactive({ prenom: "", nom: "", email: "" });
+const identityErrors = ref<Record<string, string>>({});
+const identityMessage = ref("");
+const identityMessageTone = ref<"success" | "warning" | "error">("success");
+
+const resetIdentityForm = () => {
+  identityForm.prenom = user.value?.prenom || "";
+  identityForm.nom = user.value?.nom || "";
+  identityForm.email = user.value?.email || "";
+};
+watch(user, resetIdentityForm, { immediate: true });
+
+const identityPatch = computed(() => buildIdentityPatch(identityForm, user.value));
+const isIdentityDirty = computed(() => Object.keys(identityPatch.value).length > 0);
+
+const saveIdentity = async () => {
+  identityMessage.value = "";
+  identityErrors.value = {};
+
+  const result = await clientProfile.updateIdentity(identityPatch.value);
+  if (!result.ok) {
+    identityErrors.value = result.error.fieldErrors || {};
+    identityMessageTone.value = "error";
+    identityMessage.value = result.error.fieldErrors ? "" : result.error.message;
+    return;
+  }
+
+  await auth.reloadUser();
+  // L'e-mail affiché redevient l'adresse active, même si /me n'a pas changé :
+  // la nouvelle adresse n'existe qu'après ouverture du lien.
+  resetIdentityForm();
+
+  const confirmation = result.emailConfirmation;
+  if (confirmation && !confirmation.envoyee) {
+    identityMessageTone.value = "warning";
+    identityMessage.value = `Le lien de confirmation n'a pas pu être envoyé à ${confirmation.adresse}. Votre adresse e-mail reste inchangée, réessayez plus tard.`;
+  } else if (confirmation) {
+    identityMessageTone.value = "success";
+    identityMessage.value = `Un lien de confirmation a été envoyé à ${confirmation.adresse}. Votre adresse e-mail changera après l'ouverture de ce lien, valable 24 heures.`;
+  } else {
+    identityMessageTone.value = "success";
+    identityMessage.value = "Informations mises à jour.";
+  }
+};
+
+const IDENTITY_MESSAGE_CLASSES = { success: "text-green-600", warning: "text-amber-600", error: "text-red-600" };
+
+// Localisation, initialisée dès que /profile répond et à chaque rechargement —
+// jamais une valeur de démonstration en repli. Le pays se choisit dans la liste
+// du backend ; seul son libellé est enregistré (code_pays reste celui du
+// téléphone, voir config/clientProfile.ts).
+const localisationForm = reactive<{ pays: string | null; ville: string; adresse: string }>({ pays: null, ville: "", adresse: "" });
 watch(
   profile,
   (value) => {
-    localisationForm.pays = value?.localisation?.pays || "";
+    localisationForm.pays = value?.localisation?.pays || null;
     localisationForm.ville = value?.localisation?.ville || "";
     localisationForm.adresse = value?.localisation?.adresse || "";
   },
   { immediate: true },
 );
 
+// Un ancien pays saisi en texte libre reste affiché tel quel, sans être renvoyé
+// (le backend le refuserait) tant que l'utilisateur n'en choisit pas un autre.
+const paysOptions = computed(() => {
+  const actuel = profile.value?.localisation?.pays;
+  return actuel && !paysDisponibles.value.includes(actuel) ? [actuel, ...paysDisponibles.value] : paysDisponibles.value;
+});
+
 const localisationSaveMessage = ref("");
 const localisationSaveIsError = ref(false);
 
 const saveLocalisation = async () => {
   localisationSaveMessage.value = "";
+  const paysModifie = localisationForm.pays && localisationForm.pays !== profile.value?.localisation?.pays;
   const result = await clientProfile.updateLocalisation({
-    pays: localisationForm.pays || null,
+    ...(paysModifie ? { pays: localisationForm.pays as UpdateClientProfilePayload["pays"] } : {}),
     ville: localisationForm.ville || null,
     adresse: localisationForm.adresse || null,
   });
@@ -161,30 +216,35 @@ onMounted(() => {
           <Avatar :label="initials" size="xlarge" shape="circle" class="!bg-primary !text-primary-contrast" />
           <div><div class="font-semibold text-xl">{{ fullName }}</div><span v-if="accountTypeLabel" class="text-muted-color">{{ accountTypeLabel }}</span></div>
         </div>
-        <!-- Cadenas sur tout champ non modifiable de cette page (identité
-             civile/téléphone/email réservés au backoffice, voir
-             UpdateProfileRequest côté backend) : signale visuellement
-             "lecture seule" sans le curseur "interdit" par défaut des
-             composants PrimeVue désactivés/readonly (voir
+        <!-- Cadenas sur le seul champ non modifiable de cette carte : signale
+             visuellement "lecture seule" sans le curseur "interdit" par défaut
+             des composants PrimeVue désactivés/readonly (voir
              .profil-readonly-field ci-dessous). -->
-        <div class="grid grid-cols-12 gap-4">
+        <form class="grid grid-cols-12 gap-4" @submit.prevent="saveIdentity">
           <div class="col-span-12 md:col-span-6 flex flex-col gap-2">
             <label for="first-name" class="font-medium">Prénom</label>
-            <IconField class="profil-readonly-field"><InputIcon class="pi pi-lock" /><InputText id="first-name" :model-value="user?.prenom" readonly fluid /></IconField>
+            <InputText id="first-name" v-model="identityForm.prenom" autocomplete="given-name" :invalid="!!identityErrors.prenom" fluid />
+            <small v-if="identityErrors.prenom" class="text-red-600">{{ identityErrors.prenom }}</small>
           </div>
           <div class="col-span-12 md:col-span-6 flex flex-col gap-2">
             <label for="last-name" class="font-medium">Nom</label>
-            <IconField class="profil-readonly-field"><InputIcon class="pi pi-lock" /><InputText id="last-name" :model-value="user?.nom" readonly fluid /></IconField>
+            <InputText id="last-name" v-model="identityForm.nom" autocomplete="family-name" :invalid="!!identityErrors.nom" fluid />
+            <small v-if="identityErrors.nom" class="text-red-600">{{ identityErrors.nom }}</small>
           </div>
           <div class="col-span-12 md:col-span-6 flex flex-col gap-2">
             <label for="email" class="font-medium">Adresse e-mail</label>
-            <IconField class="profil-readonly-field"><InputIcon class="pi pi-lock" /><InputText id="email" :model-value="user?.email" readonly fluid /></IconField>
+            <InputText id="email" v-model="identityForm.email" type="email" autocomplete="email" inputmode="email" :invalid="!!identityErrors.email" fluid />
+            <small v-if="identityErrors.email" class="text-red-600">{{ identityErrors.email }}</small>
           </div>
           <div class="col-span-12 md:col-span-6 flex flex-col gap-2">
             <label for="phone" class="font-medium">Téléphone</label>
             <IconField class="profil-readonly-field"><InputIcon class="pi pi-lock" /><InputText id="phone" :model-value="formattedPhone" readonly fluid /></IconField>
           </div>
-        </div>
+          <div class="col-span-12 flex flex-col items-end gap-2 mt-2">
+            <Button type="submit" label="Enregistrer mes informations" severity="secondary" outlined :loading="isSavingIdentity" :disabled="!isIdentityDirty || isSavingIdentity" />
+            <small v-if="identityMessage" role="status" class="text-right" :class="IDENTITY_MESSAGE_CLASSES[identityMessageTone]">{{ identityMessage }}</small>
+          </div>
+        </form>
       </div>
     </div>
 
@@ -207,9 +267,10 @@ onMounted(() => {
             <IconField class="profil-readonly-field"><InputIcon class="pi pi-lock" /><InputText id="company" :model-value="profile.entreprise.raison_sociale" readonly fluid /></IconField>
           </div>
 
-          <!-- Localisation : seuls champs réellement modifiables par ce compte
-               (PATCH /v1/mobile/profile). -->
-          <div class="flex flex-col gap-2"><label for="pays" class="font-medium">Pays</label><InputText id="pays" v-model="localisationForm.pays" fluid /></div>
+          <div class="flex flex-col gap-2">
+            <label id="pays-label" for="pays" class="font-medium">Pays</label>
+            <Select v-model="localisationForm.pays" input-id="pays" aria-labelledby="pays-label" :options="paysOptions" placeholder="Sélectionnez un pays" filter filter-placeholder="Rechercher un pays" empty-filter-message="Aucun pays trouvé" empty-message="Liste des pays indisponible pour le moment" fluid />
+          </div>
           <div class="flex flex-col gap-2"><label for="ville" class="font-medium">Ville</label><InputText id="ville" v-model="localisationForm.ville" fluid /></div>
           <div class="flex flex-col gap-2"><label for="adresse" class="font-medium">Adresse</label><InputText id="adresse" v-model="localisationForm.adresse" fluid /></div>
         </div>
@@ -275,8 +336,7 @@ onMounted(() => {
 </template>
 
 <style lang="scss" scoped>
-// Champs non modifiables (identité civile/téléphone/email/raison sociale,
-// réservés au backoffice — voir script) : cadenas visible plutôt que le
+// Champs non modifiables (téléphone/raison sociale) : cadenas visible plutôt que le
 // curseur "interdit" par défaut de PrimeVue sur [readonly], plus agressif que
 // ce que justifie une simple absence de fonctionnalité (pas une action
 // réellement bloquée).

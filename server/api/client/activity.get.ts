@@ -23,6 +23,7 @@ export default defineEventHandler(async (event) => {
       query: {
         type: query.type,
         vehicule_id: query.vehicule_id,
+        periode: query.periode,
         date_debut: query.date_debut,
         date_fin: query.date_fin,
         per_page: query.per_page,

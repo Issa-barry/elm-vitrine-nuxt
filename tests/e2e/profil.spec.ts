@@ -81,6 +81,139 @@ test.describe("Espace client — profil", () => {
     await expect(page.getByLabel("Ville")).toHaveValue("Kindia", { timeout: 10_000 });
   });
 
+  test("modifie le prénom et le nom réellement, le téléphone reste verrouillé", async ({ page }) => {
+    await loginAsTestUser(page);
+    await page.goto("/espace-client/profil", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(1000);
+
+    const enregistrer = page.getByRole("button", { name: "Enregistrer mes informations" });
+    await expect(enregistrer).toBeDisabled();
+    await expect(page.getByLabel("Téléphone")).not.toBeEditable();
+
+    await page.getByLabel("Prénom").fill("Testé");
+    await enregistrer.click();
+    await expect(page.getByText("Informations mises à jour.")).toBeVisible();
+    await expect(page.getByRole("main").getByText("Testé E2E", { exact: true })).toBeVisible();
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("load");
+    await expect(page.getByLabel("Prénom")).toHaveValue("Testé", { timeout: 10_000 });
+    // La valeur vient du SSR : attendre l'hydratation avant de saisir.
+    await page.waitForTimeout(1000);
+
+    // État du mock partagé entre les tests de ce fichier : restauré ici.
+    await page.getByLabel("Prénom").fill("Test");
+    await enregistrer.click();
+    await expect(page.getByText("Informations mises à jour.")).toBeVisible();
+  });
+
+  test("affiche les erreurs de validation sous le champ concerné", async ({ page }) => {
+    await loginAsTestUser(page);
+    await page.goto("/espace-client/profil", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(1000);
+
+    await page.getByLabel("Adresse e-mail").fill("prise@example.com");
+    await page.getByRole("button", { name: "Enregistrer mes informations" }).click();
+
+    await expect(page.getByText("Cette adresse e-mail est déjà utilisée.")).toBeVisible();
+    await expect(page.getByLabel("Adresse e-mail")).toHaveValue("prise@example.com");
+  });
+
+  test("un nouvel e-mail attend la confirmation par lien", async ({ page }) => {
+    await loginAsTestUser(page);
+    await page.goto("/espace-client/profil", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(1000);
+
+    await page.getByLabel("Adresse e-mail").fill("nouvelle@example.com");
+    await page.getByRole("button", { name: "Enregistrer mes informations" }).click();
+
+    await expect(page.getByText(/Un lien de confirmation a été envoyé à nouvelle@example\.com/)).toBeVisible();
+    await expect(page.getByLabel("Adresse e-mail")).toHaveValue("test-e2e@example.com");
+  });
+
+  test("avertit quand le lien de confirmation n'a pas pu être envoyé", async ({ page }) => {
+    await loginAsTestUser(page);
+    await page.goto("/espace-client/profil", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(1000);
+
+    await page.getByLabel("Adresse e-mail").fill("smtp-ko@example.com");
+    await page.getByRole("button", { name: "Enregistrer mes informations" }).click();
+
+    await expect(page.getByText(/n'a pas pu être envoyé à smtp-ko@example\.com/)).toBeVisible();
+    await expect(page.getByLabel("Adresse e-mail")).toHaveValue("test-e2e@example.com");
+  });
+
+  test("le pays se choisit dans une liste", async ({ page }) => {
+    await loginAsTestUser(page);
+    await page.goto("/espace-client/profil", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(1000);
+
+    const pays = page.getByRole("combobox", { name: "Pays" });
+    await expect(pays).toHaveText("Guinée", { timeout: 10_000 });
+
+    await pays.click();
+    await page.getByRole("option", { name: "Sénégal" }).click();
+    await page.getByRole("button", { name: "Mettre à jour" }).click();
+    await expect(page.getByText("Localisation mise à jour.")).toBeVisible();
+
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("load");
+    await expect(page.getByRole("combobox", { name: "Pays" })).toHaveText("Sénégal", { timeout: 10_000 });
+  });
+
+  test("reste utilisable si l'API ne fournit pas la liste des pays", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (err) => errors.push(err.message));
+
+    await loginAsTestUser(page);
+    await page.route("**/api/client/profile", async (route) => {
+      if (route.request().method() !== "GET") return route.fallback();
+      const response = await route.fetch();
+      const body = await response.json();
+      delete body.pays_disponibles;
+      body.profile.localisation.pays = null;
+      return route.fulfill({ response, json: body });
+    });
+
+    await page.goto("/espace-client/profil", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(1000);
+
+    await expect(page.getByLabel("Ville")).toBeVisible({ timeout: 10_000 });
+    await page.getByRole("combobox", { name: "Pays" }).click();
+    // getByRole : PrimeVue répète ce texte dans une zone d'accessibilité masquée.
+    await expect(page.getByRole("option", { name: "Liste des pays indisponible pour le moment" })).toBeVisible();
+
+    expect(errors).toEqual([]);
+  });
+
+  test("l'identité reste modifiable si la fiche ne se charge pas", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("pageerror", (err) => errors.push(err.message));
+
+    await loginAsTestUser(page);
+    await page.route("**/api/client/profile", (route) =>
+      route.request().method() === "GET"
+        ? route.fulfill({ status: 500, json: { message: "Erreur serveur." } })
+        : route.fallback(),
+    );
+
+    await page.goto("/espace-client/profil", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(1000);
+
+    await expect(page.getByLabel("Prénom")).toHaveValue("Test", { timeout: 10_000 });
+    await expect(page.getByRole("button", { name: "Mettre à jour" })).toHaveCount(0);
+    await expect(page.locator(".card p.text-red-600")).toBeVisible();
+
+    expect(errors).toEqual([]);
+  });
+
   test("bascule la préférence de notification réellement (PATCH .../notification-preferences)", async ({ page }) => {
     await loginAsTestUser(page);
     await page.goto("/espace-client/profil", { waitUntil: "domcontentloaded", timeout: 30_000 });

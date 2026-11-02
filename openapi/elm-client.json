@@ -1513,6 +1513,37 @@
                 "security": []
             }
         },
+        "/auth/confirm-email/{userId}": {
+            "get": {
+                "operationId": "auth.confirm-email",
+                "tags": [
+                    "Autres"
+                ],
+                "parameters": [
+                    {
+                        "name": "userId",
+                        "in": "path",
+                        "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": []
+            }
+        },
         "/v1/mobile/web-push/vapid-public-key": {
             "get": {
                 "operationId": "client.web-push.vapid-public-key",
@@ -3649,7 +3680,7 @@
         "/v1/mobile/profile": {
             "get": {
                 "operationId": "client.profile.mine",
-                "description": "Aucun champ `siret`/identifiant l\u00e9gal (absent du mod\u00e8le ELM, ne jamais l'inventer c\u00f4t\u00e9 frontend). Aucun champ \"quartier\" s\u00e9par\u00e9 \u2014 seuls `pays`, `ville`, `adresse` existent, un quartier doit \u00eatre saisi dans `adresse` en texte libre. `profile` vaut `null` si le r\u00f4le est pr\u00e9sent mais qu'aucune fiche m\u00e9tier n'est r\u00e9ellement rattach\u00e9e (cas limite). Seuls `pays`/`code_pays`/`ville`/`adresse` sont modifiables via `PATCH` \u2014 voir cet endpoint pour le d\u00e9tail exact.",
+                "description": "Aucun champ `siret`/identifiant l\u00e9gal (absent du mod\u00e8le ELM, ne jamais l'inventer c\u00f4t\u00e9 frontend). Aucun champ \"quartier\" s\u00e9par\u00e9 \u2014 seuls `pays`, `ville`, `adresse` existent, un quartier doit \u00eatre saisi dans `adresse` en texte libre. `profile` vaut `null` si le r\u00f4le est pr\u00e9sent mais qu'aucune fiche m\u00e9tier n'est r\u00e9ellement rattach\u00e9e (cas limite). `pays_disponibles` liste les pays s\u00e9lectionnables. Les champs modifiables sont d\u00e9taill\u00e9s sur le `PATCH` de cette route.",
                 "tags": [
                     "Profile"
                 ],
@@ -3675,7 +3706,7 @@
             },
             "patch": {
                 "operationId": "client.profile.update",
-                "description": "Seuls `pays`, `code_pays`, `ville`, `adresse` sont modifiables ici (tous optionnels, seuls les champs envoy\u00e9s sont modifi\u00e9s). **Volontairement non modifiables par ce endpoint** (silencieusement ignor\u00e9s si envoy\u00e9s) : `nom`/`prenom`/`surnom` (identit\u00e9 civile), `telephone`/`email` (identifiants de connexion, unicit\u00e9 par organisation \u00e0 revalider), `raison_sociale`/`type` (identit\u00e9 l\u00e9gale), `actif` (jamais en self-service) \u2014 r\u00e9serv\u00e9s au backoffice. `404` si aucun profil n'est rattach\u00e9 au compte.",
+                "description": "Tous les champs sont optionnels, seuls les champs envoy\u00e9s sont modifi\u00e9s. `prenom`/`nom` : appliqu\u00e9s imm\u00e9diatement, ne peuvent pas \u00eatre vid\u00e9s. `email` : appliqu\u00e9 seulement \u00e0 l'ouverture du lien envoy\u00e9 \u00e0 la nouvelle adresse (valable 24 h) ; `email_confirmation` indique l'adresse concern\u00e9e et si l'envoi a r\u00e9ussi, `null` sans demande. `pays` : un libell\u00e9 de `pays_disponibles`. **Non modifiables** (silencieusement ignor\u00e9s si envoy\u00e9s) : `telephone`, `code_pays`, `code_phone_pays`, `surnom`, `raison_sociale`, `type`, `actif`. `404` si la localisation est envoy\u00e9e sans fiche m\u00e9tier rattach\u00e9e.",
                 "tags": [
                     "Profile"
                 ],
@@ -5478,21 +5509,71 @@
             },
             "UpdateProfileRequest": {
                 "type": "object",
-                "description": "Champs modifiables par le titulaire du compte lui-m\u00eame \u2014 uniquement la\nlocalisation. Volontairement exclus (d\u00e9cision du 26/08/2026, cf. rapport) :\nnom/prenom (identit\u00e9 civile), telephone/email (identifiants de connexion,\nunicit\u00e9 par organisation \u00e0 revalider), raison_sociale/type (identit\u00e9 l\u00e9gale)\net is_active (jamais en self-service) \u2014 ces champs restent r\u00e9serv\u00e9s au\nbackoffice, coh\u00e9rent avec la s\u00e9paration d\u00e9j\u00e0 en place partout ailleurs dans\nl'application entre \u00e9dition \"propri\u00e9taire\" (self-service) et \u00e9dition \"staff\"\n(ProprietaireController, ClientController...).",
+                "description": "Champs modifiables par le titulaire du compte lui-m\u00eame (ADR 0051) : pr\u00e9nom, nom,\ne-mail (appliqu\u00e9 apr\u00e8s confirmation par lien) et localisation. Le pays est un\nlibell\u00e9 choisi dans une liste ferm\u00e9e. Volontairement exclus : telephone (identifiant\nde connexion), code_pays/code_phone_pays (recomposent le t\u00e9l\u00e9phone dans les\nformulaires du back-office), raison_sociale/type (identit\u00e9 l\u00e9gale) et is_active.",
                 "properties": {
+                    "prenom": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 100
+                    },
+                    "nom": {
+                        "type": "string",
+                        "minLength": 2,
+                        "maxLength": 100
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "maxLength": 255
+                    },
                     "pays": {
                         "type": [
                             "string",
                             "null"
                         ],
-                        "maxLength": 100
-                    },
-                    "code_pays": {
-                        "type": [
-                            "string",
-                            "null"
-                        ],
-                        "maxLength": 10
+                        "enum": [
+                            "Guin\u00e9e",
+                            "Guin\u00e9e-Bissau",
+                            "S\u00e9n\u00e9gal",
+                            "Mali",
+                            "C\u00f4te d'Ivoire",
+                            "Liberia",
+                            "Sierra Leone",
+                            "France",
+                            "Chine",
+                            "\u00c9mirats arabes unis",
+                            "Inde",
+                            "Canada",
+                            "Autriche",
+                            "Belgique",
+                            "Bulgarie",
+                            "Croatie",
+                            "Tch\u00e9quie",
+                            "Danemark",
+                            "Estonie",
+                            "Finlande",
+                            "Allemagne",
+                            "Gr\u00e8ce",
+                            "Hongrie",
+                            "Islande",
+                            "Italie",
+                            "Lettonie",
+                            "Liechtenstein",
+                            "Lituanie",
+                            "Luxembourg",
+                            "Malte",
+                            "Pays-Bas",
+                            "Norv\u00e8ge",
+                            "Pologne",
+                            "Portugal",
+                            "Roumanie",
+                            "Slovaquie",
+                            "Slov\u00e9nie",
+                            "Espagne",
+                            "Su\u00e8de",
+                            "Suisse",
+                            null
+                        ]
                     },
                     "ville": {
                         "type": [
