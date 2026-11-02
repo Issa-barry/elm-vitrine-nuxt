@@ -142,7 +142,7 @@ test.describe("Dashboard — cartes KPI (tablette paysage / desktop)", () => {
       await route.continue();
     });
 
-    await page.locator(".layout-menu").getByRole("link", { name: "Tableau de bord" }).click();
+    await page.locator(".layout-menu").getByRole("link", { name: "Accueil" }).click();
     await expect(page).toHaveURL(/\/espace-client$/);
     await expect(kpiRow.getByText(formatGnf(generated))).toBeVisible({ timeout: 500 });
   });

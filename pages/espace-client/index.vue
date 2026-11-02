@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ClientDashboardResponse } from "~/config/clientDashboard";
-import { clientSpaceRoleLabel } from "~/config/auth";
+import { clientDisplayName, clientSpaceRoleLabel } from "~/config/auth";
 import { notificationResourceToRoute } from "~/config/clientNotifications";
 import type { ClientNotification } from "~/config/clientNotifications";
 
@@ -52,15 +52,10 @@ async function onSelectNotification(notification: ClientNotification) {
 const capabilities = useClientCapabilities();
 
 // Identité réelle (GET /api/auth/me) — jamais "Issa M." (ancienne donnée de
-// démonstration). clientSpaceRoleLabel() reflète la même priorité que
-// profile.type côté backend en cas de cumul de rôles (proprietaire > client
-// > livreur), voir config/auth.ts.
-const displayName = computed(() => {
-  const user = auth.user.value;
-  return user ? `${user.prenom} ${user.nom}`.trim() : "";
-});
+// démonstration). Nom et libellé de rôle : voir config/auth.ts.
+const displayName = computed(() => clientDisplayName(auth.user.value));
 const displayPhone = computed(() => formatPhoneNumber(auth.user.value?.telephone));
-const displayRole = computed(() => clientSpaceRoleLabel(auth.user.value?.roles));
+const displayRole = computed(() => clientSpaceRoleLabel(auth.user.value?.roles, auth.context.value));
 const displayQr = computed(() => auth.user.value?.qr_payload ?? null);
 
 // Période précédente (comparaison RÉELLE, pas une image locale figée) : même
