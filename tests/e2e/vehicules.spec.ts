@@ -30,6 +30,7 @@ test.describe("Espace client — véhicules", () => {
     // canonique depuis le 27/08/2026, voir vehicleDriverSummary() dans
     // pages/espace-client/vehicules.vue) — plus le champ hérité conducteur.
     await expect(table.getByText("Mamadou Diallo")).toBeVisible();
+    await expect(table.getByText("Chauffeur-1")).toHaveCount(0);
     // Résumé "Capacité" : plusieurs catégories -> décompte, jamais un
     // nombre unique inventé (voir vehicleCapacitySummary()).
     await expect(table.getByText("2 catégories")).toBeVisible();

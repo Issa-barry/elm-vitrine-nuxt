@@ -858,6 +858,67 @@ $bp-mobile-or-tablet-portrait: "#{$bp-mobile}, #{$bp-tablet-portrait}";
       gap: 0.75rem;
     }
 
+    .client-mobile-expenses__active-filters {
+      margin-top: 0;
+      margin-bottom: 0.85rem;
+    }
+
+    .client-mobile-expenses__limit {
+      margin: 0 0 0.85rem;
+      color: var(--text-color-secondary);
+      font-size: 0.74rem;
+      line-height: 1.4;
+    }
+
+    .client-mobile-expenses__search {
+      margin-bottom: 1rem;
+    }
+
+    .client-mobile-expenses__months {
+      display: flex;
+      flex-direction: column;
+      gap: 1.1rem;
+    }
+
+    .client-mobile-expenses__month-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      width: 100%;
+      min-height: 2.75rem;
+      padding: 0.25rem 0.1rem;
+      margin-bottom: 0.45rem;
+      color: var(--text-color-secondary);
+      text-align: left;
+      cursor: pointer;
+      background: transparent;
+      border: 0;
+    }
+
+    .client-mobile-expenses__month-toggle > span {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 0.1rem;
+    }
+
+    .client-mobile-expenses__month-toggle strong {
+      color: var(--text-color);
+      font-size: 0.86rem;
+      font-weight: 800;
+    }
+
+    .client-mobile-expenses__month-toggle small {
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+
+    .client-mobile-expenses__month-toggle > i {
+      flex: 0 0 auto;
+      font-size: 0.75rem;
+    }
+
     .client-mobile-expenses__card {
       display: grid;
       grid-template-columns: 2.65rem minmax(0, 1fr) auto;

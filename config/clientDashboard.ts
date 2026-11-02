@@ -14,7 +14,13 @@ export type DashboardSummary = ApiDashboardResponse["summary"];
 // existants (pages/espace-client/{index,commissions}.vue).
 export type DashboardVehiculeBalance = ApiVehiculeEarningsRow;
 export type DashboardVehiculeIdentity = ApiDashboardResponse["vehicules"][number];
-export type ClientDashboardResponse = ApiDashboardResponse;
+// `depenses_total` (montant de la carte "Dépenses") : optionnel tant que la
+// vitrine peut être déployée avant le backend, voir dashboardExpensesTotal().
+export type ClientDashboardResponse = Omit<ApiDashboardResponse, "depenses_total"> & { depenses_total?: number };
+
+export function dashboardExpensesTotal(dashboard: ClientDashboardResponse): number {
+  return dashboard.depenses_total ?? dashboard.summary.frais_depenses_total;
+}
 
 /** Requête vers GET /api/client/dashboard (BFF) — tous les filtres sont optionnels. */
 export type DashboardQuery = ApiDashboardQuery;

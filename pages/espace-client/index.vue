@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { ClientDashboardResponse } from "~/config/clientDashboard";
+import { dashboardExpensesTotal, type ClientDashboardResponse } from "~/config/clientDashboard";
 import { clientDisplayName, clientSpaceRoleLabel } from "~/config/auth";
 import { notificationResourceToRoute } from "~/config/clientNotifications";
 import type { ClientNotification } from "~/config/clientNotifications";
@@ -89,6 +89,9 @@ const topVehicleLink = (vehiculeId: string) => ({
   query: { vehicule_id: vehiculeId },
 });
 
+const expensesTotal = computed(() => (dashboard.value ? dashboardExpensesTotal(dashboard.value) : 0));
+const previousExpensesTotal = computed(() => (previousDashboard.value ? dashboardExpensesTotal(previousDashboard.value) : 0));
+
 // Jamais un pourcentage inventé : null tant que l'une des deux périodes n'est
 // pas chargée (voir utils/kpiTrend.ts — computeKpiTrend renvoie déjà null si
 // la période précédente vaut 0).
@@ -102,7 +105,7 @@ const kpiTrends = computed(() => {
     generated: computeKpiTrend(current.total_earned, previous.total_earned),
     // invertTone=true : une hausse de dépenses n'est pas une bonne nouvelle,
     // contrairement aux 3 autres KPI (voir utils/kpiTrend.ts).
-    expenses: computeKpiTrend(current.frais_depenses_total, previous.frais_depenses_total, true),
+    expenses: computeKpiTrend(expensesTotal.value, previousExpensesTotal.value, true),
     operations: computeKpiTrend(current.operations_count, previous.operations_count),
     remaining: computeKpiTrend(current.balance, previous.balance),
   };
@@ -154,7 +157,7 @@ const recentNotifications = computed(() => notificationItems.value.slice(0, 6));
       <div class="client-mobile-summary-grid">
         <NuxtLink to="/espace-client/depenses" class="client-mobile-summary-card" aria-label="Voir le détail des dépenses">
           <span class="client-mobile-summary-icon"><i class="pi pi-wallet" /></span>
-          <div><span>Dépenses</span><strong>{{ formatGnf(summary.frais_depenses_total) }}</strong></div>
+          <div><span>Dépenses</span><strong>{{ formatGnf(expensesTotal) }}</strong></div>
           <i class="pi pi-chevron-right client-mobile-summary-chevron" aria-hidden="true" />
         </NuxtLink>
       </div>
@@ -220,7 +223,7 @@ const recentNotifications = computed(() => notificationItems.value.slice(0, 6));
     <div class="col-span-12 md:col-span-6 xl:col-span-3">
       <ClientDashboardKpiCard
         label="Dépenses"
-        :value="formatGnf(summary.frais_depenses_total)"
+        :value="formatGnf(expensesTotal)"
         :trend="kpiTrends.expenses"
       />
     </div>
