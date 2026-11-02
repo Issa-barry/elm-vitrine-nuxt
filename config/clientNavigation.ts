@@ -25,17 +25,17 @@ export interface ClientNavItem {
   /**
    * Inclus dans le menu bas mobile (espace limité à quelques items
    * atteignables au pouce) — les autres restent accessibles via le menu
-   * desktop et les raccourcis du tableau de bord (ex. carte "Dépenses").
+   * desktop et les raccourcis du tableau de bord.
    */
   mobileBottomNav?: boolean;
 }
 
 export const CLIENT_NAV_ITEMS: ClientNavItem[] = [
-  { key: "dashboard", label: "Tableau de bord", icon: "pi-home", to: "/espace-client", capability: "dashboard", exact: true, section: "accueil", mobileBottomNav: true },
+  { key: "dashboard", label: "Accueil", icon: "pi-home", to: "/espace-client", capability: "dashboard", exact: true, section: "accueil", mobileBottomNav: true },
   { key: "vehicles", label: "Véhicules", icon: "pi-car", to: "/espace-client/vehicules", capability: "vehicles", section: "gestion", mobileBottomNav: true },
   { key: "logisticsActivity", label: "Livraisons", icon: "pi-map-marker", to: "/espace-client/activite", capability: "logisticsActivity", section: "gestion", mobileBottomNav: true },
   { key: "commissions", label: "Commissions", icon: "pi-percentage", to: "/espace-client/commissions", capability: "commissions", section: "gestion", mobileBottomNav: true },
-  { key: "expenses", label: "Dépenses", icon: "pi-wallet", to: "/espace-client/depenses", capability: "expenses", section: "gestion" },
+  { key: "expenses", label: "Dépenses", icon: "pi-wallet", to: "/espace-client/depenses", capability: "expenses", section: "gestion", mobileBottomNav: true },
   // Prestations : placeholder UI uniquement (voir pages/espace-client/
   // prestations.vue) — aucune API prestataire réelle, jamais affiché
   // aujourd'hui (capability "services" toujours false tant que le backend
