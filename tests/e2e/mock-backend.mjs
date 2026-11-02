@@ -180,10 +180,19 @@ router.post(
 // Toujours "not_found" : tests/e2e/inscription.spec.ts utilise volontairement
 // le même numéro que TEST_TELEPHONE (601020304, un numéro guinéen plausible
 // quelconque) sans lien avec le compte de connexion simulé ici — un
-// "user_exists" bloquerait son parcours d'inscription dès l'étape 1.
+// "user_exists" bloquerait son parcours d'inscription dès l'étape 1. Deux numéros
+// dédiés simulent une fiche connue, complète ou sans prénom/nom (ancienne réponse
+// backend, encore possible si la vitrine est déployée avant lui).
 router.post(
   "/api/auth/register/check-phone",
-  defineEventHandler(async () => {
+  defineEventHandler(async (event) => {
+    const body = await readBody(event);
+    if (body?.telephone === "+224601020398") {
+      return { status: "prefill_available", prefill: { prenom: "Rayanatou", nom: "SYLLA" } };
+    }
+    if (body?.telephone === "+224601020399") {
+      return { status: "prefill_available", prefill: { prenom: null, nom: null } };
+    }
     return { status: "not_found", prefill: null };
   }),
 );
