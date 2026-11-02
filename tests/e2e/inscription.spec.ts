@@ -46,4 +46,54 @@ test.describe("Inscription", () => {
     await page.getByRole("button", { name: "Continuer" }).click();
     await expect(page.getByRole("alert").first()).toBeVisible();
   });
+
+  test("verrouille une identité préremplie complète", async ({ page }) => {
+    await page.goto("/inscription", { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(1000);
+    await page.getByLabel("Numéro de téléphone").fill("601020398");
+    await page.getByRole("button", { name: "Continuer" }).click();
+
+    await expect(page.getByRole("heading", { name: "Comment vous appelez-vous ?" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Informations préremplies depuis nos dossiers.")).toBeVisible();
+    await expect(page.getByLabel("Prénom")).toHaveValue("Rayanatou");
+    await expect(page.getByLabel("Prénom")).not.toBeEditable();
+    await expect(page.getByLabel("Nom", { exact: true })).toHaveValue("SYLLA");
+    await expect(page.getByLabel("Nom", { exact: true })).not.toBeEditable();
+  });
+
+  // Régression prod 01/11 : prefill sans prénom ni nom -> champs vides verrouillés,
+  // impossible de passer l'étape.
+  test("laisse saisir le nom si le préremplissage reçu est vide", async ({ page }) => {
+    await page.goto("/inscription", { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(1000);
+    await page.getByLabel("Numéro de téléphone").fill("601020399");
+    await page.getByRole("button", { name: "Continuer" }).click();
+
+    await expect(page.getByRole("heading", { name: "Comment vous appelez-vous ?" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Informations préremplies depuis nos dossiers.")).toBeHidden();
+    await page.getByLabel("Prénom").fill("Moussa");
+    await page.getByLabel("Nom", { exact: true }).fill("Sidibe");
+    await page.getByRole("button", { name: "Continuer" }).click();
+
+    await expect(page.getByPlaceholder("Votre mot de passe")).toBeVisible();
+  });
+
+  test("ne garde pas l'identité préremplie d'un autre numéro après un retour", async ({ page }) => {
+    await page.goto("/inscription", { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(1000);
+    await page.getByLabel("Numéro de téléphone").fill("601020398");
+    await page.getByRole("button", { name: "Continuer" }).click();
+    await expect(page.getByLabel("Prénom")).toHaveValue("Rayanatou", { timeout: 10_000 });
+
+    await page.getByRole("button", { name: "Retour" }).click();
+    await page.getByLabel("Numéro de téléphone").fill("601020304");
+    await page.getByRole("button", { name: "Continuer" }).click();
+
+    await expect(page.getByRole("heading", { name: "Comment vous appelez-vous ?" })).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByLabel("Prénom")).toHaveValue("");
+    await expect(page.getByLabel("Prénom")).toBeEditable();
+  });
 });
