@@ -242,7 +242,7 @@ const checkPhone = async () => {
     // ordinaire, sans cette machinerie.
     const response = await rawFetch<{
       status: "user_exists" | "prefill_available" | "not_found";
-      prefill: { prenom: string; nom: string } | null;
+      prefill: { prenom: string | null; nom: string | null } | null;
     }>("/api/register/client/check-phone", {
       method: "POST",
       body: { telephone: telephone.value },
@@ -255,11 +255,22 @@ const checkPhone = async () => {
       return false;
     }
 
-    if (response.prefill) {
-      firstName.value = response.prefill.prenom || "";
-      lastName.value = response.prefill.nom || "";
+    // Identité incomplète (ex. client connu par son seul nom_complet) : champs
+    // laissés modifiables, sinon la personne resterait bloquée sur un champ
+    // vide verrouillé. Un nom déjà saisi à la main est conservé, mais pas
+    // celui prérempli pour un autre numéro après un retour à l'étape 1.
+    const prenom = response.prefill?.prenom?.trim() ?? "";
+    const nom = response.prefill?.nom?.trim() ?? "";
+
+    if (prenom && nom) {
+      firstName.value = prenom;
+      lastName.value = nom;
       isPrefilled.value = true;
     } else {
+      if (isPrefilled.value) {
+        firstName.value = "";
+        lastName.value = "";
+      }
       isPrefilled.value = false;
     }
 

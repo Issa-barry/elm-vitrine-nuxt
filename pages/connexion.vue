@@ -1024,14 +1024,111 @@ onBeforeUnmount(() => {
   opacity: 0.6;
 }
 
-// Tablette portrait uniquement (~768–1024px) : cette carte n'a pas le bug de
-// hauteur forcée des écrans inscription/mot-de-passe-oublié (elle suit déjà
-// sa propre hauteur), mais reste cohérente avec eux niveau largeur — un peu
-// plus large que le point de rupture desktop (24rem) pour ne pas paraître
-// trop étroite sur iPad. Le paysage tablette et le desktop gardent 24rem.
-@media (min-width: 768px) and (max-width: 1024px) and (orientation: portrait) {
+// Carte desktop/tablette inspirée du login elm-monolithe et d'Apollo.
+// Les marges automatiques gardent le haut accessible sur un écran peu haut.
+@media (min-width: 768px) {
+  .connexion-screen {
+    padding: 2rem;
+    background: var(--p-content-background);
+  }
+
   .connexion-card {
-    max-width: 28rem;
+    flex-shrink: 0;
+    max-width: 29rem;
+    padding: 2rem 2.25rem;
+    background: var(--p-content-background);
+    border: 1px solid var(--p-content-border-color);
+    border-radius: 1rem;
+    box-shadow: 0 20px 40px -12px rgb(15 23 42 / 12%);
+  }
+
+  .connexion-brand {
+    gap: 0.35rem;
+    margin-bottom: 1.75rem;
+  }
+
+  .connexion-brand-mark {
+    width: 3rem;
+    height: 3rem;
+  }
+
+  .connexion-brand h1 {
+    font-size: 1.4rem;
+    font-weight: 600;
+  }
+
+  .connexion-brand p {
+    font-size: 0.85rem;
+  }
+
+  .connexion-global-error {
+    margin: 0 0 1.25rem;
+    font-weight: 500;
+  }
+
+  .connexion-field {
+    font-size: 0.8rem;
+    font-weight: 500;
+  }
+
+  .connexion-phone,
+  .connexion-password {
+    height: 2.5rem;
+    border-radius: 0.375rem;
+  }
+
+  .connexion-phone:focus-within,
+  .connexion-password:focus-within {
+    outline: 2px solid var(--p-primary-color);
+    outline-offset: 2px;
+  }
+
+  .connexion-phone input,
+  .connexion-password input {
+    padding-inline: 0.75rem;
+    font-size: max(16px, 0.9rem);
+    font-weight: 400;
+  }
+
+  .connexion-country-select :deep(.p-select-label) {
+    padding-left: 0.65rem;
+    font-size: 0.8rem;
+    font-weight: 400;
+  }
+
+  .connexion-field-error-slot:empty {
+    display: none;
+  }
+
+  .connexion-submit {
+    min-height: 2.5rem;
+    border-radius: 0.65rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+  }
+
+  .connexion-otp-switch {
+    gap: 0.75rem;
+    margin-top: 1rem;
+  }
+
+  .connexion-otp-switch-label {
+    padding: 0.6rem;
+    border-radius: 0.65rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+  }
+
+  .connexion-forgot,
+  .connexion-signup {
+    margin-top: 1rem;
+    font-size: 0.8rem;
+  }
+
+  .connexion-forgot,
+  .connexion-signup a,
+  .connexion-otp-title {
+    font-weight: 600;
   }
 }
 </style>
