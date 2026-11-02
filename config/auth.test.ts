@@ -3,6 +3,7 @@ import {
   DEVICE_NAME,
   buildLoginPayload,
   buildOtpVerifyPayload,
+  clientDisplayName,
   clientSpaceRoleLabel,
   hasClientSpaceAccess,
   isAccountStatusCode,
@@ -14,16 +15,51 @@ import {
 } from "./auth";
 
 describe("clientSpaceRoleLabel", () => {
-  it("priorité proprietaire > client > livreur en cas de cumul (même ordre que profile.type backend)", () => {
+  it("priorité proprietaire > livreur > client en cas de cumul", () => {
     expect(clientSpaceRoleLabel(["client", "proprietaire"])).toBe("Propriétaire");
     expect(clientSpaceRoleLabel(["manager", "client"])).toBe("Client");
     expect(clientSpaceRoleLabel(["comptable", "livreur"])).toBe("Livreur");
+    // Régression 02/11 : un livreur inscrit porte aussi le rôle client (voir
+    // RegistrationService), il restait donc affiché "Client".
+    expect(clientSpaceRoleLabel(["client", "livreur"])).toBe("Livreur");
+    expect(clientSpaceRoleLabel(["livreur", "proprietaire", "client"])).toBe("Propriétaire");
+  });
+
+  it("le contexte résolu par le backend prime sur les rôles bruts", () => {
+    const context = { organization_id: "org", client_id: "c1", proprietaire_id: null, livreur_id: "l1" };
+    expect(clientSpaceRoleLabel(["client"], context)).toBe("Livreur");
+    expect(clientSpaceRoleLabel(["client"], { ...context, proprietaire_id: "p1" })).toBe("Propriétaire");
+    expect(clientSpaceRoleLabel(["livreur"], { ...context, livreur_id: null })).toBe("Client");
+  });
+
+  it("un contexte vide ou absent revient aux rôles", () => {
+    const emptyContext = { organization_id: null, client_id: null, proprietaire_id: null, livreur_id: null };
+    expect(clientSpaceRoleLabel(["livreur"], emptyContext)).toBe("Livreur");
+    expect(clientSpaceRoleLabel(["client"], null)).toBe("Client");
   });
 
   it("compte staff pur (sans rôle espace client) : libellé neutre, jamais un rôle inventé", () => {
     expect(clientSpaceRoleLabel(["super_admin"])).toBe("Compte");
     expect(clientSpaceRoleLabel(null)).toBe("Compte");
     expect(clientSpaceRoleLabel(undefined)).toBe("Compte");
+  });
+});
+
+describe("clientDisplayName", () => {
+  it("privilégie le nom d'affichage du backend", () => {
+    expect(clientDisplayName({ prenom: null, nom: null, nom_affichage: "Camara Ya Moussa" })).toBe("Camara Ya Moussa");
+  });
+
+  it("revient au prénom et au nom si le backend ne fournit pas encore nom_affichage", () => {
+    expect(clientDisplayName({ prenom: " Test ", nom: "E2E" })).toBe("Test E2E");
+    expect(clientDisplayName({ prenom: null, nom: "SYLLA", nom_affichage: null })).toBe("SYLLA");
+  });
+
+  it("n'affiche jamais \"null null\" pour une identité vide", () => {
+    expect(clientDisplayName({ prenom: null, nom: null })).toBe("—");
+    expect(clientDisplayName({ prenom: null, nom: null, nom_affichage: "  " })).toBe("—");
+    expect(clientDisplayName(null)).toBe("—");
+    expect(clientDisplayName(undefined)).toBe("—");
   });
 });
 

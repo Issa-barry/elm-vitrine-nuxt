@@ -40,7 +40,16 @@ export const DEVICE_NAME = "elm-nuxt-web";
 // (LoginResponse, plus légère, qui ne les renvoie PAS — voir
 // composables/useAuth.ts::login(), qui pose `user.value = data.user` avant
 // même d'avoir appelé /me). Les rendre requis casserait ce cas réel.
-export type AuthUser = Omit<ApiMeResponse, "context" | "email" | "is_active" | "qr_payload"> & {
+//
+// `prenom`/`nom` réécrits en nullables : générés en `string`, mais null pour
+// une fiche connue par son seul nom_complet (cas réel du 02/11/2026, "null
+// null" à l'écran). Afficher un nom passe par clientDisplayName() plus bas.
+// `nom_affichage` optionnel : renvoyé par /auth/me seulement, pas par
+// /auth/login.
+export type AuthUser = Omit<ApiMeResponse, "context" | "email" | "is_active" | "qr_payload" | "prenom" | "nom" | "nom_affichage"> & {
+  prenom: string | null;
+  nom: string | null;
+  nom_affichage?: string | null;
   email: string | null;
   is_active?: boolean;
   qr_payload?: string | null;
@@ -341,15 +350,37 @@ export function hasClientSpaceAccess(roles: string[] | undefined | null): boolea
   return roles.some((role) => allowed.includes(role));
 }
 
-// Libellé d'affichage pour un compte cumulant plusieurs rôles (ex. carte
-// d'identité mobile, pages/espace-client/index.vue) — même ordre de priorité
-// que `profile.type` sur GET /v1/mobile/profile (proprietaire > client >
-// livreur en cas de cumul, voir docs/api-espace-client-contract.md §0/§3
-// côté elm-monolithe) : jamais roles[0], qui refléterait un ordre arbitraire
-// côté base de données plutôt qu'une vraie priorité métier.
-export function clientSpaceRoleLabel(roles: string[] | undefined | null): string {
-  if (roles?.includes("proprietaire")) return "Propriétaire";
-  if (roles?.includes("client")) return "Client";
+// Libellé d'affichage pour un compte cumulant plusieurs rôles (carte d'identité
+// et panneau de profil mobiles). `context` (identité résolue par le backend)
+// prime sur les rôles bruts, jamais roles[0]. Priorité proprietaire > livreur >
+// client : un livreur inscrit porte aussi le rôle client (RegistrationService
+// côté elm-monolithe), ce rôle ne dit donc rien de son activité. Volontairement
+// différent de `profile.type` (proprietaire > client > livreur), qui choisit la
+// fiche lue et modifiée par GET/PATCH /v1/mobile/profile.
+export function clientSpaceRoleLabel(
+  roles: string[] | undefined | null,
+  context?: AuthContext | null,
+): string {
+  if (context?.proprietaire_id || roles?.includes("proprietaire")) return "Propriétaire";
+  if (context?.livreur_id) return "Livreur";
+  if (context?.client_id) return "Client";
   if (roles?.includes("livreur")) return "Livreur";
+  if (roles?.includes("client")) return "Client";
   return "Compte";
+}
+
+// Nom à afficher pour le compte connecté. `nom_affichage` (GET /api/auth/me)
+// d'abord : prenom/nom valent null pour une fiche connue par son seul
+// nom_complet. Prénom + nom en repli, car /auth/login ne renvoie pas ce champ.
+export function clientDisplayName(
+  user: { prenom?: string | null; nom?: string | null; nom_affichage?: string | null } | null | undefined,
+): string {
+  const fromBackend = user?.nom_affichage?.trim();
+  if (fromBackend) return fromBackend;
+
+  const civilName = [user?.prenom, user?.nom]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" ");
+  return civilName || "—";
 }
