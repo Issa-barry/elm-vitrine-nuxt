@@ -16,8 +16,8 @@ export default defineNuxtConfig({
         { rel: "icon", type: "image/png", href: "/favicon.png" },
         { rel: "apple-touch-icon", href: "/icons/apple-touch-icon-180x180.png" },
         // Contenu généré dynamiquement par server/routes/manifest.webmanifest.ts
-        // (nom/short_name pilotés par NUXT_PUBLIC_APP_NAME, jamais figés au
-        // build) — voir docs/pwa.md.
+        // (name/short_name pilotés par NUXT_PUBLIC_APP_NAME et
+        // NUXT_PUBLIC_APP_SHORT_NAME, jamais figés au build) — voir docs/pwa.md.
         { rel: "manifest", href: "/manifest.webmanifest" },
         { rel: "stylesheet", href: "https://fonts.cdnfonts.com/css/lato" },
       ],
@@ -40,10 +40,15 @@ export default defineNuxtConfig({
   },
   modules: ["nuxt-icon", "@primevue/nuxt-module", "@nuxt/eslint", "@vite-pwa/nuxt"],
   pwa: {
-    // Prompt maîtrisé (voir components/PwaUpdatePrompt.vue) : jamais de
-    // rechargement silencieux qui mélangerait un ancien JS avec un nouveau
-    // backend, jamais l'inverse non plus.
-    registerType: "prompt",
+    // Mise à jour sans clic ni rechargement forcé (voir docs/pwa.md § mise à
+    // jour) : le nouveau service worker s'active seul (skipWaiting, plus bas),
+    // et le plugin d'enregistrement du module est remplacé par
+    // plugins/pwa-register.client.ts, car le sien recharge la page sans
+    // condition, même pendant une saisie.
+    registerType: "autoUpdate",
+    client: {
+      registerPlugin: false,
+    },
     // Le manifest est servi dynamiquement par
     // server/routes/manifest.webmanifest.ts (même artefact .output réutilisable
     // sur plusieurs environnements Hostinger, voir docs/environment.md) : on
@@ -56,6 +61,16 @@ export default defineNuxtConfig({
       // mise en cache — voir docs/pwa.md § politique de cache.
       navigateFallback: null,
       cleanupOutdatedCaches: true,
+      skipWaiting: true,
+      clientsClaim: true,
+      // Web Push (chantier du 28/08/2026, voir docs/pwa.md § Web Push) :
+      // ajoute les listeners push/notificationclick (public/push-sw.js) au
+      // service worker généré par Workbox, SANS migrer generateSW ->
+      // injectManifest — mécanisme officiel documenté par workbox-build pour
+      // ce cas exact (GenerateSWOptions.importScripts). Un seul service
+      // worker au total : ce script tourne dans le MÊME scope `self`, jamais
+      // un second SW concurrent.
+      importScripts: ["push-sw.js"],
       // Seuls les assets statiques versionnés du build (JS/CSS/icônes/fonts)
       // sont précachés. Aucune route serveur (/api/*, /manifest.webmanifest,
       // /robots.txt) n'est un fichier de ce dossier : elles ne peuvent donc

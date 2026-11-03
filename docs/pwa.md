@@ -3,7 +3,8 @@
 V1 : installable sur mobile, tablette et ordinateur, en conservant le SSR et
 le SEO existants. **Volontairement sans offline métier** (pas de cache de
 commandes, véhicules, dépenses, gains/commissions, profil — voir
-[Garde-fous](#garde-fous) et [AGENTS.md](../AGENTS.md)).
+[Garde-fous](#garde-fous) et [AGENTS.md](../AGENTS.md)). Web Push (notifications
+système) fait exception depuis le 28/08/2026 — voir [Web Push](#web-push).
 
 ## Architecture
 
@@ -28,13 +29,12 @@ La génération statique du module (`pwa.manifest`) est donc désactivée
 (`manifest: false` dans `nuxt.config.ts`) au profit de cette route.
 
 Champs pilotés par `runtimeConfig.public` (donc par les variables
-`NUXT_PUBLIC_*` déjà documentées dans `docs/environment.md`, aucune nouvelle
-variable créée) :
+`NUXT_PUBLIC_*` documentées dans `docs/environment.md`) :
 
 | Champ manifest | Source | Exemple prod | Exemple préprod |
 |---|---|---|---|
-| `name` | `NUXT_PUBLIC_APP_NAME` | `Eau La Maman` | `ELM Préprod` |
-| `short_name` | `ELM` en production, sinon identique à `name` | `ELM` | `ELM Préprod` |
+| `name` | `NUXT_PUBLIC_APP_NAME` | `Eau La Maman` | `Eau La Maman Test` |
+| `short_name` | `NUXT_PUBLIC_APP_SHORT_NAME`, ou `NUXT_PUBLIC_APP_NAME` si vide | `ELM` | `ELM Test` |
 
 Champs fixes (identiques partout, non pilotés par l'environnement) :
 
@@ -55,10 +55,29 @@ Le lien `<link rel="manifest" href="/manifest.webmanifest">` est ajouté
 statiquement dans `nuxt.config.ts` (`app.head.link`), le chemin ne change
 jamais même si le contenu, lui, varie par environnement.
 
-Le nom affiché sous l'icône iOS lors de « Ajouter à l'écran d'accueil » suit
-la même logique côté client, dans `app.vue`
-(`meta name="apple-mobile-web-app-title"`, piloté par
-`runtimeConfig.public.appName`).
+Le nom affiché sous l'icône iOS lors de « Ajouter à l'écran d'accueil » est le
+même nom court, dans `app.vue` (`meta name="apple-mobile-web-app-title"`,
+`resolveAppShortName` de `config/runtime.ts`).
+
+### Changer le nom d'une application
+
+1. Local : modifier `.env`, puis relancer `nuxt dev`. Préprod et production :
+   modifier la variable dans le panneau Hostinger de la Web App, puis
+   redémarrer ou redéployer l'application (les variables sont lues au
+   démarrage du serveur, aucune recompilation n'est nécessaire).
+2. Vérifier : `/manifest.webmanifest` et la balise
+   `apple-mobile-web-app-title` de la page d'accueil.
+3. Applications déjà installées :
+   - **iPhone/iPad** : le nom est figé à l'installation (et modifiable par
+     l'utilisateur à ce moment-là). Supprimer l'icône et réinstaller.
+   - **Android** : Chrome relit le manifest de lui-même, la mise à jour peut
+     prendre plusieurs jours. Réinstaller pour l'obtenir immédiatement.
+   - **Ordinateur** : Chrome/Edge relisent aussi le manifest et peuvent
+     demander une confirmation du changement de nom.
+
+Le service worker ne met pas `/manifest.webmanifest` en cache (route serveur,
+hors `globPatterns`) et le CDN Hostinger le sert sans cache
+(`x-hcdn-cache-status: DYNAMIC`, constaté le 02/11/2026).
 
 ## Icônes
 
@@ -136,8 +155,9 @@ cache du service worker.
 
 Volontairement absents de cette V1 : cache de commandes, véhicules,
 dépenses, gains/commissions, profil ; IndexedDB métier ; Background Sync ;
-file d'attente offline ; notifications push. Pourront être étudiés plus
-tard, sur décision explicite — voir [Garde-fous](#garde-fous).
+file d'attente offline. Pourront être étudiés plus tard, sur décision
+explicite — voir [Garde-fous](#garde-fous). Les notifications push font
+exception depuis le 28/08/2026 — voir [Web Push](#web-push) ci-dessous.
 
 ## Vitrine + espace client
 
@@ -162,18 +182,42 @@ branchement réel de l'auth.
 
 ## Mise à jour
 
-`registerType: "prompt"` (pas `autoUpdate`) : un nouveau déploiement
-n'écrase jamais silencieusement le JS en cours d'exécution. Quand un nouveau
-service worker est prêt, `components/PwaUpdatePrompt.vue` affiche un bandeau
-discret « Nouvelle version disponible — Mettre à jour », piloté par
-`usePWA().needRefresh` (composable exposé par `@vite-pwa/nuxt`). Le clic
-appelle `updateServiceWorker(true)`, qui active le nouveau service worker et
-recharge la page. Sans action de l'utilisateur, l'ancienne version continue
-de fonctionner normalement (pas de rupture forcée en plein usage).
+Depuis le 02/11/2026 (décision explicite) : plus de bandeau « Nouvelle version
+disponible », aucun clic demandé et aucun rechargement pendant une saisie. Le
+mode `prompt` précédent demandait un clic à chaque déploiement, alors que le
+service worker ne sert jamais le HTML (`navigateFallback: null`) : une page
+ouverte après un déploiement exécutait déjà le nouveau code.
 
-Pas de bandeau au premier chargement : `needRefresh` ne devient vrai que
-lorsqu'un service worker plus récent est effectivement en attente, jamais à
-l'installation initiale.
+| Situation | Ce qui se passe |
+|---|---|
+| Page ouverte après un déploiement | HTML et JS récents viennent du réseau. Le nouveau service worker s'active en arrière-plan (`skipWaiting`), sans rechargement. |
+| Onglet resté ouvert pendant un déploiement | Il garde l'ancienne version sans interruption. Nuxt vérifie `/_nuxt/builds/latest.json` toutes les heures (`experimental.checkOutdatedBuildInterval`) et, si la version a changé, recharge au **prochain changement de page** (`chunk-reload.client`). |
+| Ancien fichier JS introuvable lors d'un changement de page | Nuxt recharge sur la page demandée (`emitRouteChunkError: "automatic"`, valeur par défaut). |
+
+Le service worker est enregistré par `plugins/pwa-register.client.ts` et non
+par le plugin de `@vite-pwa/nuxt` (`client.registerPlugin: false`). Ce dernier
+s'appuie sur `workbox-window`, qui recharge la page dès qu'un nouveau service
+worker prend le contrôle : `registerType: "autoUpdate"` seul effacerait donc
+une saisie en cours (code OTP, inscription...). Ne pas le réactiver sans
+re-vérifier ce point. Conséquence : `usePWA()` et `$pwa` ne sont plus
+disponibles, utiliser `navigator.serviceWorker` directement.
+
+Limite : tant que l'utilisateur ne change pas de page et ne recharge pas, un
+onglet ouvert reste sur l'ancienne version. Une évolution d'API doit donc
+rester compatible avec le JS de la version précédente le temps de la transition.
+
+Autre limite : Nitro répond `304` à `/sw.js` si la date du build servi n'est pas
+plus récente que celle du service worker installé. Après un retour à un build
+plus ancien, le service worker en place reste donc actif jusqu'au build suivant.
+Les pages restent servies par le réseau, donc dans la version redéployée.
+
+Vérifié le 02/11/2026 sous Chromium, sur de vrais builds successifs servis par
+`.output/server/index.mjs` : pas de bandeau ni de rechargement à la réouverture,
+saisie conservée dans un onglet ouvert pendant un déploiement (y compris un
+onglet encore sur l'ancien code à bandeau), rechargement au changement de page
+après la vérification horaire, et rechargement sur la page demandée quand un
+ancien fichier JS manque. Non vérifié : Safari iOS et Android réel, à contrôler
+après déploiement sur `test.eau-la-maman.com`.
 
 ## Installation
 
@@ -207,30 +251,51 @@ iOS (pas de bannière custom, pas de détection UA pour forcer un prompt).
 
 ### UX installation
 
-Aucun prompt d'installation personnalisé n'est déclenché au premier
-chargement : `pwa.workbox`/`client.installPrompt` n'est pas configuré, donc
-`@vite-pwa/nuxt` laisse le navigateur gérer nativement l'événement
-`beforeinstallprompt` (pas de `preventDefault()` custom). Proposer
-l'installation depuis l'espace client ou le profil est un sujet séparé, pour
-plus tard.
+Bouton "Installer l'application" sur la landing mobile (`components/
+PwaInstallButton.vue`), branché du 29/08/2026, mis en avant comme CTA
+**principal** de la barre d'actions fixe (`components/landing/Hero.vue`)
+quand une installation est disponible — Mon espace/Connexion redescendent
+alors en `outline`, Inscription en `muted` (design déjà utilisé ailleurs sur
+la landing, `assets/css/main.css::.landing-theme-action--*`), jamais 3 gros
+boutons bleus concurrents. Sans installation disponible (déjà installée,
+navigateur non compatible), le bouton disparaît et la hiérarchie retombe
+telle qu'avant (Mon espace, ou Connexion primaire + Inscription outline) sans
+laisser de trou. Toute la détection plateforme/état vit dans
+`composables/usePwaInstall.ts` (accès navigateur) et `config/pwaInstall.ts`
+(logique pure, testable sans DOM — même convention que `config/webPush.ts`) :
+
+- **Déjà installée** (`display: standalone`, y compris `navigator.standalone`
+  sur iOS) → bouton masqué.
+- **Android/Chrome, desktop Chrome/Edge** : `beforeinstallprompt` est
+  intercepté (`preventDefault()`) pour piloter l'invite depuis CE bouton
+  plutôt que la mini-infobar par défaut du navigateur ; le clic déclenche
+  `prompt()` sur l'événement capturé.
+- **iOS/iPadOS (Safari)** : `beforeinstallprompt` ne se déclenche jamais
+  (WebKit) — le clic ouvre une modale (PrimeVue `Dialog`) avec les 3 étapes
+  manuelles (Partager → Sur l'écran d'accueil → Ajouter). Aucune tentative de
+  déclencher automatiquement l'installation sur cette plateforme.
+- **Navigateur sans l'un ni l'autre chemin** (ex. Firefox desktop) → bouton
+  masqué plutôt qu'un bouton qui échouerait silencieusement.
+
+Vérification manuelle à faire contre un build réel (même limite que
+l'installabilité elle-même, voir [Vérifications
+effectuées](#vérifications-effectuées)) : iPhone/iPad Safari, Android Chrome,
+Chrome desktop, et le cas "déjà installée".
 
 ## Environnements
 
-Aucune nouvelle variable d'environnement : le manifest et le titre iOS
-réutilisent `NUXT_PUBLIC_APP_NAME` / `NUXT_PUBLIC_ENVIRONMENT`, déjà
-documentés dans `docs/environment.md` (qui anticipait déjà ce besoin : *« Nom
-affiché ; sert aussi au manifest PWA »*). En pratique, avec les valeurs déjà
-prévues par environnement :
+Le manifest et le titre iOS utilisent `NUXT_PUBLIC_APP_NAME` et
+`NUXT_PUBLIC_APP_SHORT_NAME`, documentées dans `docs/environment.md`. Aucun nom
+d'application ne dépend de `NUXT_PUBLIC_ENVIRONMENT`. Valeurs par environnement :
 
-| Environnement | `name`/`short_name` (non-prod) ou `name` (prod) |
-|---|---|
-| Local | `Eau La Maman` (valeur par défaut de `NUXT_PUBLIC_APP_NAME`) |
-| Préproduction | `ELM Préprod` |
-| Recette | `ELM Recette` |
-| Production | `Eau La Maman` (`short_name: "ELM"`) |
+| Environnement | `NUXT_PUBLIC_APP_NAME` | `NUXT_PUBLIC_APP_SHORT_NAME` | Où la renseigner |
+|---|---|---|---|
+| Local | `Eau La Maman` | `ELM Dev` | fichier `.env` |
+| Préproduction | `Eau La Maman Test` | `ELM Test` | panneau Hostinger |
+| Production | `Eau La Maman` | `ELM` | panneau Hostinger |
 
-Un testeur préprod/recette voit donc un nom d'app différent de la production,
-aussi bien dans le manifest Android/desktop que dans le titre iOS.
+Un testeur préprod voit donc un nom d'app différent de la production, aussi
+bien dans le manifest Android/desktop que dans le titre iOS.
 
 ## Vérifications effectuées
 
@@ -262,6 +327,132 @@ attendus (`name`, `start_url`, `scope`, `display`, icônes). La vérification
 du service worker lui-même (uniquement actif en build, voir ci-dessus) reste
 manuelle.
 
+## Web Push
+
+Chantier du 28/08/2026 — 3ᵉ canal de notifications côté backend
+(`NotificationDispatcher` → `DispatchPushNotificationsJob` → Expo + Web Push,
+voir `docs/api-espace-client-contract.md` §7.4 côté elm-monolithe), branché
+ici à l'existant PWA/BFF **sans** créer de second service worker ni migrer de
+stratégie Workbox.
+
+### Architecture
+
+```
+Browser (PushManager, Notification)
+   ↓
+composables/useWebPush.ts (logique pure : config/webPush.ts)
+   ↓
+server/api/client/web-push/*.ts (BFF Nitro, session httpOnly existante)
+   ↓
+Laravel /v1/mobile/web-push/* (Bearer Sanctum)
+```
+
+- `GET /api/client/web-push/vapid-public-key` → `GET
+  /v1/mobile/web-push/vapid-public-key` (`public_key: string | null` —
+  `null` = canal pas configuré côté serveur, jamais une erreur).
+- `POST /api/client/web-push/subscriptions` → `POST
+  /v1/mobile/web-push/subscriptions` (`{endpoint, keys: {p256dh, auth}}`,
+  idempotent — upsert par endpoint côté backend).
+- `DELETE /api/client/web-push/subscriptions?endpoint=...` → `DELETE
+  /v1/mobile/web-push/subscriptions?endpoint=...` (toujours 200, ne supprime
+  que l'abonnement de CET endpoint).
+
+Comme le reste du BFF : le token Sanctum ne quitte jamais le serveur Nitro
+(`server/utils/authSession.ts`), `server/utils/monolithClient.ts` réutilisé
+tel quel (juste élargi à la méthode `DELETE`).
+
+### Service worker : un seul, `importScripts` plutôt qu'`injectManifest`
+
+La stratégie reste `generateSW` (voir [Architecture](#architecture) plus
+haut) : `public/push-sw.js` (script classique, pas un module ES) est injecté
+dans le service worker généré par Workbox via `pwa.workbox.importScripts`
+(`nuxt.config.ts`) — mécanisme officiel `workbox-build` documenté pour
+exactement ce besoin ("include some additional code, such as a push event
+listener"). Il tourne dans le **même** `self`/scope que le SW généré : un
+seul service worker au total, jamais un second SW concurrent pour `/`.
+
+Conséquence assumée : `public/push-sw.js` ne peut pas importer
+`config/webPush.ts` (TypeScript, jamais bundlé pour ce fichier). Le mapping
+`type` d'événement → route (`notificationclick`) y est donc dupliqué à la
+main, avec un commentaire croisé des deux côtés — migrer vers
+`injectManifest` (qui permettrait un vrai import partagé) a été jugé
+disproportionné pour ce seul besoin, avec le risque de régression sur
+tout le pipeline PWA existant (precache, offline fallback, mise à jour) que
+ça implique. À reconsidérer si le mapping grossit significativement.
+
+### Payload (`push` event)
+
+Confirmé en lisant directement `DispatchPushNotificationsJob`/
+`WebPushService::sendToUser` côté elm-monolithe (le rapport backend était
+ambigu à ce sujet) : le JSON reçu par le navigateur est **aplati**,
+`{title, body, ...data}`, jamais `{title, body, data: {...}}` imbriqué. Les
+2 seuls événements aujourd'hui câblés produisent :
+
+```json
+{ "title": "Nouvelle commande assignée", "body": "Réf. ... — ...", "type": "commande_vente_validee", "commande_id": "..." }
+{ "title": "Nouvelle livraison assignée", "body": "Réf. ... — ...", "type": "transfert_created", "transfert_id": "..." }
+```
+
+Seul `commande_vente_validee` a une route connue côté Nuxt
+(`/espace-client/activite?commande=<id>`, même destination que
+`notificationResourceToRoute()` dans `config/clientNotifications.ts` pour la
+cloche database — vocabulaire différent, écran identique). `transfert_created`
+n'a pas de page dédiée : repli sur `/espace-client/notifications`, jamais une
+route inventée.
+
+### `useWebPush()` (`composables/useWebPush.ts`)
+
+État exposé : `state` (enum fermé — voir `config/webPush.ts::WebPushState` :
+`unsupported`, `requires_install`, `unavailable_server`, `permission_denied`,
+`subscribed`, `not_subscribed`), `isSupported`, `isSubscribed`, `isLoading`,
+`error`. Actions : `initialize()` (lecture seule + resync silencieuse, jamais
+de prompt), `subscribe()` (seule fonction qui appelle
+`Notification.requestPermission()`, uniquement depuis un clic explicite),
+`unsubscribe()` (désactivation explicite : DELETE serveur + abonnement
+navigateur), `syncSubscription()` (resync silencieuse, utilisée aussi par
+`useAuth.ts`), `unlinkFromAccount()` (DELETE serveur **seul**, jamais
+d'`unsubscribe()` navigateur — utilisée au logout).
+
+### Cycle de vie compte / appareil
+
+- **Login** (`useAuth.ts::completeLogin()`) : `syncSubscription()` en
+  best-effort — si un abonnement navigateur existe déjà (créé par ce compte
+  ou un précédent sur ce même navigateur), il est réassocié au compte qui
+  vient de se connecter. Ne crée jamais de nouvel abonnement, aucun prompt.
+- **Logout / perte de session** (`useAuth.ts::clear()`) : `unlinkFromAccount()`
+  en best-effort — supprime uniquement l'association serveur de cet endpoint.
+  L'abonnement navigateur n'est **pas** détruit : un login suivant (même
+  compte ou un autre) le resynchronise. Empêche qu'un compte A continue de
+  recevoir des notifications après logout puis connexion d'un compte B sur le
+  même navigateur, sans forcer un ré-abonnement complet à chaque connexion.
+- **Désactivation explicite** ("Notifications sur cet appareil" →
+  Désactiver, page Profil) : DELETE serveur **et**
+  `subscription.unsubscribe()` — la seule situation où l'abonnement
+  navigateur lui-même est détruit.
+
+### UX
+
+Carte "Notifications sur cet appareil" dans `pages/espace-client/profil.vue`
+— **distincte** de la carte "Notifications" existante (préférence
+`notification_preferences`, backend/globale au compte) : celle-ci est locale
+à ce navigateur/appareil, jamais présentée comme un réglage de compte. Pas de
+`Notification.requestPermission()` au chargement — uniquement depuis le clic
+sur "Activer". Sur iOS/iPadOS Safari non installé (PWA pas ajoutée à l'écran
+d'accueil), l'état `requires_install` affiche une consigne d'installation
+plutôt qu'un bouton qui échouerait silencieusement.
+
+### LIMITATION BACKEND ACTUELLE
+
+Web Push hérite exactement de la couverture Expo existante : seuls **2
+événements sur 7** fournissent aujourd'hui un `$pushPayload`
+(`NotificationDispatcher`) — commande validée et transfert créé. Commission
+générée/payée, dépense validée, transfert réceptionné et commission
+manquante restent `database`-only (visibles dans la cloche, jamais en
+notification système). **Volontairement pas de compensation côté Nuxt**
+(aucune simulation de push en observant la cloche) : étendre la couverture
+est un sujet backend (`$pushPayload` sur les 5 jobs/services restants), pas
+un correctif frontend.
+
 ## Garde-fous
 
 Voir aussi `AGENTS.md`. Pour tout agent qui reviendrait sur ce chantier :
@@ -275,3 +466,8 @@ Voir aussi `AGENTS.md`. Pour tout agent qui reviendrait sur ce chantier :
 - Pas d'offline métier (IndexedDB, Background Sync, file d'attente) sans
   décision explicite — ce n'est pas un oubli, c'est un choix de portée pour
   cette V1.
+- Web Push (voir [section dédiée](#web-push)) : un seul service worker au
+  total (`public/push-sw.js` chargé via `importScripts`, jamais un second SW
+  enregistré) ; ne jamais appeler `Notification.requestPermission()` hors
+  d'un clic explicite ; ne jamais étendre la couverture backend (2/7
+  événements) par une simulation côté Nuxt.

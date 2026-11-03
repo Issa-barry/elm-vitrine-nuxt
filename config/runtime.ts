@@ -3,6 +3,7 @@ export interface PublicRuntimeConfig {
   apiBase: string;
   environment: string;
   appName: string;
+  appShortName: string;
   appVersion: string;
   // Nuxt augmente runtimeConfig.public via son propre système de types
   // (modules, hooks...) : la signature d'index le rend assignable au type
@@ -13,6 +14,10 @@ export interface PublicRuntimeConfig {
 export interface AppRuntimeConfig {
   monolithApiBase: string;
   vitrineServiceToken: string;
+  // Secret de scellement du cookie de session BFF (server/utils/authSession.ts)
+  // — jamais sous `public` (voir le test dédié dans config/runtime.test.ts).
+  // >= 32 caractères imposés par h3 useSession (iron-webcrypto).
+  authSessionPassword: string;
   public: PublicRuntimeConfig;
   [key: string]: unknown;
 }
@@ -20,11 +25,13 @@ export interface AppRuntimeConfig {
 export const runtimeConfigDefaults: AppRuntimeConfig = {
   monolithApiBase: "",
   vitrineServiceToken: "",
+  authSessionPassword: "",
   public: {
     siteUrl: "",
     apiBase: "",
     environment: "local",
     appName: "Eau La Maman",
+    appShortName: "",
     appVersion: process.env.npm_package_version || "0.0.0",
   },
 };
@@ -43,6 +50,32 @@ export function findMissingRequiredConfig(config: Pick<AppRuntimeConfig, "public
 
 export function isProductionEnvironment(environment: string): boolean {
   return environment === "production";
+}
+
+// Nom affiché sous l'icône de l'application installée (short_name du manifest
+// et titre iOS). NUXT_PUBLIC_APP_SHORT_NAME absente ou vide : le nom complet
+// est repris, pour ne jamais produire un manifest sans short_name.
+export function resolveAppShortName(
+  config: Pick<PublicRuntimeConfig, "appName" | "appShortName">,
+): string {
+  return config.appShortName || config.appName;
+}
+
+// authSessionPassword (server/utils/authSession.ts) est serveur-only —
+// jamais sous `public`, donc hors de REQUIRED_PUBLIC_KEYS/
+// findMissingRequiredConfig ci-dessus, qui ne portent que sur `public`.
+// >= 32 caractères imposés par h3 useSession (iron-webcrypto) pour le
+// scellement du cookie de session BFF.
+const MIN_AUTH_SESSION_PASSWORD_LENGTH = 32;
+
+export function checkAuthSessionPassword(password: string): string | null {
+  if (!password) {
+    return "NUXT_AUTH_SESSION_PASSWORD manquante.";
+  }
+  if (password.length < MIN_AUTH_SESSION_PASSWORD_LENGTH) {
+    return `NUXT_AUTH_SESSION_PASSWORD trop courte (${password.length} caractères, ${MIN_AUTH_SESSION_PASSWORD_LENGTH} minimum).`;
+  }
+  return null;
 }
 
 // Hors production (local, préprod, recette) : on ne veut jamais qu'un moteur

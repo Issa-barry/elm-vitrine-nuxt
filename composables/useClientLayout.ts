@@ -14,6 +14,13 @@ type ClientLayoutState = {
   mobileMenuActive: boolean;
   configMenuVisible: boolean;
   topbarMenuVisible: boolean;
+  // Indépendant de configMenuVisible/topbarMenuVisible (chantier "centre de
+  // notifications" du 27/08/2026, demande explicite : Notifications et
+  // Profil doivent rester deux fonctionnalités indépendantes) — jamais
+  // fermé en même temps que les deux autres par toggleConfigMenu/
+  // toggleTopbarMenu, seulement par closeOverlays() (navigation, Escape,
+  // clic extérieur).
+  notificationsMenuVisible: boolean;
 };
 
 export function useClientLayout() {
@@ -31,6 +38,7 @@ export function useClientLayout() {
     mobileMenuActive: false,
     configMenuVisible: false,
     topbarMenuVisible: false,
+    notificationsMenuVisible: false,
   }));
 
   const isDarkTheme = computed(() => config.value.darkTheme);
@@ -83,6 +91,10 @@ export function useClientLayout() {
     state.value.configMenuVisible = false;
   };
 
+  const toggleNotificationsMenu = () => {
+    state.value.notificationsMenuVisible = !state.value.notificationsMenuVisible;
+  };
+
   const changeMenuMode = (menuMode: ClientMenuMode) => {
     config.value.menuMode = menuMode;
     state.value.staticMenuInactive = false;
@@ -95,6 +107,7 @@ export function useClientLayout() {
     state.value.mobileMenuActive = false;
     state.value.configMenuVisible = false;
     state.value.topbarMenuVisible = false;
+    state.value.notificationsMenuVisible = false;
   };
 
   return {
@@ -106,6 +119,7 @@ export function useClientLayout() {
     toggleDarkMode,
     toggleConfigMenu,
     toggleTopbarMenu,
+    toggleNotificationsMenu,
     changeMenuMode,
     closeOverlays,
   };

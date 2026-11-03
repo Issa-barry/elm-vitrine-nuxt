@@ -10,13 +10,14 @@ import { defineConfig, devices } from "@playwright/test";
 // CI réelles avant d'en faire un check obligatoire. Lancer manuellement via
 // `npm run test:e2e` pour l'instant.
 //
-// Cible `nuxt dev` (pas un build) : plusieurs pages (inscription,
-// mot-de-passe-oublie) ont un mode `isUiPreview = import.meta.dev` qui
-// simule les réponses backend sans appel réseau réel — indispensable ici
-// puisque ce dépôt n'a pas de backend Laravel à disposition en CI. Ces
-// parcours ne sont donc pas des E2E "bout en bout" contre le vrai
-// monolithe (voir docs/environment.md) mais valident le comportement
-// frontend (navigation, rendu, validation) de façon fiable et rapide.
+// Cible `nuxt dev` (pas un build). Décision du 26/08/2026 : aucune page de
+// l'application réelle ne simule plus une réponse backend en dev
+// (isUiPreview supprimé de connexion/inscription/mot-de-passe-oublie, et les
+// middlewares auth/guest sont actifs en dev comme partout ailleurs — voir
+// docs/environment.md). Ce dépôt n'ayant pas de vrai elm-monolithe garanti en
+// CI, un second serveur (tests/e2e/mock-backend.mjs) simule le sous-ensemble
+// du contrat Laravel nécessaire à cette suite, et NUXT_MONOLITH_API_BASE
+// pointe dessus ci-dessous — le mock vit dans les tests, jamais dans l'app.
 export default defineConfig({
   testDir: "./tests/e2e",
   // Un seul worker partout : ces tests partagent un unique serveur `nuxt
@@ -40,23 +41,39 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  webServer: {
-    command: "npm run dev -- --port 3300",
-    url: "http://localhost:3300",
-    // false partout : un serveur "réutilisé" laissé par une exécution
-    // précédente sur cette machine s'est révélé être la cause d'échecs
-    // intermittents difficiles à diagnostiquer (clics sans effet, alors que
-    // la page fonctionne normalement sur un serveur fraîchement démarré).
-    reuseExistingServer: false,
-    timeout: 180_000,
-    env: {
-      NUXT_PUBLIC_SITE_URL: "http://localhost:3300",
-      NUXT_PUBLIC_API_BASE: "http://localhost:8000",
-      NUXT_PUBLIC_ENVIRONMENT: "local",
-      // Le petit overlay Nuxt DevTools (nuxt.config.ts: devtools.enabled)
-      // s'affiche par-dessus la page en dev et peut intercepter des clics
-      // Playwright ciblant des éléments proches du bord de la fenêtre.
-      NUXT_DEVTOOLS_DISABLE: "true",
+  webServer: [
+    {
+      command: "node tests/e2e/mock-backend.mjs",
+      url: "http://localhost:8100",
+      reuseExistingServer: false,
+      timeout: 30_000,
     },
-  },
+    {
+      command: "npm run dev -- --port 3300",
+      url: "http://localhost:3300",
+      // false partout : un serveur "réutilisé" laissé par une exécution
+      // précédente sur cette machine s'est révélé être la cause d'échecs
+      // intermittents difficiles à diagnostiquer (clics sans effet, alors que
+      // la page fonctionne normalement sur un serveur fraîchement démarré).
+      reuseExistingServer: false,
+      timeout: 180_000,
+      env: {
+        NUXT_PUBLIC_SITE_URL: "http://localhost:3300",
+        // Le navigateur n'appelle jamais Laravel directement (architecture
+        // BFF, voir docs/environment.md) : cette valeur n'a pas besoin de
+        // pointer sur un vrai backend pour les tests, seul
+        // NUXT_MONOLITH_API_BASE (utilisé par server/api/*) compte ici.
+        NUXT_PUBLIC_API_BASE: "http://localhost:8100",
+        NUXT_MONOLITH_API_BASE: "http://localhost:8100",
+        NUXT_PUBLIC_ENVIRONMENT: "local",
+        // >= 32 caractères imposés par h3 useSession — valeur de test fixe,
+        // jamais utilisée hors de ce serveur Playwright éphémère.
+        NUXT_AUTH_SESSION_PASSWORD: "e2e-playwright-session-password-not-a-secret-00",
+        // Le petit overlay Nuxt DevTools (nuxt.config.ts: devtools.enabled)
+        // s'affiche par-dessus la page en dev et peut intercepter des clics
+        // Playwright ciblant des éléments proches du bord de la fenêtre.
+        NUXT_DEVTOOLS_DISABLE: "true",
+      },
+    },
+  ],
 });

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { getRobotsMetaContent } from "~/config/runtime";
+import { getRobotsMetaContent, resolveAppShortName } from "~/config/runtime";
 
 const { public: publicConfig } = useRuntimeConfig();
 
@@ -10,9 +10,9 @@ useHead({
   meta: [
     { name: "robots", content: getRobotsMetaContent(publicConfig.environment) },
     // Nom affiché sous l'icône iOS lors de "Ajouter à l'écran d'accueil" —
-    // même logique que le manifest PWA (server/routes/manifest.webmanifest.ts) :
-    // un testeur préprod/recette ne doit jamais voir "Eau La Maman".
-    { name: "apple-mobile-web-app-title", content: publicConfig.appName },
+    // même nom court que le manifest PWA (server/routes/manifest.webmanifest.ts),
+    // pour afficher le même nom sur iPhone et sur Android.
+    { name: "apple-mobile-web-app-title", content: resolveAppShortName(publicConfig) },
   ],
 });
 </script>
@@ -21,5 +21,4 @@ useHead({
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>
-  <PwaUpdatePrompt />
 </template>

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   buildRobotsTxt,
+  checkAuthSessionPassword,
   findMissingRequiredConfig,
   getRobotsMetaContent,
+  resolveAppShortName,
   runtimeConfigDefaults,
 } from "./runtime";
 
@@ -11,6 +13,7 @@ describe("runtimeConfigDefaults", () => {
     const publicKeys = Object.keys(runtimeConfigDefaults.public);
     expect(publicKeys).not.toContain("monolithApiBase");
     expect(publicKeys).not.toContain("vitrineServiceToken");
+    expect(publicKeys).not.toContain("authSessionPassword");
   });
 });
 
@@ -57,5 +60,37 @@ describe("SEO selon l'environnement", () => {
   it("robots.txt n'autorise le crawl que sur l'environnement de production", () => {
     expect(buildRobotsTxt("production")).toBe("User-agent: *\nAllow: /\n");
     expect(buildRobotsTxt("preprod")).toBe("User-agent: *\nDisallow: /\n");
+  });
+});
+
+describe("resolveAppShortName", () => {
+  it("utilise le nom court configuré, sans valeur propre à la production", () => {
+    expect(resolveAppShortName({ appName: "Eau La Maman", appShortName: "ELM" })).toBe("ELM");
+    expect(resolveAppShortName({ appName: "Eau La Maman Test", appShortName: "ELM Test" })).toBe(
+      "ELM Test",
+    );
+  });
+
+  it("reprend le nom complet quand le nom court est vide", () => {
+    expect(resolveAppShortName({ appName: "Eau La Maman", appShortName: "" })).toBe("Eau La Maman");
+  });
+
+  it("expose NUXT_PUBLIC_APP_SHORT_NAME : Nuxt ne surcharge qu'une clé déclarée", () => {
+    expect(runtimeConfigDefaults.public).toHaveProperty("appShortName");
+  });
+});
+
+describe("checkAuthSessionPassword", () => {
+  it("signale une valeur manquante", () => {
+    expect(checkAuthSessionPassword("")).toMatch(/manquante/);
+  });
+
+  it("signale une valeur trop courte (< 32 caractères, contrainte h3 useSession)", () => {
+    expect(checkAuthSessionPassword("trop-court")).toMatch(/trop courte/);
+  });
+
+  it("accepte une valeur d'au moins 32 caractères", () => {
+    expect(checkAuthSessionPassword("a".repeat(32))).toBeNull();
+    expect(checkAuthSessionPassword("a".repeat(64))).toBeNull();
   });
 });

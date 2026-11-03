@@ -1,4 +1,4 @@
-import { isProductionEnvironment } from "../../config/runtime";
+import { resolveAppShortName } from "../../config/runtime";
 
 // Manifest PWA généré à la requête (comme robots.txt.ts) plutôt qu'écrit en
 // statique au build : ce même artefact .output peut tourner sur plusieurs
@@ -8,15 +8,14 @@ import { isProductionEnvironment } from "../../config/runtime";
 // au build pour un testeur préprod.
 export default defineEventHandler((event) => {
   const config = useRuntimeConfig();
-  const { appName, environment } = config.public;
-  const shortName = isProductionEnvironment(environment) ? "ELM" : appName;
+  const { appName } = config.public;
 
   setHeader(event, "Content-Type", "application/manifest+json; charset=utf-8");
 
   return {
     id: "/",
     name: appName,
-    short_name: shortName,
+    short_name: resolveAppShortName(config.public),
     description:
       "Espace client Eau La Maman : suivez vos commandes, véhicules, dépenses et gains.",
     lang: "fr",

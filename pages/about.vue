@@ -101,7 +101,14 @@ const commitments = [
         </p>
       </div>
       <div class="mx-auto w-full max-w-xs lg:max-w-sm">
-        <BrandMark class="w-full h-auto rounded-3xl shadow-xl" />
+        <img
+          class="w-full h-auto rounded-3xl shadow-xl"
+          src="~/assets/img/produit/prd-19.webp"
+          alt="Stock de bouteilles Eau La Maman en entrepôt"
+          loading="eager"
+          width="1000"
+          height="1000"
+        >
       </div>
     </section>
 

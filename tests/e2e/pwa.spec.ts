@@ -23,6 +23,14 @@ test.describe("PWA", () => {
       "content",
       "#2563eb",
     );
+
+    // Même nom sur iPhone que sous l'icône Android (short_name du manifest).
+    const manifestResponse = await page.request.get("/manifest.webmanifest");
+    const { short_name: shortName } = await manifestResponse.json();
+    await expect(page.locator('meta[name="apple-mobile-web-app-title"]')).toHaveAttribute(
+      "content",
+      shortName,
+    );
   });
 
   test("manifest.webmanifest répond avec les champs attendus", async ({ request }) => {
@@ -32,12 +40,15 @@ test.describe("PWA", () => {
     expect(response.headers()["content-type"]).toContain("application/manifest+json");
 
     const manifest = await response.json();
-    // Pas de valeur exacte figée : NUXT_PUBLIC_APP_NAME peut être
-    // personnalisée localement (.env, ignoré par git — voir
-    // docs/environment.md), c'est même le comportement attendu. On vérifie
-    // que le champ est bien rempli dynamiquement, pas sa valeur précise.
+    // Pas de valeur exacte figée : NUXT_PUBLIC_APP_NAME et
+    // NUXT_PUBLIC_APP_SHORT_NAME peuvent être personnalisées localement (.env,
+    // ignoré par git — voir docs/environment.md), c'est même le comportement
+    // attendu. On vérifie que les champs sont bien remplis dynamiquement, pas
+    // leur valeur précise.
     expect(typeof manifest.name).toBe("string");
     expect(manifest.name.length).toBeGreaterThan(0);
+    expect(typeof manifest.short_name).toBe("string");
+    expect(manifest.short_name.length).toBeGreaterThan(0);
     expect(manifest.start_url).toBe("/espace-client");
     expect(manifest.scope).toBe("/");
     expect(manifest.display).toBe("standalone");

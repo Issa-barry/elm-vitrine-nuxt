@@ -40,7 +40,6 @@ const error = ref("");
 const globalError = ref("");
 const isLoading = ref(false);
 const maskedEmail = ref("");
-const isUiPreview = import.meta.dev;
 
 const selectedCountry = computed(
   () => countries.find((country) => country.iso2 === selectedCode.value) ?? countries[0],
@@ -100,6 +99,15 @@ const onPhoneInput = (event: Event) => {
   globalError.value = "";
 };
 
+// Ferme le clavier mobile avant l'ouverture du sélecteur de pays (demande du
+// 29/08/2026) : sur mobile, le Select PrimeVue ne vole pas nativement le
+// focus au clic (il gère son propre focus interne), donc le clavier restait
+// ouvert par-dessus le panneau pays sans ce blur() explicite. `before-show`
+// émet avant l'ouverture du panneau (voir node_modules/primevue/select),
+// donc le blur précède bien visuellement l'ouverture, jamais l'inverse.
+const phoneInputRef = ref<HTMLInputElement | null>(null);
+const blurPhoneInput = () => phoneInputRef.value?.blur();
+
 watch(selectedCode, () => {
   phoneLocal.value = "";
   error.value = "";
@@ -137,12 +145,6 @@ const submitPhone = async () => {
   const digitCount = telephone.value.replace(/\D/g, "").length;
   if (digitCount < 7 || digitCount > 15) {
     error.value = "Numéro de téléphone invalide.";
-    return;
-  }
-
-  if (isUiPreview) {
-    maskedEmail.value = "i***@exemple.com";
-    step.value = "otp";
     return;
   }
 
@@ -189,11 +191,6 @@ const submitOtp = async () => {
     return;
   }
 
-  if (isUiPreview) {
-    step.value = "password";
-    return;
-  }
-
   isLoading.value = true;
 
   try {
@@ -220,11 +217,6 @@ const submitPassword = async () => {
 
   if (password.value !== passwordConfirmation.value) {
     error.value = "Les mots de passe ne correspondent pas.";
-    return;
-  }
-
-  if (isUiPreview) {
-    step.value = "done";
     return;
   }
 
@@ -307,6 +299,7 @@ const back = () => {
                 option-value="iso2"
                 class="forgot-country"
                 aria-label="Choisir l’indicatif du pays"
+                @before-show="blurPhoneInput"
               >
                 <template #value>
                   <span class="forgot-country-value">
@@ -324,6 +317,7 @@ const back = () => {
               </Select>
 
               <input
+                ref="phoneInputRef"
                 :value="phoneLocal"
                 type="tel"
                 inputmode="numeric"

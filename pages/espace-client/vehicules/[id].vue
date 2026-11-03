@@ -1,5 +1,5 @@
 <script setup lang="ts">
-definePageMeta({ layout: "client" });
+definePageMeta({ layout: "client", middleware: "auth" });
 
 const route = useRoute();
 const activeTab = ref("gains");

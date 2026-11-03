@@ -45,7 +45,6 @@ const isPrefilled = ref(false);
 const isLoading = ref(false);
 const globalError = ref("");
 const errors = ref<Record<string, string>>({});
-const isUiPreview = import.meta.dev;
 
 const selectedCountry = computed(
   () => countries.find((country) => country.iso2 === selectedCode.value) ?? countries[0],
@@ -121,6 +120,15 @@ const onPhoneInput = (event: Event) => {
   errors.value.telephone = "";
   globalError.value = "";
 };
+
+// Ferme le clavier mobile avant l'ouverture du sélecteur de pays (demande du
+// 29/08/2026) : sur mobile, le Select PrimeVue ne vole pas nativement le
+// focus au clic (il gère son propre focus interne), donc le clavier restait
+// ouvert par-dessus le panneau pays sans ce blur() explicite. `before-show`
+// émet avant l'ouverture du panneau (voir node_modules/primevue/select),
+// donc le blur précède bien visuellement l'ouverture, jamais l'inverse.
+const phoneInputRef = ref<HTMLInputElement | null>(null);
+const blurPhoneInput = () => phoneInputRef.value?.blur();
 
 watch(selectedCode, () => {
   phoneLocal.value = "";
@@ -216,13 +224,6 @@ const checkPhone = async () => {
     return false;
   }
 
-  if (isUiPreview) {
-    isPrefilled.value = false;
-    errors.value = {};
-    globalError.value = "";
-    return true;
-  }
-
   isLoading.value = true;
   errors.value = {};
   globalError.value = "";
@@ -241,7 +242,7 @@ const checkPhone = async () => {
     // ordinaire, sans cette machinerie.
     const response = await rawFetch<{
       status: "user_exists" | "prefill_available" | "not_found";
-      prefill: { prenom: string; nom: string } | null;
+      prefill: { prenom: string | null; nom: string | null } | null;
     }>("/api/register/client/check-phone", {
       method: "POST",
       body: { telephone: telephone.value },
@@ -254,11 +255,22 @@ const checkPhone = async () => {
       return false;
     }
 
-    if (response.prefill) {
-      firstName.value = response.prefill.prenom || "";
-      lastName.value = response.prefill.nom || "";
+    // Identité incomplète (ex. client connu par son seul nom_complet) : champs
+    // laissés modifiables, sinon la personne resterait bloquée sur un champ
+    // vide verrouillé. Un nom déjà saisi à la main est conservé, mais pas
+    // celui prérempli pour un autre numéro après un retour à l'étape 1.
+    const prenom = response.prefill?.prenom?.trim() ?? "";
+    const nom = response.prefill?.nom?.trim() ?? "";
+
+    if (prenom && nom) {
+      firstName.value = prenom;
+      lastName.value = nom;
       isPrefilled.value = true;
     } else {
+      if (isPrefilled.value) {
+        firstName.value = "";
+        lastName.value = "";
+      }
       isPrefilled.value = false;
     }
 
@@ -273,13 +285,6 @@ const checkPhone = async () => {
 
 const submitRegistration = async () => {
   if (!validateSecurity()) return;
-
-  if (isUiPreview) {
-    errors.value = {};
-    globalError.value = "";
-    step.value = "success";
-    return;
-  }
 
   isLoading.value = true;
   errors.value = {};
@@ -380,6 +385,7 @@ const actionLabel = computed(() =>
                 option-value="iso2"
                 class="registration-country"
                 aria-label="Choisir l’indicatif du pays"
+                @before-show="blurPhoneInput"
               >
                 <template #value>
                   <span class="registration-country-value">
@@ -396,6 +402,7 @@ const actionLabel = computed(() =>
                 </template>
               </Select>
               <input
+                ref="phoneInputRef"
                 :value="phoneLocal"
                 type="tel"
                 inputmode="numeric"

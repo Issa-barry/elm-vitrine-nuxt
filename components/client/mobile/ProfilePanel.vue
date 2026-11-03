@@ -1,12 +1,14 @@
 <script setup lang="ts">
-const { toggleConfigMenu } = useClientLayout();
+import { clientDisplayName, clientSpaceRoleLabel } from "~/config/auth";
 
-// Données de démonstration, cohérentes avec celles utilisées pour la carte
-// d'identité de l'accueil (pages/espace-client/index.vue). Pas de contrat API
-// réel derrière : à remplacer quand l'authentification sera branchée.
-const name = "Issa M.";
-const role = "Propriétaire";
-const phone = "+224 622 60 26 93";
+const { toggleConfigMenu } = useClientLayout();
+const auth = useAuth();
+
+// Identité réelle (GET /api/auth/me), comme la carte d'identité de l'accueil
+// (pages/espace-client/index.vue).
+const name = computed(() => clientDisplayName(auth.user.value));
+const role = computed(() => clientSpaceRoleLabel(auth.user.value?.roles, auth.context.value));
+const phone = computed(() => formatPhoneNumber(auth.user.value?.telephone));
 
 type ProfileRow = { label: string; icon: string; to?: string; action?: () => void };
 type ProfileGroup = { title: string; rows: ProfileRow[] };
@@ -46,8 +48,12 @@ const groups: ProfileGroup[] = [
 const router = useRouter();
 
 const logoutConfirmVisible = ref(false);
+const isLoggingOut = ref(false);
 
-const confirmLogout = () => {
+const confirmLogout = async () => {
+  if (isLoggingOut.value) return;
+  isLoggingOut.value = true;
+  await auth.logout();
   logoutConfirmVisible.value = false;
   router.push("/connexion");
 };
@@ -102,8 +108,8 @@ const confirmLogout = () => {
         <h2 id="logout-dialog-title">Se déconnecter ?</h2>
       </div>
       <div class="client-mobile-logout-dialog-actions">
-        <Button label="Annuler" severity="secondary" outlined @click="logoutConfirmVisible = false" />
-        <Button label="Oui" severity="danger" @click="confirmLogout" />
+        <Button label="Annuler" severity="secondary" outlined :disabled="isLoggingOut" @click="logoutConfirmVisible = false" />
+        <Button label="Oui" severity="danger" :loading="isLoggingOut" @click="confirmLogout" />
       </div>
     </Dialog>
   </div>
