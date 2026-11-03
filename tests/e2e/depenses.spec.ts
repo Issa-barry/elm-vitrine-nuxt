@@ -95,6 +95,77 @@ test.describe("Espace client — dépenses", () => {
     await expect(mobile.getByText("Dépense personnelle")).toBeVisible();
   });
 
+  // `depenses_total` ignore les frais des véhicules de l'équipe d'un livreur : la
+  // carte doit afficher le même montant que le "Total validé" de la page.
+  test("la carte Dépenses de l'accueil reprend total_valide, pas depenses_total", async ({ page }) => {
+    const expense = {
+      id: "dep-septembre",
+      date: "2026-09-06",
+      montant: 2_000,
+      type_code: "avance_salaire",
+      type_label: "Avance sur salaire",
+      statut: "valide",
+      statut_label: "Validé",
+      commentaire: null,
+      vehicule: null,
+    };
+    await page.route("**/api/client/expenses**", (route) => route.fulfill({
+      json: {
+        data: [expense],
+        links: { first: null, last: null, prev: null, next: null },
+        meta: { current_page: 1, last_page: 1, per_page: 100, total: 1 },
+        filters: { vehicule_id: null, depense_type_id: null, statut: null, date_debut: null, date_fin: null },
+        total_valide: 2_000,
+      },
+    }));
+    await page.route("**/api/client/dashboard**", async (route) => {
+      const response = await route.fetch();
+      await route.fulfill({ response, json: { ...await response.json(), depenses_total: 0 } });
+    });
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginAsTestUser(page);
+
+    const amount = `${new Intl.NumberFormat("fr-FR").format(2_000)} GNF`;
+    const expensesCard = page.locator(".client-mobile-summary-card");
+    await expect(expensesCard.getByText(amount)).toBeVisible({ timeout: 10_000 });
+
+    await expensesCard.click();
+    await expect(page).toHaveURL(/\/espace-client\/depenses$/);
+    await expect(page.locator(".client-mobile-expenses").getByText(amount)).toBeVisible({ timeout: 10_000 });
+  });
+
+  test.describe("le Total validé précise sa période", () => {
+    const totalLabel = (page: import("@playwright/test").Page, conteneur: string) => page.locator(conteneur).getByText(/^Total validé · /);
+
+    test("mobile : mois en cours par défaut, puis lien toutes périodes", async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await loginAsTestUser(page);
+
+      await page.goto("/espace-client/depenses", { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await expect(totalLabel(page, ".client-mobile-expenses")).toHaveText("Total validé · Ce mois", { timeout: 10_000 });
+
+      await page.goto("/espace-client/depenses?periode=toutes", { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await expect(totalLabel(page, ".client-mobile-expenses")).toHaveText("Total validé · Toutes les périodes", { timeout: 10_000 });
+      await expect(page.locator(".client-mobile-expenses__summary strong")).toHaveText(`${new Intl.NumberFormat("fr-FR").format(155_400)} GNF`, { timeout: 10_000 });
+    });
+
+    test("mobile : un lien de l'accueil sur une période rapide affiche ses bornes", async ({ page }) => {
+      await page.setViewportSize({ width: 390, height: 844 });
+      await loginAsTestUser(page);
+
+      await page.goto("/espace-client/depenses?du=2026-09-01&au=2026-09-30", { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await expect(totalLabel(page, ".client-mobile-expenses")).toHaveText("Total validé · 1 sept. 2026 – 30 sept. 2026", { timeout: 10_000 });
+    });
+
+    test("desktop : même libellé", async ({ page }) => {
+      await loginAsTestUser(page);
+
+      await page.goto("/espace-client/depenses?periode=toutes", { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await expect(totalLabel(page, ".client-desktop-expenses")).toHaveText("Total validé · Toutes les périodes", { timeout: 10_000 });
+    });
+  });
+
   test.describe("regroupement par mois (mobile)", () => {
     const formatGnf = (amount: number) => `${new Intl.NumberFormat("fr-FR").format(amount)} GNF`;
     const stubExpense = (id: string, date: string, montant: number, typeLabel: string, statut = "valide", commentaire: string | null = null) => ({

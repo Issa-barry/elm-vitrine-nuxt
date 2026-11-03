@@ -1,4 +1,5 @@
 import type { ClientExpensesResponse, ExpensesQuery } from "../../../config/clientExpenses";
+import type { PeriodeComptableQuery } from "../../../config/clientPeriodeComptable";
 import { callMonolith } from "../../utils/monolithClient";
 import { clearAuthSession, getSessionToken } from "../../utils/authSession";
 
@@ -13,7 +14,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: "Non authentifié." });
   }
 
-  const query = getQuery(event) as ExpensesQuery;
+  const query = getQuery(event) as ExpensesQuery & PeriodeComptableQuery;
 
   try {
     return await callMonolith<ClientExpensesResponse>("/api/v1/mobile/depenses/mine", {
@@ -22,6 +23,9 @@ export default defineEventHandler(async (event) => {
         vehicule_id: query.vehicule_id,
         depense_type_id: query.depense_type_id,
         statut: query.statut,
+        annee: query.annee,
+        mois: query.mois,
+        quinzaine: query.quinzaine,
         date_debut: query.date_debut,
         date_fin: query.date_fin,
         per_page: query.per_page,

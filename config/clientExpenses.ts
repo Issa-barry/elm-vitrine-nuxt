@@ -28,7 +28,9 @@ export interface ExpenseFilters {
   date_fin: string | null;
 }
 
-export type ClientExpensesResponse = PaginatedResponse<ClientExpense, ExpenseFilters>;
+// `total_valide` (carte "Dépenses" de l'accueil mobile) : optionnel tant que la
+// vitrine peut être déployée avant le backend.
+export type ClientExpensesResponse = PaginatedResponse<ClientExpense, ExpenseFilters> & { total_valide?: number };
 
 /** Requête vers GET /api/client/expenses (BFF) — tous les filtres sont optionnels. */
 export type ExpensesQuery = ApiDepensesQuery & { page?: number };

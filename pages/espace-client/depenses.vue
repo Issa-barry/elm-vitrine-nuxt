@@ -1,12 +1,16 @@
 <script setup lang="ts">
 import type { ExpensePeriod, ExpenseStatus } from "~/config/clientExpenses";
 import { EXPENSE_PERIOD_OPTIONS, customPeriodError, expensePeriodBounds, groupExpensesByMonth } from "~/config/clientExpenses";
+import type { PeriodeComptable } from "~/config/clientPeriodeComptable";
+import { bornesDepuisLien, periodeComptableLabel, periodeComptableQuery } from "~/config/clientPeriodeComptable";
 
 definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Dépenses — Eau La Maman" });
 
 const { response, isLoading, error, hasLoaded, fetchExpenses } = useClientExpenses();
 const { vehicles: ownedVehicles, fetchVehicles } = useClientVehicles();
+const { periodeComptable, revenirAuMoisCourant } = useClientPeriodeComptable();
+const route = useRoute();
 
 const activeExpenseTab = ref<"general" | "details">("general");
 // "tous" plutôt que "" comme valeur du filtre par défaut : PrimeVue Select
@@ -17,8 +21,16 @@ const activeExpenseTab = ref<"general" | "details">("general");
 // valeur non vide comme une autre, donc affichée normalement.
 const ALL = "tous";
 
+// "comptable" : la période vient du filtre année/mois/quinzaine en tête de page.
+type ExpensePeriodChoice = ExpensePeriod | "comptable";
+
+const periodOptions: Array<{ label: string; value: ExpensePeriodChoice }> = [
+  { label: "Période comptable (en haut de page)", value: "comptable" },
+  ...EXPENSE_PERIOD_OPTIONS,
+];
+
 interface ExpenseFiltersState {
-  period: ExpensePeriod;
+  period: ExpensePeriodChoice;
   customStart: string;
   customEnd: string;
   statut: ExpenseStatus | typeof ALL;
@@ -27,7 +39,7 @@ interface ExpenseFiltersState {
 }
 
 const createEmptyFilters = (): ExpenseFiltersState => ({
-  period: "all",
+  period: "comptable",
   customStart: "",
   customEnd: "",
   statut: ALL,
@@ -35,7 +47,14 @@ const createEmptyFilters = (): ExpenseFiltersState => ({
   vehiculeId: ALL,
 });
 
-const appliedFilters = reactive<ExpenseFiltersState>(createEmptyFilters());
+// Liens de l'accueil sur une période rapide : ?periode=toutes ou ?du=…&au=… (voir
+// docs/filtre-periode-comptable.md).
+const bornesLien = bornesDepuisLien(route.query);
+const appliedFilters = reactive<ExpenseFiltersState>({
+  ...createEmptyFilters(),
+  ...(bornesLien ? { period: "custom", customStart: bornesLien.du, customEnd: bornesLien.au } : {}),
+  ...(route.query.periode === "toutes" ? { period: "all" } : {}),
+});
 const draftFilters = reactive<ExpenseFiltersState>(createEmptyFilters());
 const filterPanelVisible = ref(false);
 const periodError = ref("");
@@ -53,10 +72,12 @@ async function loadExpenses() {
     per_page: 100,
     statut: appliedFilters.statut !== ALL ? appliedFilters.statut : undefined,
     vehicule_id: appliedFilters.vehiculeId !== ALL ? appliedFilters.vehiculeId : undefined,
-    ...expensePeriodBounds(appliedFilters.period, new Date().toISOString().slice(0, 10), {
-      start: appliedFilters.customStart,
-      end: appliedFilters.customEnd,
-    }),
+    ...(appliedFilters.period === "comptable"
+      ? periodeComptableQuery(periodeComptable.value)
+      : expensePeriodBounds(appliedFilters.period, new Date().toISOString().slice(0, 10), {
+        start: appliedFilters.customStart,
+        end: appliedFilters.customEnd,
+      })),
   });
 }
 
@@ -66,9 +87,17 @@ onMounted(() => {
 });
 
 watch(
-  () => [appliedFilters.period, appliedFilters.customStart, appliedFilters.customEnd, appliedFilters.statut, appliedFilters.vehiculeId],
+  () => [appliedFilters.period, appliedFilters.customStart, appliedFilters.customEnd, appliedFilters.statut, appliedFilters.vehiculeId, periodeComptable.value],
   loadExpenses,
 );
+
+const periodeComptableActive = computed(() => appliedFilters.period === "comptable");
+const choisirPeriodeComptable = (periode: PeriodeComptable) => {
+  periodeComptable.value = periode;
+  Object.assign(appliedFilters, { period: "comptable", customStart: "", customEnd: "" });
+};
+const voirToutesLesPeriodes = () => { appliedFilters.period = "all"; };
+const periodeVide = computed(() => periodeComptableActive.value && !isLoading.value && !error.value && hasLoaded.value && expenses.value.length === 0);
 
 const expenses = computed(() => response.value?.data ?? []);
 const meta = computed(() => response.value?.meta ?? null);
@@ -142,10 +171,14 @@ const formatDate = (date: string) => new Intl.DateTimeFormat("fr-FR", {
 const periodFilterLabel = computed(() => (appliedFilters.period === "custom"
   ? `${formatDate(appliedFilters.customStart)} – ${formatDate(appliedFilters.customEnd)}`
   : EXPENSE_PERIOD_OPTIONS.find((option) => option.value === appliedFilters.period)?.label ?? ""));
+// Période sur laquelle porte le "Total validé" : le montant seul ne le dit pas.
+const totalPeriodLabel = computed(() => (appliedFilters.period === "comptable"
+  ? periodeComptableLabel(periodeComptable.value)
+  : periodFilterLabel.value));
 
 const activeFilters = computed(() => {
   const filters: Array<{ key: "period" | "statut" | "typeLabel" | "vehiculeId"; label: string; value: string }> = [
-    { key: "period", label: "Période", value: appliedFilters.period !== "all" ? periodFilterLabel.value : "" },
+    { key: "period", label: "Période", value: appliedFilters.period !== "comptable" ? periodFilterLabel.value : "" },
     { key: "statut", label: "Statut", value: statutOptions.find((option) => option.value === appliedFilters.statut && option.value !== ALL)?.label ?? "" },
     { key: "typeLabel", label: "Type", value: appliedFilters.typeLabel !== ALL ? appliedFilters.typeLabel : "" },
     { key: "vehiculeId", label: "Véhicule", value: appliedFilters.vehiculeId !== ALL
@@ -182,6 +215,7 @@ const clearAppliedFilters = () => Object.assign(appliedFilters, createEmptyFilte
 const resetAllFilters = () => {
   search.value = "";
   clearAppliedFilters();
+  revenirAuMoisCourant();
 };
 
 const statutSeverity = (statut: ExpenseStatus): "success" | "info" | "danger" | "secondary" => {
@@ -231,6 +265,15 @@ const expenseComparisonMax = computed(() => Math.max(...expenseComparison.value.
       @filter="openFilterPanel"
     />
 
+    <ClientPeriodeComptableFilter
+      :model-value="periodeComptable"
+      :actif="periodeComptableActive"
+      :chargement="isLoading"
+      :debut="response?.filters.date_debut"
+      :fin="response?.filters.date_fin"
+      @update:model-value="choisirPeriodeComptable"
+    />
+
     <div v-if="error" class="p-4 text-red-500" role="alert">{{ error.message }}</div>
     <div v-else-if="isLoading && !hasLoaded" class="p-4 text-muted-color" role="status">Chargement des dépenses…</div>
 
@@ -246,6 +289,12 @@ const expenseComparisonMax = computed(() => Math.max(...expenseComparison.value.
       <p v-if="hasMoreThanShown" class="client-mobile-expenses__limit">
         Affichage limité aux {{ meta!.per_page }} dépenses les plus récentes sur {{ meta!.total }} : le plus ancien mois affiché peut être incomplet. Choisissez une période pour voir les autres.
       </p>
+
+      <div v-if="periodeVide" class="client-mobile-expenses__empty" role="status">
+        <i class="pi pi-calendar-times" aria-hidden="true" />
+        <strong>Aucune dépense sur cette période</strong>
+        <Button label="Voir toutes les périodes" severity="secondary" outlined size="small" @click="voirToutesLesPeriodes" />
+      </div>
 
       <div class="client-mobile-expenses__tabs" role="tablist" aria-label="Sections des dépenses">
         <button
@@ -280,7 +329,7 @@ const expenseComparisonMax = computed(() => Math.max(...expenseComparison.value.
         class="client-mobile-expenses__panel"
       >
         <div class="client-mobile-expenses__summary">
-          <span>Total validé</span>
+          <span>Total validé · {{ totalPeriodLabel }}</span>
           <strong>{{ formatGnf(totalValidatedExpenses) }}</strong>
           <small>{{ validatedExpenses.length }} {{ validatedExpenses.length > 1 ? "dépenses validées" : "dépense validée" }}</small>
         </div>
@@ -375,7 +424,7 @@ const expenseComparisonMax = computed(() => Math.max(...expenseComparison.value.
           <Button label="Réinitialiser" severity="secondary" outlined size="small" @click="resetAllFilters" />
         </div>
 
-        <div v-else class="client-mobile-expenses__empty" role="status">
+        <div v-else-if="!periodeVide" class="client-mobile-expenses__empty" role="status">
           <i class="pi pi-wallet" aria-hidden="true" />
           <strong>Aucune dépense trouvée</strong>
           <span>Les dépenses apparaîtront ici après validation par le back-office.</span>
@@ -385,11 +434,22 @@ const expenseComparisonMax = computed(() => Math.max(...expenseComparison.value.
   </section>
 
   <div class="client-desktop-expenses grid grid-cols-12 gap-8">
+    <div class="col-span-12">
+      <ClientPeriodeComptableFilter
+        class="!mb-0"
+        :model-value="periodeComptable"
+        :actif="periodeComptableActive"
+        :chargement="isLoading"
+        :debut="response?.filters.date_debut"
+        :fin="response?.filters.date_fin"
+        @update:model-value="choisirPeriodeComptable"
+      />
+    </div>
     <div v-if="error" class="col-span-12"><div class="card text-red-500" role="alert">{{ error.message }}</div></div>
     <div v-else-if="isLoading && !hasLoaded" class="col-span-12"><div class="card text-muted-color" role="status">Chargement des dépenses…</div></div>
 
     <template v-else>
-      <div class="col-span-12 lg:col-span-4"><div class="card !mb-0"><span class="block text-muted-color font-medium mb-4">Total validé</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ formatGnf(totalValidatedExpenses) }}</div><span class="text-muted-color">Dépenses validées</span></div></div>
+      <div class="col-span-12 lg:col-span-4"><div class="card !mb-0"><span class="block text-muted-color font-medium mb-4">Total validé · {{ totalPeriodLabel }}</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ formatGnf(totalValidatedExpenses) }}</div><span class="text-muted-color">Dépenses validées</span></div></div>
       <div class="col-span-12 lg:col-span-4"><div class="card !mb-0"><span class="block text-muted-color font-medium mb-4">Dépenses affichées</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">{{ expenses.length }}</div><span class="text-muted-color">{{ meta ? `sur ${meta.total} au total` : "—" }}</span></div></div>
       <div class="col-span-12 lg:col-span-4"><div class="card !mb-0"><span class="block text-muted-color font-medium mb-4">Accès</span><div class="text-surface-900 dark:text-surface-0 font-medium text-xl">Consultation</div><span class="text-muted-color">Aucune modification autorisée</span></div></div>
 
@@ -412,7 +472,10 @@ const expenseComparisonMax = computed(() => Math.max(...expenseComparison.value.
             <Column header="Montant"><template #body="{ data }">{{ formatGnf(data.montant) }}</template></Column>
             <Column header="Statut"><template #body="{ data }"><Tag :value="data.statut_label" :severity="statutSeverity(data.statut)" /></template></Column>
           </DataTable>
-          <p v-if="!expenses.length" class="text-muted-color text-center py-8">Aucune dépense trouvée pour ces filtres.</p>
+          <p v-if="!expenses.length" class="text-muted-color text-center py-8">
+            Aucune dépense trouvée pour ces filtres.
+            <Button v-if="periodeVide" class="block mx-auto mt-3" label="Voir toutes les périodes" severity="secondary" outlined size="small" @click="voirToutesLesPeriodes" />
+          </p>
         </div>
       </div>
     </template>
@@ -433,7 +496,7 @@ const expenseComparisonMax = computed(() => Math.max(...expenseComparison.value.
       <div class="client-delivery-filter__grid">
         <label class="client-delivery-filter__field">
           <span>Période</span>
-          <Select v-model="draftFilters.period" :options="EXPENSE_PERIOD_OPTIONS" option-label="label" option-value="value" fluid />
+          <Select v-model="draftFilters.period" :options="periodOptions" option-label="label" option-value="value" fluid />
         </label>
         <template v-if="draftFilters.period === 'custom'">
           <label class="client-delivery-filter__field">

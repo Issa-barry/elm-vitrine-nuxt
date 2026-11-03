@@ -1,6 +1,7 @@
 import type {
   ClientProfile,
   ClientProfileEmailConfirmation,
+  ClientProfilePaysOption,
   ClientProfileResponse,
   UpdateClientProfilePayload,
   UpdateClientProfileResponse,
@@ -15,6 +16,7 @@ import { normalizeAuthError } from "~/config/auth";
 export function useClientProfile() {
   const profile = useState<ClientProfile | null>("client:profile", () => null);
   const paysDisponibles = useState<string[]>("client:profile:paysDisponibles", () => []);
+  const paysOptions = useState<ClientProfilePaysOption[]>("client:profile:paysOptions", () => []);
   const isLoading = useState<boolean>("client:profile:loading", () => false);
   const isSavingIdentity = useState<boolean>("client:profile:savingIdentity", () => false);
   const isSavingLocalisation = useState<boolean>("client:profile:savingLocalisation", () => false);
@@ -33,6 +35,7 @@ export function useClientProfile() {
       profile.value = data.profile;
       // Repli : une API pas encore à jour ne doit pas faire planter l'écran.
       paysDisponibles.value = data.pays_disponibles ?? [];
+      paysOptions.value = data.pays_options ?? [];
       return true;
     } catch (fetchError) {
       error.value = normalizeAuthError(fetchError);
@@ -50,6 +53,7 @@ export function useClientProfile() {
     });
     profile.value = data.profile;
     paysDisponibles.value = data.pays_disponibles ?? [];
+    paysOptions.value = data.pays_options ?? [];
     return data;
   }
 
@@ -112,6 +116,7 @@ export function useClientProfile() {
   return {
     profile,
     paysDisponibles,
+    paysOptions,
     isLoading,
     isSavingIdentity,
     isSavingLocalisation,

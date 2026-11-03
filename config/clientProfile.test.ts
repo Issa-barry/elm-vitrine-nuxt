@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { buildIdentityPatch } from "./clientProfile";
+import { buildIdentityPatch, paysFlagUrl } from "./clientProfile";
+
+describe("paysFlagUrl", () => {
+  const options = [{ label: "Guinée", code: "GN" }, { label: "Sénégal", code: "SN" }];
+
+  it("retrouve le drapeau par le libellé du pays", () => {
+    expect(paysFlagUrl("Sénégal", options)).toBe("https://flagcdn.com/24x18/sn.png");
+  });
+
+  it("n'invente rien pour un ancien pays en texte libre, un pays vide ou une liste absente", () => {
+    expect(paysFlagUrl("Gambie", options)).toBeNull();
+    expect(paysFlagUrl(null, options)).toBeNull();
+    expect(paysFlagUrl("Guinée", [])).toBeNull();
+  });
+});
 
 const current = { prenom: "Ya Moussa", nom: "CAMARA", email: "ya@example.com" };
 

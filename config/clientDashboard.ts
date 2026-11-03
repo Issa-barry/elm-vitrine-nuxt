@@ -1,4 +1,5 @@
 import type { ApiDashboardPeriod, ApiDashboardQuery, ApiDashboardResponse, ApiVehiculeEarningsRow } from "~/types/api";
+import type { PeriodeComptableQuery, PeriodeRapide } from "./clientPeriodeComptable";
 
 // Formes HTTP dérivées du contrat OpenAPI généré (chantier du 27/08/2026,
 // voir npm run api:types, types/api.ts, types/generated/elm-api.ts) — même
@@ -23,4 +24,4 @@ export function dashboardExpensesTotal(dashboard: ClientDashboardResponse): numb
 }
 
 /** Requête vers GET /api/client/dashboard (BFF) — tous les filtres sont optionnels. */
-export type DashboardQuery = ApiDashboardQuery;
+export type DashboardQuery = ApiDashboardQuery & PeriodeComptableQuery & { periode?: PeriodeRapide };

@@ -288,6 +288,7 @@ const profileResponse = () => ({
   user: { id: TEST_USER.id, telephone: TEST_USER.telephone, email: TEST_USER.email },
   profile: profileState,
   pays_disponibles: PAYS_DISPONIBLES,
+  pays_options: [{ label: "Guinée", code: "GN" }, { label: "Sénégal", code: "SN" }, { label: "Mali", code: "ML" }, { label: "France", code: "FR" }],
 });
 
 router.get(
@@ -694,13 +695,16 @@ router.get(
       return true;
     });
 
-    return paginate(filtered, query, {
-      vehicule_id: query.vehicule_id || null,
-      depense_type_id: query.depense_type_id || null,
-      statut: query.statut || null,
-      date_debut: query.date_debut || null,
-      date_fin: query.date_fin || null,
-    }, "/api/v1/mobile/depenses/mine");
+    return {
+      ...paginate(filtered, query, {
+        vehicule_id: query.vehicule_id || null,
+        depense_type_id: query.depense_type_id || null,
+        statut: query.statut || null,
+        date_debut: query.date_debut || null,
+        date_fin: query.date_fin || null,
+      }, "/api/v1/mobile/depenses/mine"),
+      total_valide: filtered.filter((expense) => expense.statut === "valide").reduce((sum, expense) => sum + expense.montant, 0),
+    };
   }),
 );
 

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { dashboardExpensesTotal, type ClientDashboardResponse } from "~/config/clientDashboard";
+import type { ClientExpensesResponse } from "~/config/clientExpenses";
+import { periodeComptableQuery, periodePrecedente } from "~/config/clientPeriodeComptable";
 import { clientDisplayName, clientSpaceRoleLabel } from "~/config/auth";
 import { PARRAIN_SPACE_HOME } from "~/config/clientParrain";
 import { notificationResourceToRoute } from "~/config/clientNotifications";
@@ -59,21 +61,70 @@ const displayPhone = computed(() => formatPhoneNumber(auth.user.value?.telephone
 const displayRole = computed(() => clientSpaceRoleLabel(auth.user.value?.roles, auth.context.value));
 const displayQr = computed(() => auth.user.value?.qr_payload ?? null);
 
+// Filtre de période de l'accueil : tous les montants de la page suivent la période
+// choisie (voir docs/filtre-periode-comptable.md).
+const { periodeComptable, periodeRapide, query: periodeQuery } = useClientPeriodeAccueil();
+
 // Période précédente (comparaison RÉELLE, pas une image locale figée) : même
-// endpoint, filtre "mois_passe" — voir docs/api-espace-client-contract.md §5
-// côté elm-monolithe (raccourci de période supporté nativement). État
-// volontairement local (pas de useState partagé) : ne sert qu'au calcul de
-// variation de cette page, jamais consommé ailleurs.
+// endpoint, mois ou année entière précédente, null pour les autres périodes
+// (aucune tendance plutôt qu'une comparaison approximative). État volontairement
+// local (pas de useState partagé) : ne sert qu'au calcul de variation de cette
+// page, jamais consommé ailleurs.
 const previousDashboard = ref<ClientDashboardResponse | null>(null);
 
-onMounted(async () => {
-  await Promise.all([
-    fetchDashboard({ period: "ce_mois" }),
-    requestFetch<ClientDashboardResponse>("/api/client/dashboard", { query: { period: "mois_passe" } })
-      .then((data) => { previousDashboard.value = data; })
-      .catch(() => { previousDashboard.value = null; }),
-  ]);
+// Carte "Dépenses" mobile : total validé de la période, le même que la page qu'elle
+// ouvre (GET /depenses/mine couvre aussi les véhicules de l'équipe d'un livreur, pas
+// `depenses_total`). Bornes reprises de la réponse du dashboard, calculées par le serveur.
+const validatedExpensesTotal = ref<number | null>(null);
+const validatedExpensesLoaded = ref(false);
+let chargementSeq = 0;
+
+async function chargerAccueil() {
+  const seq = ++chargementSeq;
+  const estCourant = () => seq === chargementSeq;
+  const query = periodeQuery.value;
+  const precedente = periodeRapide.value ? null : periodePrecedente(periodeComptable.value);
+  validatedExpensesLoaded.value = false;
+
+  const chargerPrecedent = async () => {
+    const data = precedente
+      ? await requestFetch<ClientDashboardResponse>("/api/client/dashboard", { query: periodeComptableQuery(precedente) }).catch(() => null)
+      : null;
+    if (estCourant()) previousDashboard.value = data;
+  };
+
+  const chargerDepenses = async () => {
+    const dashboardCourant = await fetchDashboard(query);
+    if (!dashboardCourant || !estCourant()) {
+      if (estCourant()) validatedExpensesLoaded.value = true;
+      return;
+    }
+    const filters = dashboard.value?.filters;
+    const data = await requestFetch<ClientExpensesResponse>("/api/client/expenses", {
+      query: { statut: "valide", per_page: 1, date_debut: filters?.date_debut ?? undefined, date_fin: filters?.date_fin ?? undefined },
+    }).catch(() => null);
+    if (!estCourant()) return;
+    validatedExpensesTotal.value = data?.total_valide ?? null;
+    validatedExpensesLoaded.value = true;
+  };
+
+  await Promise.all([chargerDepenses(), chargerPrecedent()]);
+}
+
+onMounted(chargerAccueil);
+watch(periodeQuery, chargerAccueil);
+
+// Les liens gardent la période : la période comptable est partagée entre les écrans,
+// une période rapide est transmise par ses bornes, calculées par le serveur.
+const lienPeriode = computed<{ du?: string; au?: string }>(() => {
+  const filters = dashboard.value?.filters;
+  if (!periodeRapide.value || !filters?.date_debut || !filters.date_fin) return {};
+  return { du: filters.date_debut, au: filters.date_fin };
 });
+const expensesLink = computed(() => ({
+  path: "/espace-client/depenses",
+  query: periodeRapide.value === "tout" ? { periode: "toutes" } : lienPeriode.value,
+}));
 
 const summary = computed(() => dashboard.value?.summary ?? null);
 const previousSummary = computed(() => previousDashboard.value?.summary ?? null);
@@ -87,11 +138,16 @@ const hasVehicles = computed(() => parVehicule.value.length > 0);
 const topVehicles = computed(() => parVehicule.value.slice(0, 3));
 const topVehicleLink = (vehiculeId: string) => ({
   path: "/espace-client/commissions",
-  query: { vehicule_id: vehiculeId },
+  query: { vehicule_id: vehiculeId, ...lienPeriode.value },
 });
 
 const expensesTotal = computed(() => (dashboard.value ? dashboardExpensesTotal(dashboard.value) : 0));
 const previousExpensesTotal = computed(() => (previousDashboard.value ? dashboardExpensesTotal(previousDashboard.value) : 0));
+// Jamais de 0 transitoire pendant le chargement. Repli sur `depenses_total` si
+// l'appel échoue ou si le backend ne renvoie pas encore `total_valide`.
+const mobileExpensesCardValue = computed(() => (validatedExpensesLoaded.value
+  ? formatGnf(validatedExpensesTotal.value ?? expensesTotal.value)
+  : "…"));
 
 // Jamais un pourcentage inventé : null tant que l'une des deux périodes n'est
 // pas chargée (voir utils/kpiTrend.ts — computeKpiTrend renvoie déjà null si
@@ -137,6 +193,8 @@ const recentNotifications = computed(() => notificationItems.value.slice(0, 6));
       </NuxtLink>
     </div>
 
+    <ClientPeriodeAccueilFilter :chargement="isLoading" />
+
     <div v-if="error" class="p-4 text-red-500" role="alert">
       {{ error.message }}
     </div>
@@ -159,14 +217,14 @@ const recentNotifications = computed(() => notificationItems.value.slice(0, 6));
               <div><span>Reste à payer</span><strong>{{ formatGnf(summary.balance) }}</strong></div>
             </div>
           </template>
-          <p v-else id="mobile-balance-title" class="client-mobile-balance-empty">Aucune commission enregistrée pour le moment.</p>
+          <p v-else id="mobile-balance-title" class="client-mobile-balance-empty">Aucune commission sur cette période.</p>
         </div>
       </section>
 
       <div class="client-mobile-summary-grid">
-        <NuxtLink to="/espace-client/depenses" class="client-mobile-summary-card" aria-label="Voir le détail des dépenses">
+        <NuxtLink :to="expensesLink" class="client-mobile-summary-card" aria-label="Voir le détail des dépenses">
           <span class="client-mobile-summary-icon"><i class="pi pi-wallet" /></span>
-          <div><span>Dépenses</span><strong>{{ formatGnf(expensesTotal) }}</strong></div>
+          <div><span>Dépenses</span><strong>{{ mobileExpensesCardValue }}</strong></div>
           <i class="pi pi-chevron-right client-mobile-summary-chevron" aria-hidden="true" />
         </NuxtLink>
       </div>
@@ -199,8 +257,9 @@ const recentNotifications = computed(() => notificationItems.value.slice(0, 6));
     </template>
   </div>
 
-  <div v-if="error" class="client-desktop-dashboard" role="alert">
-    <div class="card">{{ error.message }}</div>
+  <div v-if="error" class="client-desktop-dashboard">
+    <ClientPeriodeAccueilFilter class="mb-6" :chargement="isLoading" />
+    <div class="card" role="alert">{{ error.message }}</div>
   </div>
   <div v-else-if="isLoading && !dashboard" class="client-desktop-dashboard" role="status">
     <div class="card">Chargement du tableau de bord…</div>
@@ -217,11 +276,14 @@ const recentNotifications = computed(() => notificationItems.value.slice(0, 6));
       masqué (voir le split chrome/contenu de _mobile.scss) : le mobile et
       la tablette portrait ne sont pas concernés par ce bloc.
 
-      Variation (%) calculée réellement contre GET /v1/mobile/dashboard?
-      period=mois_passe (voir computed kpiTrends plus haut) — jamais un
+      Variation (%) calculée réellement contre GET /v1/mobile/dashboard sur la
+      période précédente (voir computed kpiTrends plus haut) — jamais un
       pourcentage tapé en dur. Carte 3 = operations_count (voir commentaire
       "Carte n°3" plus haut : "Net à payer" n'a pas d'équivalent réel).
     -->
+    <div class="col-span-12">
+      <ClientPeriodeAccueilFilter :chargement="isLoading" />
+    </div>
     <div class="col-span-12 md:col-span-6 xl:col-span-3">
       <ClientDashboardKpiCard
         label="Commission générée"
