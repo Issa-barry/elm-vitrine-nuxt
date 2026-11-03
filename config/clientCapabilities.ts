@@ -33,6 +33,8 @@ export interface ClientCapabilities {
   orders: boolean;
   /** Mes prestations — futur contexte prestataire, aucun backend aujourd'hui (voir pages/espace-client/prestations.vue, placeholder). */
   services: boolean;
+  /** Espace parrain — compte rattaché à un parrain par un responsable (ADR 0050 côté elm-monolithe). */
+  parrain: boolean;
   /** Profil — toujours accessible à tout compte espace client. */
   profile: boolean;
 }
@@ -48,6 +50,7 @@ const NO_CAPABILITIES: ClientCapabilities = {
   logisticsActivity: false,
   orders: false,
   services: false,
+  parrain: false,
   profile: false,
 };
 
@@ -68,6 +71,12 @@ export function resolveClientCapabilities(context: AuthContext | null | undefine
     context.client_id || context.proprietaire_id || context.livreur_id || context.prestataire_id,
   );
 
+  // parrain_id volontairement hors de hasAnyContext : tableau de bord,
+  // commissions et dépenses lisent le dashboard propriétaire/livreur, vide pour
+  // un parrain seul. Il a ses propres écrans, et le menu des autres comptes ne
+  // change pas.
+  const hasParrainContext = Boolean(context.parrain_id);
+
   // Véhicules/activité logistique : uniquement proprietaire ou livreur (une
   // équipe) — jamais un client pur, jamais (aujourd'hui) un prestataire pur.
   const hasVehicleContext = Boolean(context.proprietaire_id || context.livreur_id);
@@ -82,6 +91,7 @@ export function resolveClientCapabilities(context: AuthContext | null | undefine
     // prestataire_id n'existe pas encore côté backend : toujours false en
     // pratique tant qu'il n'est pas exposé — voir config/auth.ts::AuthContext.
     services: Boolean(context.prestataire_id),
-    profile: hasAnyContext,
+    parrain: hasParrainContext,
+    profile: hasAnyContext || hasParrainContext,
   };
 }

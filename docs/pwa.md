@@ -29,13 +29,12 @@ La génération statique du module (`pwa.manifest`) est donc désactivée
 (`manifest: false` dans `nuxt.config.ts`) au profit de cette route.
 
 Champs pilotés par `runtimeConfig.public` (donc par les variables
-`NUXT_PUBLIC_*` déjà documentées dans `docs/environment.md`, aucune nouvelle
-variable créée) :
+`NUXT_PUBLIC_*` documentées dans `docs/environment.md`) :
 
 | Champ manifest | Source | Exemple prod | Exemple préprod |
 |---|---|---|---|
-| `name` | `NUXT_PUBLIC_APP_NAME` | `Eau La Maman` | `ELM Préprod` |
-| `short_name` | `ELM` en production, sinon identique à `name` | `ELM` | `ELM Préprod` |
+| `name` | `NUXT_PUBLIC_APP_NAME` | `Eau La Maman` | `Eau La Maman Test` |
+| `short_name` | `NUXT_PUBLIC_APP_SHORT_NAME`, ou `NUXT_PUBLIC_APP_NAME` si vide | `ELM` | `ELM Test` |
 
 Champs fixes (identiques partout, non pilotés par l'environnement) :
 
@@ -56,10 +55,29 @@ Le lien `<link rel="manifest" href="/manifest.webmanifest">` est ajouté
 statiquement dans `nuxt.config.ts` (`app.head.link`), le chemin ne change
 jamais même si le contenu, lui, varie par environnement.
 
-Le nom affiché sous l'icône iOS lors de « Ajouter à l'écran d'accueil » suit
-la même logique côté client, dans `app.vue`
-(`meta name="apple-mobile-web-app-title"`, piloté par
-`runtimeConfig.public.appName`).
+Le nom affiché sous l'icône iOS lors de « Ajouter à l'écran d'accueil » est le
+même nom court, dans `app.vue` (`meta name="apple-mobile-web-app-title"`,
+`resolveAppShortName` de `config/runtime.ts`).
+
+### Changer le nom d'une application
+
+1. Local : modifier `.env`, puis relancer `nuxt dev`. Préprod et production :
+   modifier la variable dans le panneau Hostinger de la Web App, puis
+   redémarrer ou redéployer l'application (les variables sont lues au
+   démarrage du serveur, aucune recompilation n'est nécessaire).
+2. Vérifier : `/manifest.webmanifest` et la balise
+   `apple-mobile-web-app-title` de la page d'accueil.
+3. Applications déjà installées :
+   - **iPhone/iPad** : le nom est figé à l'installation (et modifiable par
+     l'utilisateur à ce moment-là). Supprimer l'icône et réinstaller.
+   - **Android** : Chrome relit le manifest de lui-même, la mise à jour peut
+     prendre plusieurs jours. Réinstaller pour l'obtenir immédiatement.
+   - **Ordinateur** : Chrome/Edge relisent aussi le manifest et peuvent
+     demander une confirmation du changement de nom.
+
+Le service worker ne met pas `/manifest.webmanifest` en cache (route serveur,
+hors `globPatterns`) et le CDN Hostinger le sert sans cache
+(`x-hcdn-cache-status: DYNAMIC`, constaté le 02/11/2026).
 
 ## Icônes
 
@@ -266,21 +284,18 @@ Chrome desktop, et le cas "déjà installée".
 
 ## Environnements
 
-Aucune nouvelle variable d'environnement : le manifest et le titre iOS
-réutilisent `NUXT_PUBLIC_APP_NAME` / `NUXT_PUBLIC_ENVIRONMENT`, déjà
-documentés dans `docs/environment.md` (qui anticipait déjà ce besoin : *« Nom
-affiché ; sert aussi au manifest PWA »*). En pratique, avec les valeurs déjà
-prévues par environnement :
+Le manifest et le titre iOS utilisent `NUXT_PUBLIC_APP_NAME` et
+`NUXT_PUBLIC_APP_SHORT_NAME`, documentées dans `docs/environment.md`. Aucun nom
+d'application ne dépend de `NUXT_PUBLIC_ENVIRONMENT`. Valeurs par environnement :
 
-| Environnement | `name`/`short_name` (non-prod) ou `name` (prod) |
-|---|---|
-| Local | `Eau La Maman` (valeur par défaut de `NUXT_PUBLIC_APP_NAME`) |
-| Préproduction | `ELM Préprod` |
-| Recette | `ELM Recette` |
-| Production | `Eau La Maman` (`short_name: "ELM"`) |
+| Environnement | `NUXT_PUBLIC_APP_NAME` | `NUXT_PUBLIC_APP_SHORT_NAME` | Où la renseigner |
+|---|---|---|---|
+| Local | `Eau La Maman` | `ELM Dev` | fichier `.env` |
+| Préproduction | `Eau La Maman Test` | `ELM Test` | panneau Hostinger |
+| Production | `Eau La Maman` | `ELM` | panneau Hostinger |
 
-Un testeur préprod/recette voit donc un nom d'app différent de la production,
-aussi bien dans le manifest Android/desktop que dans le titre iOS.
+Un testeur préprod voit donc un nom d'app différent de la production, aussi
+bien dans le manifest Android/desktop que dans le titre iOS.
 
 ## Vérifications effectuées
 

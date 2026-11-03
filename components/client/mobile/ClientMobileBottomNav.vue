@@ -1,15 +1,14 @@
 <script setup lang="ts">
-import { CLIENT_NAV_ITEMS } from "~/config/clientNavigation";
+import { bottomNavItems } from "~/config/clientNavigation";
 
-// Construit depuis CLIENT_NAV_ITEMS (mobileBottomNav: true) + useClientCapabilities()
-// — voir le commentaire équivalent dans ClientMenu.vue (desktop), même
-// source unique de navigation (chantier "capacités" du 27/08/2026).
+// Construit depuis bottomNavItems() + useClientCapabilities() — voir le
+// commentaire équivalent dans ClientMenu.vue (desktop), même source unique de
+// navigation (chantier "capacités" du 27/08/2026). La barre suit l'espace ouvert.
 const route = useRoute();
 const capabilities = useClientCapabilities();
 
-const items = computed(() => CLIENT_NAV_ITEMS
-  .filter((item) => item.mobileBottomNav && capabilities.value[item.capability])
-  .map((item) => ({ label: item.label, icon: `pi ${item.icon}`, to: item.to, exact: item.exact })));
+const items = computed(() => bottomNavItems(capabilities.value, route.path)
+  .map((item) => ({ label: item.mobileLabel ?? item.label, icon: `pi ${item.icon}`, to: item.to, exact: item.exact })));
 
 const isActive = (item: (typeof items.value)[number]) => item.exact
   ? route.path === item.to

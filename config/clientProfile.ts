@@ -70,13 +70,52 @@ export interface ClientProfileResponse {
   // réellement liée (cas limite mais possible côté backend — ProfileController
   // renvoie explicitement `profile: null` dans ce cas plutôt qu'une erreur).
   profile: ClientProfile | null;
+  // Seules valeurs de `pays` acceptées par PATCH /v1/mobile/profile.
+  pays_disponibles: string[];
 }
 
-// Seuls champs acceptés par PATCH /v1/mobile/profile (UpdateProfileRequest,
-// dérivé du contrat OpenAPI généré — propre pour cette requête précise, voir
-// types/api.ts) — identité civile, téléphone/email, raison sociale et statut
-// restent réservés au backoffice, jamais envoyés depuis l'espace client.
-export type UpdateClientProfileLocalisationPayload = ApiUpdateProfileRequestBody;
+// Réponse du PATCH uniquement. `null` si aucune demande de changement d'e-mail
+// n'a été faite : l'adresse ne change qu'à l'ouverture du lien reçu (ADR 0051
+// côté elm-monolithe), jamais à la réponse de ce PATCH.
+export interface ClientProfileEmailConfirmation {
+  adresse: string;
+  envoyee: boolean;
+}
+
+export interface UpdateClientProfileResponse extends ClientProfileResponse {
+  email_confirmation: ClientProfileEmailConfirmation | null;
+}
+
+// Champs acceptés par PATCH /v1/mobile/profile (UpdateProfileRequest, dérivé du
+// contrat OpenAPI généré — propre pour cette requête précise, voir
+// types/api.ts). Le téléphone, code_pays/code_phone_pays (qui recomposent le
+// téléphone au backoffice), la raison sociale et le statut restent exclus.
+export type UpdateClientProfilePayload = ApiUpdateProfileRequestBody;
+
+export interface ClientIdentityForm {
+  prenom: string;
+  nom: string;
+  email: string;
+}
+
+// N'envoie que ce qui a changé : un compte connu seulement par son nom complet
+// (prénom/nom vides) doit pouvoir renseigner son e-mail sans se heurter au
+// caractère obligatoire de champs qu'il n'a pas touchés.
+export function buildIdentityPatch(
+  form: ClientIdentityForm,
+  current: { prenom?: string | null; nom?: string | null; email?: string | null } | null | undefined,
+): Pick<UpdateClientProfilePayload, "prenom" | "nom" | "email"> {
+  const patch: Pick<UpdateClientProfilePayload, "prenom" | "nom" | "email"> = {};
+  const prenom = form.prenom.trim();
+  const nom = form.nom.trim();
+  const email = form.email.trim();
+
+  if (prenom !== (current?.prenom ?? "")) patch.prenom = prenom;
+  if (nom !== (current?.nom ?? "")) patch.nom = nom;
+  if (email.toLowerCase() !== (current?.email ?? "").toLowerCase()) patch.email = email;
+
+  return patch;
+}
 
 // PATCH /v1/mobile/profile/notification-preferences — payload et réponse ont
 // une forme différente de GET/PATCH /profile (pas de wrapper "profile", cf.

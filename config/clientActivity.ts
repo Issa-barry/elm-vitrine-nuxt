@@ -41,10 +41,30 @@ export interface ClientActivityItem {
   nb_packs: number;
 }
 
+// Périodes rapides : le navigateur ne transmet que la clé, le backend résout
+// seul les bornes (ActiviteMineRequest + SituationPeriode, fuseau de
+// l'application) — jamais de calcul de dates avec l'horloge du navigateur.
+export const ACTIVITY_PERIODS = [
+  { value: "aujourd_hui", label: "Aujourd’hui" },
+  { value: "hier", label: "Hier" },
+  { value: "cette_semaine", label: "Cette semaine" },
+  { value: "semaine_precedente", label: "Semaine dernière" },
+  { value: "ce_mois", label: "Ce mois" },
+  { value: "mois_precedent", label: "Mois dernier" },
+  { value: "cette_annee", label: "Cette année" },
+] as const;
+
+export type ActivityPeriod = (typeof ACTIVITY_PERIODS)[number]["value"];
+
+export function activityPeriodLabel(period: ActivityPeriod): string {
+  return ACTIVITY_PERIODS.find((option) => option.value === period)?.label ?? period;
+}
+
 export interface ActivityFilters {
   type: ActivityType | null;
   statut: string | null;
   vehicule_id: string | null;
+  periode: ActivityPeriod | null;
   date_debut: string | null;
   date_fin: string | null;
 }
@@ -53,8 +73,8 @@ export type ClientActivityResponse = PaginatedResponse<ClientActivityItem, Activ
 
 /**
  * Requête vers GET /api/client/activity (BFF) — dérivée des paramètres de
- * requête OpenAPI (ApiActiviteQuery, correctement typés) + `page`, absent du
- * contrat documenté mais accepté nativement par le paginateur Laravel.
+ * requête OpenAPI (ApiActiviteQuery, correctement typés). `page` et `periode`
+ * sont redéclarés ici pour exclure `null` et typer `periode` par ACTIVITY_PERIODS.
  * `statut` volontairement omis de ce type malgré sa présence dans le contrat
  * OpenAPI : le backend l'exige accompagné de `type` (422 sinon, deux
  * vocabulaires de statut différents selon le type) — la page
@@ -62,8 +82,9 @@ export type ClientActivityResponse = PaginatedResponse<ClientActivityItem, Activ
  * `type`/`vehicule_id`/période, pas par statut (qui demanderait une liste
  * d'options dépendante du type sélectionné, hors périmètre de cette passe,
  * voir demande du 26/08/2026, section 38 : pas de refonte complète de l'UI).
+ * `periode` exclut `date_debut`/`date_fin` (422 sinon, voir ActiviteMineRequest).
  */
-export type ActivityQuery = Omit<ApiActiviteQuery, "statut"> & { page?: number };
+export type ActivityQuery = Omit<ApiActiviteQuery, "statut"> & { page?: number; periode?: ActivityPeriod };
 
 /** Libellé du type, pour un badge — ne reformule jamais `statut_label` (déjà fourni par le backend). */
 export function activityTypeLabel(type: ActivityType): string {

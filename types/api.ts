@@ -69,6 +69,14 @@ export type ApiActiviteQuery = NonNullable<operations["client.activite.mine"]["p
 // documentée en commentaire, jamais dans un type (voir config/
 // clientActivity.ts).
 
+// ── Espace parrain (ADR 0050 côté elm-monolithe) ─────────────────────────
+export type ApiParrainSyntheseResponse = operations["client.parrain.synthese"]["responses"][200]["content"]["application/json"];
+export type ApiParrainVehiculesResponse = operations["client.parrain.vehicules"]["responses"][200]["content"]["application/json"];
+export type ApiParrainCommissionsResponse = operations["client.parrain.commissions"]["responses"][200]["content"]["application/json"];
+export type ApiParrainCommissionsQuery = NonNullable<operations["client.parrain.commissions"]["parameters"]["query"]>;
+export type ApiParrainPaiementsResponse = operations["client.parrain.paiements"]["responses"][200]["content"]["application/json"];
+export type ApiParrainPaiementsQuery = NonNullable<operations["client.parrain.paiements"]["parameters"]["query"]>;
+
 // ── Commandes (rôle client) ──────────────────────────────────────────────
 export type ApiCommandesMineResponse = operations["client.commandes.mine"]["responses"][200]["content"]["application/json"];
 export type ApiCommandeDetailResponse = operations["client.commandes.show"]["responses"][200]["content"]["application/json"];
