@@ -46,6 +46,22 @@ const TEST_USER = {
   qr_payload: "https://fello.eau-la-maman.com/proprietaires/e2e-user-1",
 };
 
+// Comptes de l'espace parrain (tests/e2e/parrain.spec.ts) : parrain seul, et
+// propriétaire également parrain. Même mot de passe que TEST_USER.
+const PARRAIN_ACCOUNTS = {
+  "+224601020399": {
+    token: "e2e-parrain-token",
+    user: { ...TEST_USER, id: "e2e-user-parrain", prenom: "Awa", nom: "Bah", telephone: "+224601020399", roles: ["client"], qr_payload: null },
+    context: { organization_id: "org-e2e", client_id: null, proprietaire_id: null, livreur_id: null, parrain_id: "parrain-e2e" },
+  },
+  "+224601020398": {
+    token: "e2e-cumul-token",
+    user: { ...TEST_USER, id: "e2e-user-cumul", prenom: "Binta", nom: "Sow", telephone: "+224601020398" },
+    context: { organization_id: "org-e2e", client_id: null, proprietaire_id: "proprietaire-e2e", livreur_id: null, parrain_id: "parrain-e2e" },
+  },
+};
+const PARRAIN_TOKENS = Object.values(PARRAIN_ACCOUNTS).map((account) => account.token);
+
 const app = createApp();
 const router = createRouter();
 
@@ -63,6 +79,10 @@ router.post(
     if (body?.telephone === TEST_TELEPHONE && body?.password === TEST_PASSWORD) {
       return { token: TEST_TOKEN, user: TEST_USER };
     }
+    const parrainAccount = PARRAIN_ACCOUNTS[body?.telephone];
+    if (parrainAccount && body?.password === TEST_PASSWORD) {
+      return { token: parrainAccount.token, user: parrainAccount.user };
+    }
 
     throw createError({
       statusCode: 422,
@@ -79,6 +99,10 @@ router.get(
   "/api/auth/me",
   defineEventHandler((event) => {
     const authHeader = getHeader(event, "authorization");
+    const parrainAccount = Object.values(PARRAIN_ACCOUNTS).find((account) => authHeader === `Bearer ${account.token}`);
+    if (parrainAccount) {
+      return { ...parrainAccount.user, context: parrainAccount.context };
+    }
     if (authHeader !== `Bearer ${TEST_TOKEN}`) {
       throw createError({ statusCode: 401, statusMessage: "Non authentifié." });
     }
@@ -229,8 +253,17 @@ router.post("/api/auth/password/reset", defineEventHandler(() => ({ message: "Mo
 // elm-monolithe — voir config/clientProfile.ts, config/clientVehicles.ts) ──
 function requireTestToken(event) {
   const authHeader = getHeader(event, "authorization");
-  if (authHeader !== `Bearer ${TEST_TOKEN}`) {
+  if (![TEST_TOKEN, ...PARRAIN_TOKENS].some((token) => authHeader === `Bearer ${token}`)) {
     throw createError({ statusCode: 401, statusMessage: "Non authentifié." });
+  }
+}
+
+// Comme Laravel : 404 pour un compte sans parrain rattaché.
+function requireParrainToken(event) {
+  requireTestToken(event);
+  const authHeader = getHeader(event, "authorization");
+  if (!PARRAIN_TOKENS.some((token) => authHeader === `Bearer ${token}`)) {
+    throw createError({ statusCode: 404, statusMessage: "Aucun parrain n'est rattaché à ce compte.", data: { message: "Aucun parrain n'est rattaché à ce compte." } });
   }
 }
 
@@ -249,11 +282,19 @@ const profileState = {
   notifications: { activite: true },
 };
 
+const PAYS_DISPONIBLES = ["Guinée", "Sénégal", "Mali", "France"];
+
+const profileResponse = () => ({
+  user: { id: TEST_USER.id, telephone: TEST_USER.telephone, email: TEST_USER.email },
+  profile: profileState,
+  pays_disponibles: PAYS_DISPONIBLES,
+});
+
 router.get(
   "/api/v1/mobile/profile",
   defineEventHandler((event) => {
     requireTestToken(event);
-    return { user: { id: TEST_USER.id, telephone: TEST_USER.telephone, email: TEST_USER.email }, profile: profileState };
+    return profileResponse();
   }),
 );
 
@@ -261,12 +302,38 @@ router.patch(
   "/api/v1/mobile/profile",
   defineEventHandler(async (event) => {
     requireTestToken(event);
-    const body = await readBody(event);
-    // Même filtre que UpdateProfileRequest côté backend : seuls ces 4 champs.
-    for (const key of ["pays", "code_pays", "ville", "adresse"]) {
-      if (key in (body || {})) profileState.localisation[key] = body[key];
+    const body = (await readBody(event)) || {};
+
+    // Même filtre et mêmes refus que UpdateProfileRequest côté backend.
+    const errors = {};
+    for (const key of ["prenom", "nom"]) {
+      if (key in body && !String(body[key] ?? "").trim()) errors[key] = [`Le champ ${key} est obligatoire.`];
     }
-    return { user: { id: TEST_USER.id, telephone: TEST_USER.telephone, email: TEST_USER.email }, profile: profileState };
+    if ("email" in body && !String(body.email ?? "").trim()) errors.email = ["Saisissez une adresse e-mail."];
+    if (body.email === "prise@example.com") errors.email = ["Cette adresse e-mail est déjà utilisée."];
+    if ("pays" in body && !PAYS_DISPONIBLES.includes(body.pays)) errors.pays = ["Sélectionnez un pays dans la liste."];
+    if (Object.keys(errors).length > 0) {
+      // Corps plat, comme une vraie réponse 422 de Laravel.
+      setResponseStatus(event, 422);
+      return { message: "Données invalides.", errors };
+    }
+
+    for (const key of ["prenom", "nom"]) {
+      if (key in body) {
+        TEST_USER[key] = body[key];
+        profileState.identite[key] = body[key];
+      }
+    }
+    for (const key of ["pays", "ville", "adresse"]) {
+      if (key in body) profileState.localisation[key] = body[key];
+    }
+
+    // L'adresse ne change qu'à l'ouverture du lien : jamais dans ce PATCH.
+    const emailChange = "email" in body && body.email !== TEST_USER.email;
+    return {
+      ...profileResponse(),
+      email_confirmation: emailChange ? { adresse: body.email, envoyee: body.email !== "smtp-ko@example.com" } : null,
+    };
   }),
 );
 
@@ -538,6 +605,80 @@ function paginate(items, query, filters, path) {
     filters,
   };
 }
+
+// ── Espace parrain — docs/api-espace-parrain-contract.md côté elm-monolithe ──
+const PARRAIN_VEHICULES = [
+  {
+    id: "veh-parrain-1", nom_vehicule: "Camion Parrain", immatriculation: "RC-100-A", type_label: "Camion", site_nom: "Matoto", is_active: true,
+    parts: [
+      { processus_label: "Ventes", categorie_nom: "Sachet d'eau", montant: 200, a_definir: false, depuis: "2026-10-01" },
+      { processus_label: "Transferts logistiques", categorie_nom: "Sachet d'eau", montant: 0, a_definir: true, depuis: "2026-10-01" },
+    ],
+  },
+  { id: "veh-parrain-2", nom_vehicule: "Tricycle Parrain", immatriculation: "RC-200-B", type_label: "Tricycle", site_nom: "Kaloum", is_active: true, parts: [] },
+];
+const parrainCommission = (id, vehicule, statut, statutLabel, date, montant, verse) => ({
+  id, date, reference: `CMD-${id}`, processus_label: "Ventes",
+  vehicule: { id: vehicule.id, nom_vehicule: vehicule.nom_vehicule, immatriculation: vehicule.immatriculation },
+  montant_unitaire: 200, montant_a_payer: montant, montant_verse: verse, montant_restant: montant - verse, statut, statut_label: statutLabel,
+});
+const PARRAIN_COMMISSIONS = [
+  parrainCommission("001", PARRAIN_VEHICULES[0], "impaye", "Impayée", "2026-10-20", 200000, 0),
+  parrainCommission("002", PARRAIN_VEHICULES[0], "partiel", "Partiellement payée", "2026-10-15", 200000, 100000),
+  parrainCommission("003", PARRAIN_VEHICULES[1], "paye", "Payée", "2026-10-05", 50000, 50000),
+];
+const parrainTotaux = (rows) => {
+  const totalGenere = rows.reduce((sum, row) => sum + row.montant_a_payer, 0);
+  const dejaPaye = rows.reduce((sum, row) => sum + row.montant_verse, 0);
+  return { total_genere: totalGenere, en_attente_periode: 0, payable: totalGenere - dejaPaye, deja_paye: dejaPaye, reste_a_payer: totalGenere - dejaPaye };
+};
+
+router.get(
+  "/api/v1/mobile/parrain/synthese",
+  defineEventHandler((event) => {
+    requireParrainToken(event);
+    return {
+      parrain: { id: "parrain-e2e", nom_complet: "Awa Bah", telephone: "+224601020399", is_active: true },
+      nb_vehicules: PARRAIN_VEHICULES.length,
+      totaux: parrainTotaux(PARRAIN_COMMISSIONS),
+    };
+  }),
+);
+
+router.get(
+  "/api/v1/mobile/parrain/vehicules",
+  defineEventHandler((event) => {
+    requireParrainToken(event);
+    return { data: PARRAIN_VEHICULES };
+  }),
+);
+
+router.get(
+  "/api/v1/mobile/parrain/commissions",
+  defineEventHandler((event) => {
+    requireParrainToken(event);
+    const query = getQuery(event);
+    const rows = PARRAIN_COMMISSIONS.filter((row) => {
+      if (query.vehicule_id && row.vehicule.id !== query.vehicule_id) return false;
+      if (query.statut && row.statut !== query.statut) return false;
+      return true;
+    });
+    return { ...paginate(rows, query, {}, "/api/v1/mobile/parrain/commissions"), resume: parrainTotaux(rows) };
+  }),
+);
+
+router.get(
+  "/api/v1/mobile/parrain/paiements",
+  defineEventHandler((event) => {
+    requireParrainToken(event);
+    return paginate(
+      [{ id: "pay-1", date: "2026-10-16", montant: 150000, mode_paiement: "especes", mode_paiement_label: "Espèces", reference_paiement: null, fiche_reference: "FP-000123", periode_reference: "PAY-202610-P1-PAR" }],
+      getQuery(event),
+      {},
+      "/api/v1/mobile/parrain/paiements",
+    );
+  }),
+);
 
 router.get(
   "/api/v1/mobile/depenses/mine",

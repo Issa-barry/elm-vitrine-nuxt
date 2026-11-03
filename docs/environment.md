@@ -10,7 +10,8 @@ une URL codée en dur dans le code applicatif.
 
 | Variable | Portée | Obligatoire | Rôle |
 |---|---|---|---|
-| `NUXT_PUBLIC_APP_NAME` | publique | non (défaut : `Eau La Maman`) | Nom affiché ; sert aussi au manifest PWA (voir `docs/pwa.md`) |
+| `NUXT_PUBLIC_APP_NAME` | publique | non (défaut : `Eau La Maman`) | Nom complet ; sert au manifest PWA (`name`, voir `docs/pwa.md`) et au titre de la fenêtre d'installation iPhone |
+| `NUXT_PUBLIC_APP_SHORT_NAME` | publique | non (si vide : `NUXT_PUBLIC_APP_NAME`) | Nom sous l'icône de l'application installée : `short_name` du manifest (Android, ordinateur) et `apple-mobile-web-app-title` (iPhone) |
 | `NUXT_PUBLIC_APP_VERSION` | publique | non (défaut : version de `package.json`) | Uniquement informatif |
 | `NUXT_PUBLIC_ENVIRONMENT` | publique | non (défaut : `local`) | `local` \| `preprod` \| `recette` \| `production` — pilote le SEO |
 | `NUXT_PUBLIC_SITE_URL` | publique | **oui** hors local | URL publique de ce site (canonique, robots.txt) |
@@ -51,7 +52,8 @@ d'environnement`) :
 
 ```
 NUXT_PUBLIC_ENVIRONMENT=preprod
-NUXT_PUBLIC_APP_NAME=ELM Préprod
+NUXT_PUBLIC_APP_NAME=Eau La Maman Test
+NUXT_PUBLIC_APP_SHORT_NAME=ELM Test
 NUXT_PUBLIC_SITE_URL=https://test.eau-la-maman.com
 NUXT_PUBLIC_API_BASE=https://formation.eau-la-maman.com
 NUXT_MONOLITH_API_BASE=https://formation.eau-la-maman.com
@@ -64,6 +66,7 @@ NUXT_AUTH_SESSION_PASSWORD=<valeur générée, propre à cet environnement>
 ```
 NUXT_PUBLIC_ENVIRONMENT=production
 NUXT_PUBLIC_APP_NAME=Eau La Maman
+NUXT_PUBLIC_APP_SHORT_NAME=ELM
 NUXT_PUBLIC_SITE_URL=https://eau-la-maman.com
 NUXT_PUBLIC_API_BASE=https://fello.eau-la-maman.com
 NUXT_MONOLITH_API_BASE=https://fello.eau-la-maman.com

@@ -1,30 +1,31 @@
 <script setup lang="ts">
 import QrcodeVue from "qrcode.vue";
-import type { ActivityType, ClientActivityItem } from "~/config/clientActivity";
-import { activityTypeLabel } from "~/config/clientActivity";
+import type { ActivityPeriod, ActivityType, ClientActivityItem } from "~/config/clientActivity";
+import { ACTIVITY_PERIODS, activityPeriodLabel, activityTypeLabel } from "~/config/clientActivity";
 
 definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Activité — Eau La Maman" });
 
-const { response, isLoading, error, hasLoaded, fetchActivity } = useClientActivity();
+const { response, isLoading, isLoadingMore, error, loadMoreError, hasLoaded, hasMore, fetchActivity, loadMore } = useClientActivity();
 const { vehicles: ownedVehicles, fetchVehicles } = useClientVehicles();
 
 // "tous" plutôt que "" comme valeur par défaut de type/vehiculeId : PrimeVue
 // Select affiche son placeholder (jamais défini ici) tant que la modelValue
 // est vide ("", null, undefined), même avec une option `{ value: "" }` déjà
 // présente dans la liste — d'où ce sentinel non vide (voir même correctif sur
-// pages/espace-client/depenses.vue et commissions.vue). Ne concerne pas
-// `date` : c'est un <input type="date"> natif, pas un Select, "" y est le
-// placeholder attendu.
+// pages/espace-client/depenses.vue et commissions.vue). Ne concerne ni
+// `date` (<input type="date"> natif, "" y est le placeholder attendu) ni
+// `periode` (boutons, "" = toutes les périodes).
 const ALL = "tous";
 
 interface ActivityFiltersState {
   type: typeof ALL | ActivityType;
   vehiculeId: string;
+  periode: "" | ActivityPeriod;
   date: string;
 }
 
-const createEmptyFilters = (): ActivityFiltersState => ({ type: ALL, vehiculeId: ALL, date: "" });
+const createEmptyFilters = (): ActivityFiltersState => ({ type: ALL, vehiculeId: ALL, periode: "", date: "" });
 
 const search = ref("");
 const filterPanelVisible = ref(false);
@@ -38,6 +39,7 @@ async function loadActivity() {
   await fetchActivity({
     type: appliedFilters.type !== ALL ? appliedFilters.type : undefined,
     vehicule_id: appliedFilters.vehiculeId !== ALL ? appliedFilters.vehiculeId : undefined,
+    periode: appliedFilters.periode || undefined,
     date_debut: appliedFilters.date || undefined,
     date_fin: appliedFilters.date || undefined,
     per_page: 50,
@@ -142,9 +144,12 @@ const openDetail = (item: ClientActivityItem, event?: MouseEvent) => {
   detailVisible.value = true;
 };
 
+// Le total vient du backend (résultat filtré complet, pas seulement les pages
+// déjà chargées) ; une recherche texte ne porte, elle, que sur le lot chargé.
+const showLoading = computed(() => isLoading.value || !hasLoaded.value);
 const resultLabel = computed(() => {
-  const count = filteredItems.value.length;
-  return `${count} ${count > 1 ? "opérations" : "opération"}`;
+  const count = normalizeText(search.value) ? filteredItems.value.length : (response.value?.meta.total ?? 0);
+  return `${formatNumber(count)} ${count > 1 ? "opérations" : "opération"}`;
 });
 
 const formatDate = (value: string) => new Intl.DateTimeFormat("fr-FR", {
@@ -165,6 +170,7 @@ const activeFilters = computed(() => {
   const filters: Array<{ key: keyof ActivityFiltersState; label: string; value: string }> = [
     { key: "type", label: "Type", value: appliedFilters.type !== ALL ? activityTypeLabel(appliedFilters.type) : "" },
     { key: "vehiculeId", label: "Véhicule", value: vehiculeLabel },
+    { key: "periode", label: "Période", value: appliedFilters.periode ? activityPeriodLabel(appliedFilters.periode) : "" },
     { key: "date", label: "Date", value: appliedFilters.date ? formatDate(appliedFilters.date) : "" },
   ];
   return filters.filter((filter) => Boolean(filter.value));
@@ -181,8 +187,17 @@ const applyFilters = () => {
 };
 const resetDraftFilters = () => Object.assign(draftFilters, createEmptyFilters());
 const removeFilter = (key: keyof ActivityFiltersState) => {
-  (appliedFilters as ActivityFiltersState)[key] = (key === "date" ? "" : ALL) as never;
+  (appliedFilters as ActivityFiltersState)[key] = (key === "date" || key === "periode" ? "" : ALL) as never;
 };
+// Une seule période à la fois : le backend refuse `periode` avec des dates,
+// choisir l'une efface donc l'autre. Un second appui désélectionne la période.
+const togglePeriod = (period: ActivityPeriod) => {
+  draftFilters.periode = draftFilters.periode === period ? "" : period;
+  if (draftFilters.periode) draftFilters.date = "";
+};
+watch(() => draftFilters.date, (date) => {
+  if (date) draftFilters.periode = "";
+});
 const clearAppliedFilters = () => Object.assign(appliedFilters, createEmptyFilters());
 const resetAllFilters = () => { search.value = ""; clearAppliedFilters(); };
 
@@ -210,7 +225,10 @@ const severity = (statut: string): "success" | "info" | "danger" => {
     />
     <p class="client-mobile-page-intro">Retrouvez vos commandes et transferts logistiques.</p>
 
-    <div v-if="error" class="p-4 text-red-500" role="alert">{{ error.message }}</div>
+    <div v-if="error" class="p-4 text-red-500" role="alert">
+      <p class="mt-0 mb-3">{{ error.message }}</p>
+      <Button label="Réessayer" severity="secondary" outlined size="small" @click="loadActivity" />
+    </div>
 
     <template v-else>
       <div class="client-mobile-deliveries__toolbar is-search-only">
@@ -234,10 +252,10 @@ const severity = (statut: string): "success" | "info" | "danger" => {
 
       <div class="client-mobile-deliveries__list-heading">
         <h2>Opérations</h2>
-        <span>{{ isLoading && !hasLoaded ? "…" : resultLabel }}</span>
+        <span>{{ showLoading ? "…" : resultLabel }}</span>
       </div>
 
-      <section v-if="isLoading && !hasLoaded" class="p-4 text-muted-color" role="status">Chargement de l’activité…</section>
+      <section v-if="showLoading" class="p-4 text-muted-color" role="status">Chargement de l’activité…</section>
 
       <template v-else-if="filteredItems.length">
         <template v-for="group in groupedItems" :key="group.label">
@@ -267,11 +285,16 @@ const severity = (statut: string): "success" | "info" | "danger" => {
         </template>
       </template>
 
-      <div v-else class="client-mobile-deliveries__empty" role="status">
+      <div v-else-if="!hasMore" class="client-mobile-deliveries__empty" role="status">
         <span aria-hidden="true"><i class="pi pi-inbox" /></span>
         <strong>Aucune opération trouvée</strong>
         <p>Modifiez votre recherche ou vos filtres.</p>
         <button type="button" @click="resetAllFilters">Réinitialiser</button>
+      </div>
+
+      <div v-if="hasMore && !showLoading" class="client-delivery-load-more">
+        <p v-if="loadMoreError" role="alert">{{ loadMoreError.message }}</p>
+        <Button label="Afficher plus" severity="secondary" outlined size="small" :loading="isLoadingMore" @click="loadMore" />
       </div>
     </template>
   </section>
@@ -282,13 +305,16 @@ const severity = (statut: string): "success" | "info" | "danger" => {
       <p class="text-muted-color m-0">Retrouvez vos commandes et transferts logistiques.</p>
     </div>
 
-    <div v-if="error" class="card text-red-500" role="alert">{{ error.message }}</div>
+    <div v-if="error" class="card text-red-500" role="alert">
+      <p class="mt-0 mb-3">{{ error.message }}</p>
+      <Button label="Réessayer" severity="secondary" outlined size="small" @click="loadActivity" />
+    </div>
 
     <div v-else class="card">
       <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-4">
         <div>
           <h2 class="font-semibold text-xl m-0">Opérations</h2>
-          <span class="text-muted-color text-sm">{{ isLoading && !hasLoaded ? "…" : resultLabel }}</span>
+          <span class="text-muted-color text-sm">{{ showLoading ? "…" : resultLabel }}</span>
         </div>
         <div class="flex gap-2 w-full sm:w-auto">
           <IconField class="flex-1 sm:w-64">
@@ -307,7 +333,9 @@ const severity = (statut: string): "success" | "info" | "danger" => {
         <button type="button" class="is-reset" @click="clearAppliedFilters">Tout effacer</button>
       </div>
 
-      <DataTable v-if="filteredItems.length" :value="filteredItems" data-key="id" paginator :rows="10" responsive-layout="scroll" striped-rows>
+      <div v-if="showLoading" class="py-12 text-center text-muted-color" role="status">Chargement de l’activité…</div>
+
+      <DataTable v-else-if="filteredItems.length" :value="filteredItems" data-key="id" paginator :rows="10" responsive-layout="scroll" striped-rows>
         <Column field="reference" header="Référence" sortable />
         <Column header="Type"><template #body="{ data }">{{ activityTypeLabel(data.type) }}</template></Column>
         <Column header="Véhicule"><template #body="{ data }">{{ data.vehicule ? `${data.vehicule.nom_vehicule} ${data.vehicule.immatriculation}` : "—" }}</template></Column>
@@ -315,11 +343,16 @@ const severity = (statut: string): "success" | "info" | "danger" => {
         <Column header="Statut"><template #body="{ data }"><Tag :value="data.statut_label" :severity="severity(data.statut)" /></template></Column>
       </DataTable>
 
-      <div v-else-if="!(isLoading && !hasLoaded)" class="flex flex-col items-center justify-center text-center py-12" role="status">
+      <div v-else-if="!hasMore" class="flex flex-col items-center justify-center text-center py-12" role="status">
         <i class="pi pi-inbox text-muted-color !text-3xl mb-3" aria-hidden="true" />
         <strong class="text-lg">Aucune opération trouvée</strong>
         <p class="text-muted-color mt-2 mb-4">Modifiez votre recherche ou vos filtres.</p>
         <Button label="Réinitialiser" severity="secondary" outlined @click="resetAllFilters" />
+      </div>
+
+      <div v-if="hasMore && !showLoading" class="client-delivery-load-more">
+        <p v-if="loadMoreError" role="alert">{{ loadMoreError.message }}</p>
+        <Button label="Afficher plus" severity="secondary" outlined size="small" :loading="isLoadingMore" @click="loadMore" />
       </div>
     </div>
   </section>
@@ -337,6 +370,21 @@ const severity = (statut: string): "success" | "info" | "danger" => {
     <form id="client-delivery-filter-form" class="client-delivery-filter" @submit.prevent="applyFilters">
       <p>Affinez la liste avec un ou plusieurs critères.</p>
       <div class="client-delivery-filter__grid">
+        <div class="client-delivery-filter__field" role="group" aria-labelledby="client-delivery-filter-period">
+          <span id="client-delivery-filter-period">Période</span>
+          <div class="client-delivery-filter__periods">
+            <button
+              v-for="period in ACTIVITY_PERIODS"
+              :key="period.value"
+              type="button"
+              :class="{ 'is-active': draftFilters.periode === period.value }"
+              :aria-pressed="draftFilters.periode === period.value"
+              @click="togglePeriod(period.value)"
+            >
+              {{ period.label }}
+            </button>
+          </div>
+        </div>
         <label class="client-delivery-filter__field">
           <span>Type</span>
           <Select v-model="draftFilters.type" :options="typeOptions" option-label="label" option-value="value" fluid />

@@ -11,7 +11,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Mélange deux modèles à vocabulaire de statut distinct (`StatutCommandeVente` pour `type=vente`, `StatutTransfert` pour `type=logistique`) — aucune correspondance n'est inventée entre les deux. `statut` **exige `type`** (422 explicite sinon, message "Le filtre statut nécessite de préciser type"). `type` omis = les deux mélangés, triés par date décroissante, mais alors sans filtre `statut` possible. */
+        /** @description Mélange deux modèles à vocabulaire de statut distinct (`StatutCommandeVente` pour `type=vente`, `StatutTransfert` pour `type=logistique`) — aucune correspondance n'est inventée entre les deux. `statut` **exige `type`** (422 explicite sinon, message "Le filtre statut nécessite de préciser type"). `type` omis = les deux mélangés, triés par date décroissante, mais alors sans filtre `statut` possible. `periode` (période rapide résolue par le serveur) exclut `date_debut`/`date_fin` (422 sinon). */
         get: operations["client.activite.mine"];
         put?: never;
         post?: never;
@@ -209,7 +209,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description `roles` liste **tous** les rôles du compte (un compte peut cumuler un rôle staff ET un rôle client/proprietaire/livreur, cf. décision multi-rôle du 26/08/2026) — **tableau non ordonné**, ne jamais utiliser `roles[0]` comme "rôle principal" (bug de conception déjà rencontré côté frontend). Un frontend doit vérifier `roles.some(r => ['client','proprietaire','livreur'].includes(r))` pour l'accès espace client, jamais une égalité stricte. `context` est résolu exclusivement via `ClientIdentityResolver` à partir du compte authentifié, jamais un paramètre client. */
+        /** @description `roles` liste **tous** les rôles du compte (un compte peut cumuler un rôle staff ET un rôle client/proprietaire/livreur, cf. décision multi-rôle du 26/08/2026) — **tableau non ordonné**, ne jamais utiliser `roles[0]` comme "rôle principal" (bug de conception déjà rencontré côté frontend). Un frontend doit vérifier `roles.some(r => ['client','proprietaire','livreur'].includes(r))` pour l'accès espace client, jamais une égalité stricte. `context` est résolu exclusivement via `ClientIdentityResolver` à partir du compte authentifié, jamais un paramètre client. `context.parrain_id` suit uniquement le rattachement posé au back-office (ADR 0050). */
         get: operations["auth.me"];
         put?: never;
         post?: never;
@@ -261,6 +261,90 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["auth.otp-login.verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/confirm-email/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["auth.confirm-email"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mobile/parrain/synthese": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Identité et totaux du parrain relié au compte par un responsable (ADR 0050). `404` si aucun parrain n'est rattaché. `total_genere` = `en_attente_periode` + `payable` + `deja_paye`. Le parrain vient du compte authentifié, jamais d'un paramètre. */
+        get: operations["client.parrain.synthese"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mobile/parrain/vehicules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Véhicules que le parrain parraine actuellement, avec ses propres parts en vigueur (GNF par pack). Jamais l'équipe, le propriétaire ni la part des autres bénéficiaires. Un véhicule retiré ou remplacé sort de cette liste, ses commissions restent dans `commissions`. */
+        get: operations["client.parrain.vehicules"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mobile/parrain/commissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Parts du parrain, une ligne par opération, de la plus récente à la plus ancienne, sans les commissions annulées. `resume` porte les totaux des filtres appliqués, sur toutes les pages. Un `vehicule_id` d'un véhicule sans part de ce parrain renvoie une liste vide. */
+        get: operations["client.parrain.commissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mobile/parrain/paiements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Versements reçus par le parrain, du plus récent au plus ancien. Jamais le compte de trésorerie ni la personne qui a payé. */
+        get: operations["client.parrain.paiements"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -335,6 +419,10 @@ export interface paths {
          *     - `frais_depenses_total` : dépenses véhicule validées sur la période (proprietaire uniquement — jamais imputées à un livreur dans ce moteur).
          *     - `balance` : `total_earned - frais_depenses_total - total_paid`, **jamais négatif** (plancher à 0 — un solde négatif n'est jamais affiché comme dette du propriétaire).
          *     - `operations_count` : nombre de commissions (vente + logistique) entrant dans `total_earned`.
+         *
+         *     `depenses_total` (hors `summary`, affichage seul) : `frais_depenses_total` + dépenses validées
+         *     rattachées directement au livreur sur la période (ex. avance sur salaire), sauf filtre
+         *     `vehicule_id`. **Jamais déduit de `balance`.**
          *
          *     `par_vehicule` : même détail que `summary` mais par véhicule (schéma
          *     `VehiculeEarningsRow`), **toujours la liste complète du parc accessible**
@@ -662,14 +750,14 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Aucun champ `siret`/identifiant légal (absent du modèle ELM, ne jamais l'inventer côté frontend). Aucun champ "quartier" séparé — seuls `pays`, `ville`, `adresse` existent, un quartier doit être saisi dans `adresse` en texte libre. `profile` vaut `null` si le rôle est présent mais qu'aucune fiche métier n'est réellement rattachée (cas limite). Seuls `pays`/`code_pays`/`ville`/`adresse` sont modifiables via `PATCH` — voir cet endpoint pour le détail exact. */
+        /** @description Aucun champ `siret`/identifiant légal (absent du modèle ELM, ne jamais l'inventer côté frontend). Aucun champ "quartier" séparé — seuls `pays`, `ville`, `adresse` existent, un quartier doit être saisi dans `adresse` en texte libre. `profile` vaut `null` si le rôle est présent mais qu'aucune fiche métier n'est réellement rattachée (cas limite). `pays_disponibles` liste les pays sélectionnables. Les champs modifiables sont détaillés sur le `PATCH` de cette route. */
         get: operations["client.profile.mine"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Seuls `pays`, `code_pays`, `ville`, `adresse` sont modifiables ici (tous optionnels, seuls les champs envoyés sont modifiés). **Volontairement non modifiables par ce endpoint** (silencieusement ignorés si envoyés) : `nom`/`prenom`/`surnom` (identité civile), `telephone`/`email` (identifiants de connexion, unicité par organisation à revalider), `raison_sociale`/`type` (identité légale), `actif` (jamais en self-service) — réservés au backoffice. `404` si aucun profil n'est rattaché au compte. */
+        /** @description Tous les champs sont optionnels, seuls les champs envoyés sont modifiés. `prenom`/`nom` : appliqués immédiatement, ne peuvent pas être vidés. `email` : appliqué seulement à l'ouverture du lien envoyé à la nouvelle adresse (valable 24 h) ; `email_confirmation` indique l'adresse concernée et si l'envoi a réussi, `null` sans demande. `pays` : un libellé de `pays_disponibles`. **Non modifiables** (silencieusement ignorés si envoyés) : `telephone`, `code_pays`, `code_phone_pays`, `surnom`, `raison_sociale`, `type`, `actif`. `404` si la localisation est envoyée sans fiche métier rattachée. */
         patch: operations["client.profile.update"];
         trace?: never;
     };
@@ -730,7 +818,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Liste des véhicules du proprietaire (les siens) ou du livreur (ceux de son équipe) — jamais toute la flotte de l'organisation. **Aucun statut "Entretien"/maintenance n'existe dans le modèle ELM** — seul `is_active` (booléen) existe ; n'affichez pas un statut de ce type sans colonne backend dédiée (elle n'existe pas). `capacite`/`conducteur` sont des champs hérités conservés pour compatibilité descendante — la source canonique est désormais `capacites[]` (une entrée par catégorie, cf. VehiculeCapacite) et `equipe[]` (tous les membres actifs, avec `role` = valeur réelle stockée en base : `chauffeur`/`convoyeur`, jamais traduite). `proprietaire` est `null` si le véhicule n'a aucun propriétaire renseigné. */
+        /** @description Liste des véhicules du proprietaire (les siens) ou du livreur (ceux de son équipe) — jamais toute la flotte de l'organisation. **Aucun statut "Entretien"/maintenance n'existe dans le modèle ELM** — seul `is_active` (booléen) existe ; n'affichez pas un statut de ce type sans colonne backend dédiée (elle n'existe pas). `capacite`/`conducteur` sont des champs hérités conservés pour compatibilité descendante — la source canonique est désormais `capacites[]` (une entrée par catégorie, cf. VehiculeCapacite) et `equipe[]` (tous les membres actifs, avec `role` = valeur réelle stockée en base : `chauffeur`/`convoyeur`, jamais traduite ; `nom_complet` peut être une désignation provisoire comme `Chauffeur-1`, à remplacer à l'affichage par `prenom` + `nom` quand les deux sont renseignés). `proprietaire` est `null` si le véhicule n'a aucun propriétaire renseigné. */
         get: operations["client.vehicules.mine"];
         put?: never;
         post?: never;
@@ -785,7 +873,8 @@ export interface components {
             id: string;
             reference: string;
             statut: string;
-            statut_label: string;
+            /** @description Précommande retirée : « Retirée », jamais le statut financier « À encaisser ». */
+            statut_label: string | "Retirée";
             date: string | null;
             total_commande: number;
             vehicule?: {
@@ -801,6 +890,25 @@ export interface components {
                 prix_vente_snapshot: number;
                 total_ligne: number;
             }[];
+        };
+        /** CommissionParrainResource */
+        CommissionParrainResource: {
+            id: string;
+            date: string;
+            reference: string;
+            processus_label: string | null;
+            vehicule: {
+                id: string;
+                nom_vehicule: string;
+                immatriculation: string;
+            } | null;
+            montant_unitaire: number | null;
+            montant_a_payer: number;
+            montant_verse: number;
+            montant_restant: number;
+            statut: string;
+            /** @enum {string} */
+            statut_label: "Créée" | "Impayée" | "Partiellement payée" | "Payée" | "Annulée";
         };
         /** CommissionPartResource */
         CommissionPartResource: {
@@ -914,6 +1022,17 @@ export interface components {
             read_at: string | null;
             created_at: string | null;
         };
+        /** PaiementParrainResource */
+        PaiementParrainResource: {
+            id: string;
+            date: string;
+            montant: number;
+            mode_paiement: string;
+            mode_paiement_label: string;
+            reference_paiement: string | null;
+            fiche_reference: string;
+            periode_reference: string;
+        };
         /** PropositionVehiculeResource */
         PropositionVehiculeResource: {
             id: string;
@@ -953,9 +1072,18 @@ export interface components {
         StatutDepense: "brouillon" | "soumis" | "valide" | "rejete" | "annule";
         /**
          * StatutTransfert
+         * @description | |
+         *     |---|
+         *     | `brouillon` <br/>  |
+         *     | `chargement` <br/>  |
+         *     | `transit` <br/>  |
+         *     | `reception` <br/>  |
+         *     | `cloture` <br/>  |
+         *     | `annule` <br/>  |
+         *     | `retourne` <br/> Toute la marchandise chargée est revenue au site source avant réception (ADR 0029). |
          * @enum {string}
          */
-        StatutTransfert: "brouillon" | "chargement" | "transit" | "reception" | "cloture" | "annule";
+        StatutTransfert: "brouillon" | "chargement" | "transit" | "reception" | "cloture" | "annule" | "retourne";
         /**
          * StoreVehicleProposalRequest
          * @description Règles identiques à l'espace client Inertia — définies UNE FOIS sur
@@ -993,6 +1121,7 @@ export interface components {
             quantite_demandee: number | null;
             quantite_chargee: number | null;
             quantite_recue: number | null;
+            quantite_retournee: number;
             ecart_type: string | null;
             ecart_label: string;
             ecart: string;
@@ -1060,18 +1189,19 @@ export interface components {
         };
         /**
          * UpdateProfileRequest
-         * @description Champs modifiables par le titulaire du compte lui-même — uniquement la
-         *     localisation. Volontairement exclus (décision du 26/08/2026, cf. rapport) :
-         *     nom/prenom (identité civile), telephone/email (identifiants de connexion,
-         *     unicité par organisation à revalider), raison_sociale/type (identité légale)
-         *     et is_active (jamais en self-service) — ces champs restent réservés au
-         *     backoffice, cohérent avec la séparation déjà en place partout ailleurs dans
-         *     l'application entre édition "propriétaire" (self-service) et édition "staff"
-         *     (ProprietaireController, ClientController...).
+         * @description Champs modifiables par le titulaire du compte lui-même (ADR 0051) : prénom, nom,
+         *     e-mail (appliqué après confirmation par lien) et localisation. Le pays est un
+         *     libellé choisi dans une liste fermée. Volontairement exclus : telephone (identifiant
+         *     de connexion), code_pays/code_phone_pays (recomposent le téléphone dans les
+         *     formulaires du back-office), raison_sociale/type (identité légale) et is_active.
          */
         UpdateProfileRequest: {
-            pays?: string | null;
-            code_pays?: string | null;
+            prenom?: string;
+            nom?: string;
+            /** Format: email */
+            email?: string;
+            /** @enum {string|null} */
+            pays?: "Guinée" | "Guinée-Bissau" | "Sénégal" | "Mali" | "Côte d'Ivoire" | "Liberia" | "Sierra Leone" | "France" | "Chine" | "Émirats arabes unis" | "Inde" | "Canada" | "Autriche" | "Belgique" | "Bulgarie" | "Croatie" | "Tchéquie" | "Danemark" | "Estonie" | "Finlande" | "Allemagne" | "Grèce" | "Hongrie" | "Islande" | "Italie" | "Lettonie" | "Liechtenstein" | "Lituanie" | "Luxembourg" | "Malte" | "Pays-Bas" | "Norvège" | "Pologne" | "Portugal" | "Roumanie" | "Slovaquie" | "Slovénie" | "Espagne" | "Suède" | "Suisse" | null;
             ville?: string | null;
             adresse?: string | null;
         };
@@ -1199,9 +1329,11 @@ export interface operations {
                 type?: "vente" | "logistique" | null;
                 statut?: string | null;
                 vehicule_id?: string | null;
+                periode?: "aujourd_hui" | "hier" | "cette_semaine" | "semaine_precedente" | "ce_mois" | "mois_precedent" | "cette_annee" | null;
                 date_debut?: string | null;
                 date_fin?: string | null;
                 per_page?: number | null;
+                page?: number | null;
             };
             header?: never;
             path?: never;
@@ -1232,8 +1364,9 @@ export interface operations {
                             type: unknown;
                             statut: unknown;
                             vehicule_id: unknown;
-                            date_debut: unknown;
-                            date_fin: unknown;
+                            periode: unknown;
+                            date_debut: string | null;
+                            date_fin: string | null;
                         };
                     } | {
                         data: string[];
@@ -1255,8 +1388,9 @@ export interface operations {
                             type: unknown;
                             statut: unknown;
                             vehicule_id: unknown;
-                            date_debut: unknown;
-                            date_fin: unknown;
+                            periode: unknown;
+                            date_debut: string | null;
+                            date_fin: string | null;
                         };
                     };
                 };
@@ -1364,13 +1498,10 @@ export interface operations {
                     "application/json": {
                         /** @enum {string} */
                         status: "prefill_available" | "not_found";
-                        prefill: null | {
+                        prefill: {
                             prenom: string;
                             nom: string;
-                        } | {
-                            prenom: string | null;
-                            nom: string | null;
-                        };
+                        } | null;
                     } | {
                         /** @constant */
                         status: "user_exists";
@@ -1435,7 +1566,7 @@ export interface operations {
                         prefill: {
                             prenom: string;
                             nom: string;
-                        };
+                        } | null;
                     } | {
                         /** @constant */
                         status: "user_exists";
@@ -1683,6 +1814,11 @@ export interface operations {
                         id: string;
                         prenom: string;
                         nom: string;
+                        /**
+                         * @description Prénom + nom s'ils sont tous les deux connus, même si nom_complet contient une
+                         *     désignation provisoire ("Chauffeur-1") ; sinon le nom complet de la fiche.
+                         */
+                        nom_affichage: string | null;
                         telephone: string;
                         email: string;
                         /**
@@ -1691,12 +1827,20 @@ export interface operations {
                          */
                         roles: string[];
                         is_active: boolean;
+                        /**
+                         * @description Résolution centralisée dans QrPayloadResolver (cf. sa docblock) — avant
+                         *     extraction, cette méthode cherchait le proprietaire/livreur par téléphone
+                         *     SANS jamais tenter le user_id d'abord, et sans aucune restriction
+                         *     d'organisation ni de "profil non réclamé" (cf. audit backend du 26/08/2026).
+                         */
                         qr_payload: string | null;
                         context: {
                             organization_id: string;
                             client_id: null;
                             proprietaire_id: null;
                             livreur_id: null;
+                            /** @description Lu sur le rattachement posé au back-office (ADR 0050), jamais sur le téléphone. */
+                            parrain_id: string | null;
                         };
                     };
                 };
@@ -1877,6 +2021,228 @@ export interface operations {
             };
         };
     };
+    "auth.confirm-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": Record<string, never>;
+                };
+            };
+        };
+    };
+    "client.parrain.synthese": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        parrain: {
+                            id: string;
+                            nom_complet: string;
+                            telephone: string;
+                            is_active: boolean;
+                        };
+                        nb_vehicules: number;
+                        totaux: {
+                            total_genere: number;
+                            en_attente_periode: number;
+                            payable: number;
+                            deja_paye: number;
+                            reste_a_payer: number;
+                        };
+                    };
+                };
+            };
+            401: components["responses"]["AuthenticationException"];
+            403: components["responses"]["AuthorizationException"];
+        };
+    };
+    "client.parrain.vehicules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: {
+                            id: string;
+                            nom_vehicule: string;
+                            immatriculation: string;
+                            type_label: string;
+                            site_nom: string | null;
+                            is_active: boolean;
+                            parts: {
+                                processus_label: string;
+                                categorie_nom: string;
+                                montant: number;
+                                a_definir: boolean;
+                                /** @description PARRAIN-023 : date de début de la part en vigueur. */
+                                depuis: string | null;
+                            }[];
+                        }[];
+                    };
+                };
+            };
+            401: components["responses"]["AuthenticationException"];
+            403: components["responses"]["AuthorizationException"];
+        };
+    };
+    "client.parrain.commissions": {
+        parameters: {
+            query?: {
+                vehicule_id?: string | null;
+                statut?: "creee" | "impaye" | "partiel" | "paye" | null;
+                date_debut?: string | null;
+                date_fin?: string | null;
+                per_page?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated set of `CommissionParrainResource` */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CommissionParrainResource"][];
+                        links: {
+                            first: string | null;
+                            last: string | null;
+                            prev: string | null;
+                            next: string | null;
+                        };
+                        meta: {
+                            current_page: number;
+                            from: number | null;
+                            last_page: number;
+                            /** @description Generated paginator links. */
+                            links: {
+                                url: string | null;
+                                label: string;
+                                active: boolean;
+                            }[];
+                            /** @description Base path for paginator generated URLs. */
+                            path: string | null;
+                            /** @description Number of items shown per page. */
+                            per_page: number;
+                            /** @description Number of the last item in the slice. */
+                            to: number | null;
+                            /** @description Total number of items being paginated. */
+                            total: number;
+                        };
+                        resume: {
+                            total_genere: number;
+                            en_attente_periode: number;
+                            payable: number;
+                            deja_paye: number;
+                            reste_a_payer: number;
+                        };
+                        filters: {
+                            vehicule_id: unknown;
+                            statut: unknown;
+                            date_debut: unknown;
+                            date_fin: unknown;
+                        };
+                    };
+                };
+            };
+            401: components["responses"]["AuthenticationException"];
+            403: components["responses"]["AuthorizationException"];
+            422: components["responses"]["ValidationException"];
+        };
+    };
+    "client.parrain.paiements": {
+        parameters: {
+            query?: {
+                date_debut?: string | null;
+                date_fin?: string | null;
+                per_page?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated set of `PaiementParrainResource` */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["PaiementParrainResource"][];
+                        links: {
+                            first: string | null;
+                            last: string | null;
+                            prev: string | null;
+                            next: string | null;
+                        };
+                        meta: {
+                            current_page: number;
+                            from: number | null;
+                            last_page: number;
+                            /** @description Generated paginator links. */
+                            links: {
+                                url: string | null;
+                                label: string;
+                                active: boolean;
+                            }[];
+                            /** @description Base path for paginator generated URLs. */
+                            path: string | null;
+                            /** @description Number of items shown per page. */
+                            per_page: number;
+                            /** @description Number of the last item in the slice. */
+                            to: number | null;
+                            /** @description Total number of items being paginated. */
+                            total: number;
+                        };
+                        filters: {
+                            date_debut: unknown;
+                            date_fin: unknown;
+                        };
+                    };
+                };
+            };
+            401: components["responses"]["AuthenticationException"];
+            403: components["responses"]["AuthorizationException"];
+            422: components["responses"]["ValidationException"];
+        };
+    };
     "client.web-push.vapid-public-key": {
         parameters: {
             query?: never;
@@ -1996,6 +2362,7 @@ export interface operations {
                              */
                             operations_count: number;
                         };
+                        depenses_total: number;
                         summary_evolution: components["schemas"]["SummaryEvolution"] | null;
                         comparison_period: components["schemas"]["ComparisonPeriod"] | null;
                         par_vehicule: components["schemas"]["VehiculeEarningsRow"][];
@@ -2217,7 +2584,7 @@ export interface operations {
                         reference: string;
                         statut: string;
                         /** @enum {string} */
-                        statut_label: "Brouillon" | "À charger" | "Chargement en cours" | "Livraison en cours" | "Livrée" | "À encaisser" | "Clôturée" | "Annulée";
+                        statut_label: "Brouillon" | "À charger" | "Chargement en cours" | "Livraison en cours" | "Livrée" | "À encaisser" | "Clôturée" | "Annulée" | "Retournée" | "Annulée (erreur de saisie)" | "Créée" | "Préparation en cours" | "Prête au retrait";
                         site_source: string;
                         client_nom: string;
                         client_telephone: string | null;
@@ -2582,7 +2949,7 @@ export interface operations {
     "client.commandes.mine": {
         parameters: {
             query?: {
-                statut?: "brouillon" | "a_charger" | "chargement_en_cours" | "livraison_en_cours" | "livree" | "facturation" | "cloturee" | "annulee" | null;
+                statut?: "brouillon" | "a_charger" | "chargement_en_cours" | "livraison_en_cours" | "livree" | "facturation" | "cloturee" | "annulee" | "retournee" | "annulee_erreur_saisie" | "reservee" | "a_preparer" | "preparee" | null;
                 date_debut?: string | null;
                 date_fin?: string | null;
                 per_page?: number | null;
@@ -2889,6 +3256,12 @@ export interface operations {
                         equipe: {
                             id: string;
                             nom_complet: string | null;
+                            /**
+                             * @description nom_complet peut être une désignation provisoire ("Chauffeur-1") : le frontend
+                             *     préfère prénom + nom quand les deux sont connus.
+                             */
+                            prenom: string;
+                            nom: string;
                             telephone: string;
                             role: string;
                             ordre: number;
