@@ -15,11 +15,11 @@ describe("resolveClientCapabilities", () => {
   it("aucun contexte -> aucune capacité (jamais un menu affiché par défaut)", () => {
     expect(resolveClientCapabilities(null)).toEqual({
       dashboard: false, commissions: false, expenses: false, vehicles: false,
-      logisticsActivity: false, orders: false, services: false, profile: false,
+      logisticsActivity: false, orders: false, services: false, parrain: false, profile: false,
     });
     expect(resolveClientCapabilities(ctx({}))).toEqual({
       dashboard: false, commissions: false, expenses: false, vehicles: false,
-      logisticsActivity: false, orders: false, services: false, profile: false,
+      logisticsActivity: false, orders: false, services: false, parrain: false, profile: false,
     });
   });
 
@@ -27,7 +27,7 @@ describe("resolveClientCapabilities", () => {
     const caps = resolveClientCapabilities(ctx({ proprietaire_id: "prop-1" }));
     expect(caps).toEqual({
       dashboard: true, commissions: true, expenses: true, vehicles: true,
-      logisticsActivity: true, orders: false, services: false, profile: true,
+      logisticsActivity: true, orders: false, services: false, parrain: false, profile: true,
     });
   });
 
@@ -42,7 +42,7 @@ describe("resolveClientCapabilities", () => {
     const caps = resolveClientCapabilities(ctx({ client_id: "cli-1" }));
     expect(caps).toEqual({
       dashboard: true, commissions: true, expenses: true, vehicles: false,
-      logisticsActivity: false, orders: true, services: false, profile: true,
+      logisticsActivity: false, orders: true, services: false, parrain: false, profile: true,
     });
   });
 
@@ -52,7 +52,7 @@ describe("resolveClientCapabilities", () => {
     const caps = resolveClientCapabilities(ctx({ prestataire_id: "prest-1" }));
     expect(caps).toEqual({
       dashboard: true, commissions: true, expenses: true, vehicles: false,
-      logisticsActivity: false, orders: false, services: true, profile: true,
+      logisticsActivity: false, orders: false, services: true, parrain: false, profile: true,
     });
   });
 
@@ -71,11 +71,24 @@ describe("resolveClientCapabilities", () => {
     expect(caps.orders).toBe(false);
   });
 
+  it("parrain seul : son espace et son profil, jamais les menus lus sur le dashboard propriétaire/livreur", () => {
+    expect(resolveClientCapabilities(ctx({ parrain_id: "par-1" }))).toEqual({
+      dashboard: false, commissions: false, expenses: false, vehicles: false,
+      logisticsActivity: false, orders: false, services: false, parrain: true, profile: true,
+    });
+  });
+
+  it("proprietaire + parrain : le menu du propriétaire ne change pas", () => {
+    const seul = resolveClientCapabilities(ctx({ proprietaire_id: "prop-1" }));
+    const cumul = resolveClientCapabilities(ctx({ proprietaire_id: "prop-1", parrain_id: "par-1" }));
+    expect(cumul).toEqual({ ...seul, parrain: true });
+  });
+
   it("client + proprietaire + prestataire : tout est visible", () => {
     const caps = resolveClientCapabilities(ctx({ client_id: "cli-1", proprietaire_id: "prop-1", prestataire_id: "prest-1" }));
     expect(caps).toEqual({
       dashboard: true, commissions: true, expenses: true, vehicles: true,
-      logisticsActivity: true, orders: true, services: true, profile: true,
+      logisticsActivity: true, orders: true, services: true, parrain: false, profile: true,
     });
   });
 });

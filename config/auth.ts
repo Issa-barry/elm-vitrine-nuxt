@@ -80,6 +80,9 @@ export interface AuthContext {
   // jamais s'appuyer sur sa présence pour une vraie décision d'autorisation
   // (Laravel reste l'autorité, voir docs/api-espace-client-contract.md).
   prestataire_id?: string | null;
+  // Rattachement posé au back-office (ADR 0050 côté elm-monolithe), jamais
+  // déduit du téléphone. Optionnel : absent d'un backend pas encore déployé.
+  parrain_id?: string | null;
 }
 
 // `code` renvoyé par LoginController et par le filet de sécurité
@@ -364,6 +367,7 @@ export function clientSpaceRoleLabel(
   if (context?.proprietaire_id || roles?.includes("proprietaire")) return "Propriétaire";
   if (context?.livreur_id) return "Livreur";
   if (context?.client_id) return "Client";
+  if (context?.parrain_id) return "Parrain";
   if (roles?.includes("livreur")) return "Livreur";
   if (roles?.includes("client")) return "Client";
   return "Compte";

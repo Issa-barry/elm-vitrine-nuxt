@@ -4,6 +4,7 @@ import {
   checkAuthSessionPassword,
   findMissingRequiredConfig,
   getRobotsMetaContent,
+  resolveAppShortName,
   runtimeConfigDefaults,
 } from "./runtime";
 
@@ -59,6 +60,23 @@ describe("SEO selon l'environnement", () => {
   it("robots.txt n'autorise le crawl que sur l'environnement de production", () => {
     expect(buildRobotsTxt("production")).toBe("User-agent: *\nAllow: /\n");
     expect(buildRobotsTxt("preprod")).toBe("User-agent: *\nDisallow: /\n");
+  });
+});
+
+describe("resolveAppShortName", () => {
+  it("utilise le nom court configuré, sans valeur propre à la production", () => {
+    expect(resolveAppShortName({ appName: "Eau La Maman", appShortName: "ELM" })).toBe("ELM");
+    expect(resolveAppShortName({ appName: "Eau La Maman Test", appShortName: "ELM Test" })).toBe(
+      "ELM Test",
+    );
+  });
+
+  it("reprend le nom complet quand le nom court est vide", () => {
+    expect(resolveAppShortName({ appName: "Eau La Maman", appShortName: "" })).toBe("Eau La Maman");
+  });
+
+  it("expose NUXT_PUBLIC_APP_SHORT_NAME : Nuxt ne surcharge qu'une clé déclarée", () => {
+    expect(runtimeConfigDefaults.public).toHaveProperty("appShortName");
   });
 });
 

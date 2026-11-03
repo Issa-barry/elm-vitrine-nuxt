@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { dashboardExpensesTotal, type ClientDashboardResponse } from "~/config/clientDashboard";
 import { clientDisplayName, clientSpaceRoleLabel } from "~/config/auth";
+import { PARRAIN_SPACE_HOME } from "~/config/clientParrain";
 import { notificationResourceToRoute } from "~/config/clientNotifications";
 import type { ClientNotification } from "~/config/clientNotifications";
 
-definePageMeta({ layout: "client", middleware: "auth" });
+definePageMeta({ layout: "client", middleware: ["auth", "accueil-espace-client"] });
 useHead({
   title: "Tableau de bord — Eau La Maman",
   // Police des 4 cartes KPI desktop/tablette paysage (voir
@@ -127,6 +128,14 @@ const recentNotifications = computed(() => notificationItems.value.slice(0, 6));
   <div>
   <div class="client-mobile-dashboard">
     <ClientMobileIdentityQr :name="displayName" :phone="displayPhone" :role="displayRole" :qr-value="displayQr" />
+
+    <div v-if="capabilities.parrain" class="client-mobile-summary-grid">
+      <NuxtLink :to="PARRAIN_SPACE_HOME" class="client-mobile-summary-card" aria-label="Ouvrir l'espace parrain" data-testid="carte-espace-parrain">
+        <span class="client-mobile-summary-icon"><i class="pi pi-users" /></span>
+        <div><span>Espace parrain</span><strong>Mes parrainages</strong></div>
+        <i class="pi pi-chevron-right client-mobile-summary-chevron" aria-hidden="true" />
+      </NuxtLink>
+    </div>
 
     <div v-if="error" class="p-4 text-red-500" role="alert">
       {{ error.message }}

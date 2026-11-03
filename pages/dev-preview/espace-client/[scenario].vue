@@ -37,6 +37,7 @@ const capabilityLabels: Record<keyof ClientCapabilities, string> = {
   logisticsActivity: "Activité & livraisons",
   orders: "Mes commandes",
   services: "Mes prestations",
+  parrain: "Espace parrain",
   profile: "Mon profil",
 };
 

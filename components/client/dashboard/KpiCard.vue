@@ -20,6 +20,8 @@ interface Props {
   /** null/undefined => aucune comparaison calculable (période précédente à
    * 0, données absentes) : état neutre, jamais de pourcentage inventé. */
   trend?: Trend | null;
+  /** Montant sans comparaison prévue : aucune ligne de variation, pas même le tiret. */
+  noTrend?: boolean;
   secondaryLabel?: string;
   secondaryValue?: string;
 }
@@ -48,7 +50,7 @@ const trendLabel = computed(() => props.trend ? formatKpiTrendPercent(props.tren
       <span class="font-medium">{{ trendLabel }}</span>
       <i v-if="roundedPercent !== 0" class="pi text-xs ml-2" :class="roundedPercent! > 0 ? 'pi-arrow-up' : 'pi-arrow-down'" />
     </div>
-    <div v-else class="mt-1 text-muted-color">
+    <div v-else-if="!noTrend" class="mt-1 text-muted-color">
       <span class="font-medium">—</span>
     </div>
 

@@ -73,8 +73,8 @@ export type ClientActivityResponse = PaginatedResponse<ClientActivityItem, Activ
 
 /**
  * Requête vers GET /api/client/activity (BFF) — dérivée des paramètres de
- * requête OpenAPI (ApiActiviteQuery, correctement typés) + `page`, absent du
- * contrat documenté mais accepté nativement par le paginateur Laravel.
+ * requête OpenAPI (ApiActiviteQuery, correctement typés). `page` et `periode`
+ * sont redéclarés ici pour exclure `null` et typer `periode` par ACTIVITY_PERIODS.
  * `statut` volontairement omis de ce type malgré sa présence dans le contrat
  * OpenAPI : le backend l'exige accompagné de `type` (422 sinon, deux
  * vocabulaires de statut différents selon le type) — la page
