@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import type { ClientDashboardResponse, DashboardPeriod, DashboardQuery, DashboardVehiculeBalance } from "~/config/clientDashboard";
+import type { PeriodeComptable } from "~/config/clientPeriodeComptable";
+import { TOUTE_ANNEE, bornesDepuisLien, periodeComptableQuery, periodePrecedente } from "~/config/clientPeriodeComptable";
 
 // Refonte du 27/08/2026 (chantier relayé par une session Claude parallèle,
 // "elm-vitrine-nuxt-a4") : la page passe d'une liste de commissions
@@ -18,6 +20,7 @@ useHead({ title: "Commissions — Eau La Maman" });
 
 const { dashboard, isLoading, error, fetchDashboard } = useClientDashboard();
 const { vehicles: ownedVehicles, fetchVehicles } = useClientVehicles();
+const { periodeComptable } = useClientPeriodeComptable();
 const requestFetch = useRequestFetch();
 const route = useRoute();
 
@@ -27,9 +30,10 @@ const route = useRoute();
 // `{ value: "" }` existante).
 const ALL = "tous";
 
-type PeriodFilterValue = DashboardPeriod | "aujourdhui";
+type PeriodFilterValue = DashboardPeriod | "aujourdhui" | "comptable";
 
 const periodOptions: Array<{ label: string; value: PeriodFilterValue }> = [
+  { label: "Période comptable", value: "comptable" },
   { label: "Aujourd'hui", value: "aujourdhui" },
   { label: "7 derniers jours", value: "7j" },
   { label: "30 derniers jours", value: "30j" },
@@ -38,9 +42,11 @@ const periodOptions: Array<{ label: string; value: PeriodFilterValue }> = [
   { label: "Période personnalisée", value: "custom" },
 ];
 
-const periodFilter = ref<PeriodFilterValue>("ce_mois");
-const customDateDebut = ref("");
-const customDateFin = ref("");
+// ?du=…&au=… : lien de l'accueil sur une période rapide.
+const bornesLien = bornesDepuisLien(route.query);
+const periodFilter = ref<PeriodFilterValue>(bornesLien ? "custom" : "comptable");
+const customDateDebut = ref(bornesLien?.du ?? "");
+const customDateFin = ref(bornesLien?.au ?? "");
 // Pré-rempli depuis ?vehicule_id=... (voir pages/espace-client/index.vue,
 // carte "Solde par véhicule").
 const vehiculeFilter = ref<string>(typeof route.query.vehicule_id === "string" ? route.query.vehicule_id : ALL);
@@ -53,6 +59,9 @@ const vehiculeOptions = computed(() => [
 function buildDashboardQuery(): DashboardQuery | null {
   const vehiculeId = vehiculeFilter.value !== ALL ? vehiculeFilter.value : undefined;
 
+  if (periodFilter.value === "comptable") {
+    return { ...periodeComptableQuery(periodeComptable.value), vehicule_id: vehiculeId };
+  }
   if (periodFilter.value === "aujourdhui") {
     const today = new Date().toISOString().slice(0, 10);
     return { period: "custom", date_debut: today, date_fin: today, vehicule_id: vehiculeId };
@@ -67,23 +76,33 @@ function buildDashboardQuery(): DashboardQuery | null {
 }
 
 // Comparaison de tendance RÉELLE (comme pages/espace-client/index.vue) —
-// uniquement pour "ce_mois", seul cas où un raccourci nommé équivalent
-// ("mois_passe") existe côté backend pour la période immédiatement
-// précédente. Pour les autres périodes (7j, 30j, personnalisée...), aucune
-// tendance n'est affichée plutôt que d'inventer une comparaison approximative.
+// uniquement entre périodes entières : "ce_mois" et son raccourci "mois_passe", ou
+// un mois (une année) comptable et le précédent. Pour les autres périodes (P1/P2,
+// 7j, 30j, personnalisée...), aucune tendance n'est affichée plutôt que d'inventer
+// une comparaison approximative.
 const previousDashboard = ref<ClientDashboardResponse | null>(null);
+
+function buildPreviousQuery(vehiculeId: DashboardQuery["vehicule_id"]): DashboardQuery | null {
+  if (periodFilter.value === "ce_mois") return { period: "mois_passe", vehicule_id: vehiculeId };
+  const precedente = periodFilter.value === "comptable" ? periodePrecedente(periodeComptable.value) : null;
+  return precedente ? { ...periodeComptableQuery(precedente), vehicule_id: vehiculeId } : null;
+}
+
+const tendanceLabel = computed(() => (periodFilter.value === "comptable" && periodeComptable.value.mois === TOUTE_ANNEE
+  ? "vs année précédente"
+  : "vs mois précédent"));
 
 async function loadDashboard() {
   const query = buildDashboardQuery();
   if (!query) return;
 
-  await fetchDashboard(query);
+  const previousQuery = buildPreviousQuery(query.vehicule_id);
+  const isCurrent = await fetchDashboard(query);
+  if (!isCurrent) return;
 
-  if (periodFilter.value === "ce_mois") {
+  if (previousQuery) {
     try {
-      previousDashboard.value = await requestFetch<ClientDashboardResponse>("/api/client/dashboard", {
-        query: { period: "mois_passe", vehicule_id: query.vehicule_id },
-      });
+      previousDashboard.value = await requestFetch<ClientDashboardResponse>("/api/client/dashboard", { query: previousQuery });
     } catch {
       previousDashboard.value = null;
     }
@@ -97,7 +116,13 @@ onMounted(() => {
   fetchVehicles();
 });
 
-watch([periodFilter, vehiculeFilter, customDateDebut, customDateFin], loadDashboard);
+watch([periodFilter, vehiculeFilter, customDateDebut, customDateFin, periodeComptable], loadDashboard);
+
+const periodeComptableActive = computed(() => periodFilter.value === "comptable");
+const choisirPeriodeComptable = (periode: PeriodeComptable) => {
+  periodeComptable.value = periode;
+  periodFilter.value = "comptable";
+};
 
 const summary = computed(() => dashboard.value?.summary ?? null);
 const previousSummary = computed(() => previousDashboard.value?.summary ?? null);
@@ -136,6 +161,15 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
     <ClientMobilePageTopbar title="Commissions" title-id="mobile-commissions-title" />
     <p class="client-mobile-page-intro">Suivez vos gains sur la période sélectionnée.</p>
 
+    <ClientPeriodeComptableFilter
+      :model-value="periodeComptable"
+      :actif="periodeComptableActive"
+      :chargement="isLoading"
+      :debut="dashboard?.filters.date_debut"
+      :fin="dashboard?.filters.date_fin"
+      @update:model-value="choisirPeriodeComptable"
+    />
+
     <div class="client-commissions-filters">
       <Select v-model="periodFilter" :options="periodOptions" option-label="label" option-value="value" fluid />
       <Select v-model="vehiculeFilter" :options="vehiculeOptions" option-label="label" option-value="value" fluid />
@@ -152,7 +186,7 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
       <div class="client-mobile-expenses__summary">
         <span>Gains générés</span>
         <strong>{{ formatGnf(summary.total_earned) }}</strong>
-        <small v-if="earnedTrend">{{ formatKpiTrendPercent(earnedTrend.percent) }} vs mois précédent</small>
+        <small v-if="earnedTrend">{{ formatKpiTrendPercent(earnedTrend.percent) }} {{ tendanceLabel }}</small>
         <small v-else>{{ summary.operations_count }} opération{{ summary.operations_count > 1 ? "s" : "" }}</small>
       </div>
       <p v-if="hasNoCommissions" class="text-muted-color text-center">Aucune commission sur cette période.</p>
@@ -201,6 +235,17 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
   </section>
 
   <div class="client-desktop-expenses grid grid-cols-12 gap-8">
+    <div class="col-span-12">
+      <ClientPeriodeComptableFilter
+        class="!mb-0"
+        :model-value="periodeComptable"
+        :actif="periodeComptableActive"
+        :chargement="isLoading"
+        :debut="dashboard?.filters.date_debut"
+        :fin="dashboard?.filters.date_fin"
+        @update:model-value="choisirPeriodeComptable"
+      />
+    </div>
     <div v-if="error" class="col-span-12"><div class="card text-red-500" role="alert">{{ error.message }}</div></div>
     <div v-else-if="isLoading && !dashboard" class="col-span-12"><div class="card text-muted-color" role="status">Chargement des commissions…</div></div>
 

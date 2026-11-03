@@ -1,5 +1,6 @@
 import type { ApiActiviteQuery } from "~/types/api";
 import type { PaginatedResponse } from "./pagination";
+import type { PeriodeComptableQuery, Quinzaine } from "./clientPeriodeComptable";
 
 // Type du contrat réel GET /v1/mobile/activite côté elm-monolithe (voir
 // docs/api-espace-client-contract.md §5, vérifié directement contre
@@ -65,6 +66,9 @@ export interface ActivityFilters {
   statut: string | null;
   vehicule_id: string | null;
   periode: ActivityPeriod | null;
+  annee: number | null;
+  mois: number | null;
+  quinzaine: Quinzaine | null;
   date_debut: string | null;
   date_fin: string | null;
 }
@@ -82,9 +86,10 @@ export type ClientActivityResponse = PaginatedResponse<ClientActivityItem, Activ
  * `type`/`vehicule_id`/période, pas par statut (qui demanderait une liste
  * d'options dépendante du type sélectionné, hors périmètre de cette passe,
  * voir demande du 26/08/2026, section 38 : pas de refonte complète de l'UI).
- * `periode` exclut `date_debut`/`date_fin` (422 sinon, voir ActiviteMineRequest).
+ * `periode` exclut `date_debut`/`date_fin` (422 sinon, voir ActiviteMineRequest),
+ * et la période comptable exclut les deux.
  */
-export type ActivityQuery = Omit<ApiActiviteQuery, "statut"> & { page?: number; periode?: ActivityPeriod };
+export type ActivityQuery = Omit<ApiActiviteQuery, "statut"> & { page?: number; periode?: ActivityPeriod } & PeriodeComptableQuery;
 
 /** Libellé du type, pour un badge — ne reformule jamais `statut_label` (déjà fourni par le backend). */
 export function activityTypeLabel(type: ActivityType): string {

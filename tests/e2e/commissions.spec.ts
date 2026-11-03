@@ -57,7 +57,7 @@ test.describe("Espace client — commissions (vue statistique)", () => {
     const desktop = page.locator(".client-desktop-expenses");
     await expect(desktop.getByText(`${new Intl.NumberFormat("fr-FR").format(4_240_000)} GNF`)).toBeVisible({ timeout: 10_000 });
 
-    await desktop.getByRole("combobox").first().click();
+    await desktop.getByRole("combobox").nth(2).click();
     await page.getByRole("option", { name: "7 derniers jours" }).click();
 
     // 7j réel : 980 000 + 520 000 = 1 500 000 — un montant différent confirme un vrai rechargement, pas un filtre client-side sur des données déjà chargées.
@@ -72,7 +72,7 @@ test.describe("Espace client — commissions (vue statistique)", () => {
     await page.waitForTimeout(1000);
 
     const desktop = page.locator(".client-desktop-expenses");
-    await desktop.getByRole("combobox").first().click();
+    await desktop.getByRole("combobox").nth(2).click();
     await page.getByRole("option", { name: "Période personnalisée" }).click();
 
     const dateInputs = desktop.locator('input[type="date"]');
@@ -91,7 +91,7 @@ test.describe("Espace client — commissions (vue statistique)", () => {
     await page.waitForTimeout(1000);
 
     const desktop = page.locator(".client-desktop-expenses");
-    await desktop.getByRole("combobox").first().click();
+    await desktop.getByRole("combobox").nth(2).click();
     await page.getByRole("option", { name: "Aujourd'hui" }).click();
 
     await expect(desktop.getByText("Aucune commission sur cette période.")).toBeVisible({ timeout: 10_000 });
@@ -108,7 +108,7 @@ test.describe("Espace client — commissions (vue statistique)", () => {
     const desktop = page.locator(".client-desktop-expenses");
     await expect(desktop.getByText("ABARRY", { exact: true })).toBeVisible({ timeout: 10_000 });
 
-    await desktop.getByRole("combobox").nth(1).click();
+    await desktop.getByRole("combobox").nth(3).click();
     await page.getByRole("option", { name: /^ABARRY ·/ }).click();
 
     // Filtré sur veh-1 seul : total = 2 760 000 (plus 4 240 000 combiné), ABARRY 2 tombe à 0.

@@ -2,12 +2,16 @@
 import QrcodeVue from "qrcode.vue";
 import type { ActivityPeriod, ActivityType, ClientActivityItem } from "~/config/clientActivity";
 import { ACTIVITY_PERIODS, activityPeriodLabel, activityTypeLabel } from "~/config/clientActivity";
+import type { PeriodeComptable } from "~/config/clientPeriodeComptable";
+import { periodeComptableQuery } from "~/config/clientPeriodeComptable";
 
 definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Activité — Eau La Maman" });
 
 const { response, isLoading, isLoadingMore, error, loadMoreError, hasLoaded, hasMore, fetchActivity, loadMore } = useClientActivity();
 const { vehicles: ownedVehicles, fetchVehicles } = useClientVehicles();
+const { periodeComptable, revenirAuMoisCourant } = useClientPeriodeComptable();
+const route = useRoute();
 
 // "tous" plutôt que "" comme valeur par défaut de type/vehiculeId : PrimeVue
 // Select affiche son placeholder (jamais défini ici) tant que la modelValue
@@ -32,6 +36,11 @@ const filterPanelVisible = ref(false);
 const appliedFilters = reactive<ActivityFiltersState>(createEmptyFilters());
 const draftFilters = reactive<ActivityFiltersState>(createEmptyFilters());
 
+// Une notification ouvre une opération qui peut dater d'un autre mois : ce lien
+// charge toutes les périodes, jusqu'à ce que l'utilisateur touche au filtre.
+const lienVersOperation = ref(typeof route.query.commande === "string");
+const periodeComptableActive = computed(() => !lienVersOperation.value && !appliedFilters.periode && !appliedFilters.date);
+
 // `statut` volontairement absent de ces filtres : le backend l'exige
 // accompagné de `type` avec deux vocabulaires distincts (vente/logistique) —
 // voir config/clientActivity.ts pour le détail de cette limitation assumée.
@@ -39,6 +48,7 @@ async function loadActivity() {
   await fetchActivity({
     type: appliedFilters.type !== ALL ? appliedFilters.type : undefined,
     vehicule_id: appliedFilters.vehiculeId !== ALL ? appliedFilters.vehiculeId : undefined,
+    ...(periodeComptableActive.value ? periodeComptableQuery(periodeComptable.value) : {}),
     periode: appliedFilters.periode || undefined,
     date_debut: appliedFilters.date || undefined,
     date_fin: appliedFilters.date || undefined,
@@ -54,8 +64,6 @@ async function loadActivity() {
 // tout juste reçue). Introuvable (opération plus ancienne, hors page 1) :
 // dégradation silencieuse, la page reste utile (liste + filtres), pas
 // d'erreur ni de donnée inventée.
-const route = useRoute();
-
 onMounted(async () => {
   await Promise.all([loadActivity(), fetchVehicles()]);
 
@@ -66,7 +74,13 @@ onMounted(async () => {
   }
 });
 
-watch(appliedFilters, loadActivity);
+watch([appliedFilters, periodeComptable, lienVersOperation], loadActivity);
+
+const choisirPeriodeComptable = (periode: PeriodeComptable) => {
+  periodeComptable.value = periode;
+  lienVersOperation.value = false;
+  Object.assign(appliedFilters, { periode: "", date: "" });
+};
 
 const typeOptions = [
   { label: "Tous les types", value: ALL },
@@ -199,7 +213,12 @@ watch(() => draftFilters.date, (date) => {
   if (date) draftFilters.periode = "";
 });
 const clearAppliedFilters = () => Object.assign(appliedFilters, createEmptyFilters());
-const resetAllFilters = () => { search.value = ""; clearAppliedFilters(); };
+const resetAllFilters = () => {
+  search.value = "";
+  clearAppliedFilters();
+  lienVersOperation.value = false;
+  revenirAuMoisCourant();
+};
 
 // Sévérité purement présentationnelle, dérivée du texte réel de `statut`
 // (jamais une valeur inventée) : les deux modèles (vente/logistique) ont des
@@ -224,6 +243,15 @@ const severity = (statut: string): "success" | "info" | "danger" => {
       @filter="openFilterPanel"
     />
     <p class="client-mobile-page-intro">Retrouvez vos commandes et transferts logistiques.</p>
+
+    <ClientPeriodeComptableFilter
+      :model-value="periodeComptable"
+      :actif="periodeComptableActive"
+      :chargement="isLoading"
+      :debut="response?.filters.date_debut"
+      :fin="response?.filters.date_fin"
+      @update:model-value="choisirPeriodeComptable"
+    />
 
     <div v-if="error" class="p-4 text-red-500" role="alert">
       <p class="mt-0 mb-3">{{ error.message }}</p>
@@ -304,6 +332,16 @@ const severity = (statut: string): "success" | "info" | "danger" => {
       <h1 id="desktop-deliveries-title" class="text-3xl font-semibold mb-2">Activité</h1>
       <p class="text-muted-color m-0">Retrouvez vos commandes et transferts logistiques.</p>
     </div>
+
+    <ClientPeriodeComptableFilter
+      class="!mb-6"
+      :model-value="periodeComptable"
+      :actif="periodeComptableActive"
+      :chargement="isLoading"
+      :debut="response?.filters.date_debut"
+      :fin="response?.filters.date_fin"
+      @update:model-value="choisirPeriodeComptable"
+    />
 
     <div v-if="error" class="card text-red-500" role="alert">
       <p class="mt-0 mb-3">{{ error.message }}</p>

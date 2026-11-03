@@ -6,9 +6,9 @@ import { clearAuthSession, getSessionToken } from "../../utils/authSession";
 // auth:sanctum + role:client|proprietaire|livreur). Dashboard financier
 // consolidé — même moteur (ClientEarningsService) que l'espace client
 // Inertia, voir docs/api-espace-client-contract.md §5 côté elm-monolithe.
-// Aucun agrégat recalculé ici : les 5 filtres (period/date_debut/date_fin/
-// vehicule_id/statut) sont transmis tels quels, la réponse est retournée
-// telle quelle.
+// Aucun agrégat recalculé ici : les filtres (period/date_debut/date_fin/periode/
+// annee/mois/quinzaine/vehicule_id/statut) sont transmis tels quels, la réponse
+// est retournée telle quelle.
 export default defineEventHandler(async (event) => {
   const token = await getSessionToken(event);
 
@@ -25,6 +25,10 @@ export default defineEventHandler(async (event) => {
         period: query.period,
         date_debut: query.date_debut,
         date_fin: query.date_fin,
+        periode: query.periode,
+        annee: query.annee,
+        mois: query.mois,
+        quinzaine: query.quinzaine,
         vehicule_id: query.vehicule_id,
         statut: query.statut,
       },
