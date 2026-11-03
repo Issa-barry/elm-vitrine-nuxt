@@ -36,7 +36,7 @@ export function useClientParrain() {
     isLoading.value = true;
     error.value = null;
     try {
-      apply(await requestFetch<T>(path, { query }));
+      apply((await requestFetch<T>(path, { query })) as T);
       notAttached.value = false;
       return true;
     } catch (fetchError) {
