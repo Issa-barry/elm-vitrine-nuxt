@@ -134,8 +134,9 @@ test.describe("Espace client — filtre de période de l'accueil", () => {
     await panneau(page).getByRole("button", { name: "Appliquer" }).click();
     await expect(bouton(page)).toContainText(`Année ${anneeCourante}`);
     await expect(accueil(page).locator(".client-mobile-balance-amount")).toHaveText(gnf(7_000));
-    expect(requetes.dashboard.at(-1)?.get("annee")).toBe(anneeCourante);
-    expect(requetes.dashboard.at(-1)?.get("mois")).toBeNull();
+    // Toute l'année : l'année choisie, puis la précédente pour la tendance.
+    const parAnnee = requetes.dashboard.filter((query) => !query.get("mois")).map((query) => query.get("annee"));
+    expect(parAnnee).toEqual([anneeCourante, String(Number(anneeCourante) - 1)]);
   });
 
   test("toutes les périodes, puis Réinitialiser revient à « Ce mois »", async ({ page }) => {

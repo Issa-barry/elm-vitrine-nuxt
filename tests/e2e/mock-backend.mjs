@@ -531,7 +531,8 @@ router.get(
     requireTestToken(event);
     const query = getQuery(event);
     const vehiculeId = query.vehicule_id || null;
-    const period = query.period || "ce_mois";
+    // Filtre de période de l'accueil : le mois en cours ou un mois passé, pour des tendances réelles.
+    const period = query.period || (query.annee && Number(query.mois) !== new Date().getUTCMonth() + 1 ? "mois_passe" : "ce_mois");
     const source = DASHBOARD_PAR_VEHICULE_BY_PERIOD[period] ?? DASHBOARD_PAR_VEHICULE_BY_PERIOD.ce_mois;
 
     // Même règle que le vrai backend (docs/api-espace-client-contract.md §5) :
@@ -686,12 +687,13 @@ router.get(
   defineEventHandler((event) => {
     requireTestToken(event);
     const query = getQuery(event);
+    const [debut, fin] = (query.periode && activityPeriodBounds(query.periode)) || [query.date_debut, query.date_fin];
 
     const filtered = TEST_EXPENSES.filter((expense) => {
       if (query.vehicule_id && expense.vehicule?.id !== query.vehicule_id) return false;
       if (query.statut && expense.statut !== query.statut) return false;
-      if (query.date_debut && expense.date < query.date_debut) return false;
-      if (query.date_fin && expense.date > query.date_fin) return false;
+      if (debut && expense.date < debut) return false;
+      if (fin && expense.date > fin) return false;
       return true;
     });
 
@@ -700,8 +702,9 @@ router.get(
         vehicule_id: query.vehicule_id || null,
         depense_type_id: query.depense_type_id || null,
         statut: query.statut || null,
-        date_debut: query.date_debut || null,
-        date_fin: query.date_fin || null,
+        periode: query.periode || null,
+        date_debut: debut || null,
+        date_fin: fin || null,
       }, "/api/v1/mobile/depenses/mine"),
       total_valide: filtered.filter((expense) => expense.statut === "valide").reduce((sum, expense) => sum + expense.montant, 0),
     };
@@ -709,11 +712,33 @@ router.get(
 );
 
 const TEST_ACTIVITY = [
-  { id: "act-1", type: "vente", reference: "CMD-2847", statut: "livraison_en_cours", statut_label: "Livraison en cours", site_source: "Siège de Matoto", site_destination: "Client X", vehicule: { id: "veh-1", nom_vehicule: "ABARRY", immatriculation: "OU3859" }, date: "2026-08-20", nb_packs: 12 },
-  { id: "act-2", type: "logistique", reference: "TR-00042-XYZ", statut: "cloture", statut_label: "Clôturé", site_source: "Siège de Matoto", site_destination: "Dépôt Kindia", vehicule: { id: "veh-1", nom_vehicule: "ABARRY", immatriculation: "OU3859" }, date: "2026-08-18", nb_packs: 40 },
-  { id: "act-3", type: "vente", reference: "CMD-2839", statut: "livree", statut_label: "Livrée", site_source: "Siège de Matoto", site_destination: "Client Y", vehicule: { id: "veh-2", nom_vehicule: "ABARRY 2", immatriculation: "OU4217" }, date: "2026-08-17", nb_packs: 8 },
-  { id: "act-4", type: "logistique", reference: "TR-00038-ABC", statut: "en_transit", statut_label: "En transit", site_source: "Dépôt Kindia", site_destination: "Siège de Matoto", vehicule: { id: "veh-2", nom_vehicule: "ABARRY 2", immatriculation: "OU4217" }, date: "2026-08-15", nb_packs: 25 },
+  { id: "act-1", type: "vente", reference: "CMD-2847", statut: "livraison_en_cours", statut_label: "Livraison en cours", statut_paiement: "creee", statut_paiement_label: "Créée", site_source: "Siège de Matoto", site_destination: "Client X", vehicule: { id: "veh-1", nom_vehicule: "ABARRY", immatriculation: "OU3859" }, date: "2026-08-20", nb_packs: 12 },
+  { id: "act-2", type: "logistique", reference: "TR-00042-XYZ", statut: "cloture", statut_label: "Clôturé", statut_paiement: null, statut_paiement_label: null, site_source: "Siège de Matoto", site_destination: "Dépôt Kindia", vehicule: { id: "veh-1", nom_vehicule: "ABARRY", immatriculation: "OU3859" }, date: "2026-08-18", nb_packs: 40 },
+  { id: "act-3", type: "vente", reference: "CMD-2839", statut: "livree", statut_label: "Livrée", statut_paiement: "partiel", statut_paiement_label: "Partiellement payée", site_source: "Siège de Matoto", site_destination: "Client Y", vehicule: { id: "veh-2", nom_vehicule: "ABARRY 2", immatriculation: "OU4217" }, date: "2026-08-17", nb_packs: 8 },
+  { id: "act-4", type: "logistique", reference: "TR-00038-ABC", statut: "en_transit", statut_label: "En transit", statut_paiement: null, statut_paiement_label: null, site_source: "Dépôt Kindia", site_destination: "Siège de Matoto", vehicule: { id: "veh-2", nom_vehicule: "ABARRY 2", immatriculation: "OU4217" }, date: "2026-08-15", nb_packs: 25 },
 ];
+
+// Mêmes bornes que SituationPeriode côté backend réel (semaine du lundi au
+// dimanche, période en cours arrêtée à aujourd'hui), au jour près : les dates
+// de TEST_ACTIVITY n'ont pas d'heure.
+function activityPeriodBounds(periode, now = new Date()) {
+  const y = now.getUTCFullYear();
+  const m = now.getUTCMonth();
+  const d = now.getUTCDate();
+  const depuisLundi = (now.getUTCDay() + 6) % 7;
+  const jour = (year, month, date) => new Date(Date.UTC(year, month, date)).toISOString().slice(0, 10);
+  const aujourdhui = jour(y, m, d);
+
+  return {
+    aujourd_hui: [aujourdhui, aujourdhui],
+    hier: [jour(y, m, d - 1), jour(y, m, d - 1)],
+    cette_semaine: [jour(y, m, d - depuisLundi), aujourdhui],
+    semaine_precedente: [jour(y, m, d - depuisLundi - 7), jour(y, m, d - depuisLundi - 1)],
+    ce_mois: [jour(y, m, 1), aujourdhui],
+    mois_precedent: [jour(y, m - 1, 1), jour(y, m, 0)],
+    cette_annee: [jour(y, 0, 1), aujourdhui],
+  }[periode];
+}
 
 router.get(
   "/api/v1/mobile/activite",
@@ -734,12 +759,21 @@ router.get(
       });
     }
 
+    // Même règle que ActiviteMineRequest : période connue, et jamais avec des dates.
+    const bornes = query.periode ? activityPeriodBounds(query.periode) : null;
+    if (query.periode && (!bornes || query.date_debut || query.date_fin)) {
+      const message = bornes ? 'Le filtre "periode" exclut "date_debut" et "date_fin".' : 'Le filtre "periode" est invalide.';
+      throw createError({ statusCode: 422, statusMessage: message, data: { message, errors: { periode: [message] } } });
+    }
+    const dateDebut = bornes ? bornes[0] : query.date_debut;
+    const dateFin = bornes ? bornes[1] : query.date_fin;
+
     const filtered = TEST_ACTIVITY.filter((item) => {
       if (query.type && item.type !== query.type) return false;
       if (query.statut && item.statut !== query.statut) return false;
       if (query.vehicule_id && item.vehicule?.id !== query.vehicule_id) return false;
-      if (query.date_debut && item.date < query.date_debut) return false;
-      if (query.date_fin && item.date > query.date_fin) return false;
+      if (dateDebut && item.date < dateDebut) return false;
+      if (dateFin && item.date > dateFin) return false;
       return true;
     }).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
@@ -747,8 +781,9 @@ router.get(
       type: query.type || null,
       statut: query.statut || null,
       vehicule_id: query.vehicule_id || null,
-      date_debut: query.date_debut || null,
-      date_fin: query.date_fin || null,
+      periode: query.periode || null,
+      date_debut: dateDebut || null,
+      date_fin: dateFin || null,
     }, "/api/v1/mobile/activite");
   }),
 );

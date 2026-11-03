@@ -11,7 +11,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Mélange deux modèles à vocabulaire de statut distinct (`StatutCommandeVente` pour `type=vente`, `StatutTransfert` pour `type=logistique`) — aucune correspondance n'est inventée entre les deux. `statut` **exige `type`** (422 explicite sinon, message "Le filtre statut nécessite de préciser type"). `type` omis = les deux mélangés, triés par date décroissante, mais alors sans filtre `statut` possible. `periode` (période rapide résolue par le serveur) exclut `date_debut`/`date_fin` (422 sinon). */
+        /** @description Mélange deux modèles à vocabulaire de statut distinct (`StatutCommandeVente` pour `type=vente`, `StatutTransfert` pour `type=logistique`) — aucune correspondance n'est inventée entre les deux. `statut` **exige `type`** (422 explicite sinon, message "Le filtre statut nécessite de préciser type"). `type` omis = les deux mélangés, triés par date décroissante, mais alors sans filtre `statut` possible. `periode` (période rapide résolue par le serveur) exclut `date_debut`/`date_fin` (422 sinon). Période comptable : `annee` + `mois` + `quinzaine` (`P1` du 1er au 15, `P2` du 16 à la fin du mois, `TOUT` ou omise = le mois), bornes calculées par le serveur, exclut `periode` et `date_debut`/`date_fin`. */
         get: operations["client.activite.mine"];
         put?: never;
         post?: never;
@@ -432,6 +432,13 @@ export interface paths {
          *     `filters.period` : raccourci appliqué (`custom` = `date_debut`/`date_fin`
          *     pris tels quels, sinon calculés serveur — jamais un défaut inventé côté
          *     frontend).
+         *
+         *     Filtre de période de l'accueil, exclusif de `period`/`date_debut`/`date_fin` (422 sinon) :
+         *     soit `periode` (période rapide, `tout` = toutes les périodes), soit `annee` + `mois` +
+         *     `quinzaine` (`P1` du 1er au 15, `P2` du 16 à la fin du mois, `TOUT` ou omise = le mois ;
+         *     `mois` omis = l'année). Bornes calculées par le serveur et renvoyées dans `filters`
+         *     (`period` vaut alors `custom`). Ventes et logistique y sont datées par leur date de gain,
+         *     comme les fiches de paiement ; aucune formule ne change.
          *
          *     `summary_evolution` (champ additif, cf. rapport du 27/08/2026) : évolution
          *     de chacun des 5 champs de `summary` entre la période sélectionnée et la
@@ -1330,6 +1337,9 @@ export interface operations {
                 statut?: string | null;
                 vehicule_id?: string | null;
                 periode?: "aujourd_hui" | "hier" | "cette_semaine" | "semaine_precedente" | "ce_mois" | "mois_precedent" | "cette_annee" | null;
+                annee?: number | null;
+                mois?: number | null;
+                quinzaine?: "P1" | "P2" | "TOUT" | null;
                 date_debut?: string | null;
                 date_fin?: string | null;
                 per_page?: number | null;
@@ -1365,6 +1375,9 @@ export interface operations {
                             statut: unknown;
                             vehicule_id: unknown;
                             periode: unknown;
+                            annee: number | null;
+                            mois: number | null;
+                            quinzaine: string | null;
                             date_debut: string | null;
                             date_fin: string | null;
                         };
@@ -1389,6 +1402,9 @@ export interface operations {
                             statut: unknown;
                             vehicule_id: unknown;
                             periode: unknown;
+                            annee: number | null;
+                            mois: number | null;
+                            quinzaine: string | null;
                             date_debut: string | null;
                             date_fin: string | null;
                         };
@@ -2325,6 +2341,10 @@ export interface operations {
                 date_fin?: string | null;
                 vehicule_id?: string | null;
                 statut?: "creee" | "impaye" | "partiel" | "paye" | "annulee" | null;
+                periode?: "aujourd_hui" | "hier" | "cette_semaine" | "semaine_precedente" | "ce_mois" | "mois_precedent" | "cette_annee" | "annee_precedente" | "tout" | null;
+                annee?: number | null;
+                mois?: number | null;
+                quinzaine?: "P1" | "P2" | "TOUT" | null;
             };
             header?: never;
             path?: never;
@@ -2339,11 +2359,15 @@ export interface operations {
                 content: {
                     "application/json": {
                         filters: {
-                            period: string | "ce_mois";
+                            period: string | ("custom" | "ce_mois");
                             date_debut: string;
                             date_fin: string;
                             vehicule_id: string | null;
                             statut: string | null;
+                            periode: unknown;
+                            annee: number | null;
+                            mois: number | null;
+                            quinzaine: string | null;
                         };
                         summary: {
                             total_earned: number;
@@ -2487,6 +2511,10 @@ export interface operations {
                 vehicule_id?: string | null;
                 depense_type_id?: string | null;
                 statut?: "brouillon" | "soumis" | "valide" | "rejete" | "annule" | null;
+                periode?: "aujourd_hui" | "hier" | "cette_semaine" | "semaine_precedente" | "ce_mois" | "mois_precedent" | "cette_annee" | "annee_precedente" | "tout" | null;
+                annee?: number | null;
+                mois?: number | null;
+                quinzaine?: "P1" | "P2" | "TOUT" | null;
                 date_debut?: string | null;
                 date_fin?: string | null;
                 per_page?: number | null;
@@ -2534,8 +2562,12 @@ export interface operations {
                             vehicule_id: unknown;
                             depense_type_id: unknown;
                             statut: unknown;
-                            date_debut: unknown;
-                            date_fin: unknown;
+                            periode: unknown;
+                            annee: number | null;
+                            mois: number | null;
+                            quinzaine: string | null;
+                            date_debut: string;
+                            date_fin: string;
                         };
                         total_valide: number;
                     };
