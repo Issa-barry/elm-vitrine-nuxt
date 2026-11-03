@@ -5,7 +5,7 @@ import { visibleNavItems } from "~/config/clientNavigation";
 // menu statique ni un roles.includes(...) local (voir config/
 // clientNavigation.ts, chantier "capacités" du 27/08/2026). "Retour au site"
 // reste hors capacités (toujours affiché, lien externe à l'espace client).
-const SECTION_LABELS = { accueil: "Accueil", gestion: "Gestion", compte: "Compte" } as const;
+const SECTION_LABELS = { accueil: "Accueil", gestion: "Gestion", parrain: "Espace parrain", compte: "Compte" } as const;
 
 const capabilities = useClientCapabilities();
 
@@ -22,6 +22,7 @@ const model = computed(() => {
     [
       { label: SECTION_LABELS.accueil, items: bySection("accueil") },
       { label: SECTION_LABELS.gestion, items: bySection("gestion") },
+      { label: SECTION_LABELS.parrain, items: bySection("parrain") },
       { label: SECTION_LABELS.compte, items: compteItems },
     ] satisfies Array<{ label: string; items: Array<{ label: string; icon: string; to: string }> }>
   ).filter((group) => group.items.length > 0);

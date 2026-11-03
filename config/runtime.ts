@@ -3,6 +3,7 @@ export interface PublicRuntimeConfig {
   apiBase: string;
   environment: string;
   appName: string;
+  appShortName: string;
   appVersion: string;
   // Nuxt augmente runtimeConfig.public via son propre système de types
   // (modules, hooks...) : la signature d'index le rend assignable au type
@@ -30,6 +31,7 @@ export const runtimeConfigDefaults: AppRuntimeConfig = {
     apiBase: "",
     environment: "local",
     appName: "Eau La Maman",
+    appShortName: "",
     appVersion: process.env.npm_package_version || "0.0.0",
   },
 };
@@ -48,6 +50,15 @@ export function findMissingRequiredConfig(config: Pick<AppRuntimeConfig, "public
 
 export function isProductionEnvironment(environment: string): boolean {
   return environment === "production";
+}
+
+// Nom affiché sous l'icône de l'application installée (short_name du manifest
+// et titre iOS). NUXT_PUBLIC_APP_SHORT_NAME absente ou vide : le nom complet
+// est repris, pour ne jamais produire un manifest sans short_name.
+export function resolveAppShortName(
+  config: Pick<PublicRuntimeConfig, "appName" | "appShortName">,
+): string {
+  return config.appShortName || config.appName;
 }
 
 // authSessionPassword (server/utils/authSession.ts) est serveur-only —

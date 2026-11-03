@@ -16,8 +16,8 @@ export default defineNuxtConfig({
         { rel: "icon", type: "image/png", href: "/favicon.png" },
         { rel: "apple-touch-icon", href: "/icons/apple-touch-icon-180x180.png" },
         // Contenu généré dynamiquement par server/routes/manifest.webmanifest.ts
-        // (nom/short_name pilotés par NUXT_PUBLIC_APP_NAME, jamais figés au
-        // build) — voir docs/pwa.md.
+        // (name/short_name pilotés par NUXT_PUBLIC_APP_NAME et
+        // NUXT_PUBLIC_APP_SHORT_NAME, jamais figés au build) — voir docs/pwa.md.
         { rel: "manifest", href: "/manifest.webmanifest" },
         { rel: "stylesheet", href: "https://fonts.cdnfonts.com/css/lato" },
       ],

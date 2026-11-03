@@ -74,6 +74,10 @@ test.describe("Espace client — activité", () => {
   // backend (ActiviteControllerTest), la transmission par le BFF dans
   // tests/server/activity.get.test.ts. Ici : ce que l'écran demande et affiche.
   test.describe("périodes rapides (mobile 440 px)", () => {
+    // Une fois actif, le service worker de la PWA ferait passer les requêtes
+    // hors de portée de page.route.
+    test.use({ serviceWorkers: "block" });
+
     const operation = (id: string, date = "2026-08-20") => ({
       id,
       type: "vente",
@@ -110,8 +114,8 @@ test.describe("Espace client — activité", () => {
       await loginAsTestUser(page);
       await page.goto("/espace-client/activite", { waitUntil: "domcontentloaded", timeout: 30_000 });
       await page.waitForLoadState("load");
-      await expect(page.locator(".client-mobile-deliveries").getByText(/opération/).first()).toBeVisible({ timeout: 15_000 });
-      await page.waitForTimeout(500);
+      // Le compteur n'apparaît qu'après onMounted : la page est donc hydratée.
+      await expect(page.locator(".client-mobile-deliveries__list-heading").getByText(/^\d+ opérations?$/)).toBeVisible({ timeout: 30_000 });
       return requetes;
     }
 

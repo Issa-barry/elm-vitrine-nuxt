@@ -112,7 +112,8 @@ icônes, mise à jour, environnements). Règles pour tout agent IA :
 6. Le manifest est généré à la requête (`server/routes/manifest.webmanifest.ts`),
    pas au build (`pwa.manifest: false` dans `nuxt.config.ts`) : le même
    artefact `.output` peut tourner sur plusieurs environnements Hostinger, le
-   nom affiché doit donc rester dynamique (`runtimeConfig.public.appName`).
+   nom affiché doit donc rester dynamique (`runtimeConfig.public.appName` et
+   `appShortName`).
    Ne pas réactiver la génération statique du module sans re-vérifier ce
    point.
 

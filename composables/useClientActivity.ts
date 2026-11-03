@@ -1,4 +1,4 @@
-import type { ActivityQuery, ClientActivityResponse } from "~/config/clientActivity";
+import type { ActivityQuery, ClientActivityItem, ClientActivityResponse } from "~/config/clientActivity";
 import type { AuthErrorInfo } from "~/config/auth";
 import { normalizeAuthError } from "~/config/auth";
 
@@ -59,7 +59,7 @@ export function useClientActivity() {
       const result = await requestFetch<ClientActivityResponse>("/api/client/activity", { query: { ...lastQuery.value, page } });
       if (seq !== requestSeq.value || !response.value) return false;
       const knownIds = new Set(response.value.data.map((item) => item.id));
-      response.value = { ...result, data: [...response.value.data, ...result.data.filter((item) => !knownIds.has(item.id))] };
+      response.value = { ...result, data: [...response.value.data, ...result.data.filter((item: ClientActivityItem) => !knownIds.has(item.id))] };
       return true;
     } catch (fetchError) {
       if (seq !== requestSeq.value) return false;

@@ -587,6 +587,13 @@ $bp-mobile-or-tablet-portrait: "#{$bp-mobile}, #{$bp-tablet-portrait}";
       white-space: nowrap;
     }
 
+    // Plus spécifique que la règle `span` ci-dessus, qui décentrait l'icône.
+    .client-mobile-summary-card .client-mobile-summary-icon {
+      display: inline-flex;
+      color: var(--primary-color);
+      font-size: 1.1rem;
+    }
+
     .client-mobile-summary-card strong {
       display: block;
       margin-top: 0.2rem;

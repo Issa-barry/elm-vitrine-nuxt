@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { PARRAIN_SPACE_HOME } from "~/config/clientParrain";
+
 const route = useRoute();
 const { config, state, closeOverlays } = useClientLayout();
-const showMobileTopbar = computed(() => route.path.replace(/\/+$/, "") === "/espace-client");
+const showMobileTopbar = computed(() => ["/espace-client", PARRAIN_SPACE_HOME].includes(route.path.replace(/\/+$/, "")));
 
 // Chargées une seule fois par montage du shell (pas par page) : la cloche du
 // header (ClientTopbar.vue / ClientMobileTopbar.vue) doit afficher un badge

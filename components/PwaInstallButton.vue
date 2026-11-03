@@ -9,6 +9,7 @@
 withDefaults(defineProps<{ variant?: "primary" | "secondary" }>(), { variant: "primary" });
 
 const { state: installState, showIosSheet, initialize, promptInstall, closeIosSheet } = usePwaInstall();
+const { public: publicConfig } = useRuntimeConfig();
 
 onMounted(() => {
   initialize();
@@ -37,7 +38,7 @@ onMounted(() => {
       aria-labelledby="pwa-install-ios-title"
     >
       <div class="pwa-install-ios-body">
-        <h2 id="pwa-install-ios-title">Installer Eau La Maman</h2>
+        <h2 id="pwa-install-ios-title">Installer {{ publicConfig.appName }}</h2>
         <ol class="pwa-install-ios-steps">
           <li>
             <i class="pi pi-share-alt" aria-hidden="true" />
