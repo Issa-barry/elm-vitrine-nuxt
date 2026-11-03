@@ -1,4 +1,5 @@
 import type { ClientExpensesResponse, ExpensesQuery } from "~/config/clientExpenses";
+import type { PeriodeComptableQuery } from "~/config/clientPeriodeComptable";
 import type { AuthErrorInfo } from "~/config/auth";
 import { normalizeAuthError } from "~/config/auth";
 
@@ -12,21 +13,27 @@ export function useClientExpenses() {
   // Distingue "jamais chargé" de "chargé, page vide" — même principe que
   // useClientVehicles.ts.
   const hasLoaded = useState<boolean>("client:expenses:hasLoaded", () => false);
+  // Une réponse lente d'une ancienne période ne remplace jamais celle de la période courante.
+  const requestSeq = useState<number>("client:expenses:seq", () => 0);
   const requestFetch = useRequestFetch();
 
-  async function fetchExpenses(query: ExpensesQuery = {}): Promise<boolean> {
+  async function fetchExpenses(query: ExpensesQuery & PeriodeComptableQuery = {}): Promise<boolean> {
+    const seq = ++requestSeq.value;
     isLoading.value = true;
     error.value = null;
     try {
-      response.value = await requestFetch<ClientExpensesResponse>("/api/client/expenses", { query });
+      const result = await requestFetch<ClientExpensesResponse>("/api/client/expenses", { query });
+      if (seq !== requestSeq.value) return false;
+      response.value = result;
       hasLoaded.value = true;
       return true;
     } catch (fetchError) {
+      if (seq !== requestSeq.value) return false;
       error.value = normalizeAuthError(fetchError);
       response.value = null;
       return false;
     } finally {
-      isLoading.value = false;
+      if (seq === requestSeq.value) isLoading.value = false;
     }
   }
 

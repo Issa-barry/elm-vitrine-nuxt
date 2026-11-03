@@ -72,6 +72,22 @@ export interface ClientProfileResponse {
   profile: ClientProfile | null;
   // Seules valeurs de `pays` acceptées par PATCH /v1/mobile/profile.
   pays_disponibles: string[];
+  // Mêmes pays avec leur code ISO, pour le drapeau. Optionnel : absent d'un
+  // backend pas encore déployé, le sélecteur reste alors utilisable sans drapeau.
+  pays_options?: ClientProfilePaysOption[];
+}
+
+export interface ClientProfilePaysOption {
+  label: string;
+  code: string;
+}
+
+// `pays` n'est enregistré que par son libellé : le drapeau se retrouve par ce
+// libellé, et rien pour un ancien pays saisi en texte libre. Même source
+// d'images que les sélecteurs d'indicatif (pages/connexion.vue).
+export function paysFlagUrl(pays: string | null | undefined, options: ClientProfilePaysOption[]): string | null {
+  const code = options.find((option) => option.label === pays)?.code;
+  return code ? `https://flagcdn.com/24x18/${code.toLowerCase()}.png` : null;
 }
 
 // Réponse du PATCH uniquement. `null` si aucune demande de changement d'e-mail

@@ -155,8 +155,10 @@ test.describe("Espace client — profil", () => {
 
     const pays = page.getByRole("combobox", { name: "Pays" });
     await expect(pays).toHaveText("Guinée", { timeout: 10_000 });
+    await expect(pays.locator("img")).toHaveAttribute("src", /\/gn\.png$/);
 
     await pays.click();
+    await expect(page.getByRole("option", { name: "Sénégal" }).locator("img")).toHaveAttribute("src", /\/sn\.png$/);
     await page.getByRole("option", { name: "Sénégal" }).click();
     await page.getByRole("button", { name: "Mettre à jour" }).click();
     await expect(page.getByText("Localisation mise à jour.")).toBeVisible();

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { clientDisplayName } from "~/config/auth";
-import { buildIdentityPatch, type UpdateClientProfilePayload } from "~/config/clientProfile";
+import { buildIdentityPatch, paysFlagUrl, type UpdateClientProfilePayload } from "~/config/clientProfile";
 import { webPushStatePresentation } from "~/config/webPush";
 
 definePageMeta({ layout: "client", middleware: "auth" });
@@ -17,7 +17,7 @@ const auth = useAuth();
 const { user, context } = auth;
 
 const clientProfile = useClientProfile();
-const { profile, paysDisponibles, isLoading: isProfileLoading, isSavingIdentity, isSavingLocalisation, isSavingNotifications, error: profileError } = clientProfile;
+const { profile, paysDisponibles, paysOptions: paysAvecCodes, isLoading: isProfileLoading, isSavingIdentity, isSavingLocalisation, isSavingNotifications, error: profileError } = clientProfile;
 
 const router = useRouter();
 const isLoggingOut = ref(false);
@@ -269,7 +269,21 @@ onMounted(() => {
 
           <div class="flex flex-col gap-2">
             <label id="pays-label" for="pays" class="font-medium">Pays</label>
-            <Select v-model="localisationForm.pays" input-id="pays" aria-labelledby="pays-label" :options="paysOptions" placeholder="Sélectionnez un pays" filter filter-placeholder="Rechercher un pays" empty-filter-message="Aucun pays trouvé" empty-message="Liste des pays indisponible pour le moment" fluid />
+            <Select v-model="localisationForm.pays" input-id="pays" aria-labelledby="pays-label" :options="paysOptions" placeholder="Sélectionnez un pays" filter filter-placeholder="Rechercher un pays" empty-filter-message="Aucun pays trouvé" empty-message="Liste des pays indisponible pour le moment" fluid>
+              <template #value="{ value, placeholder }">
+                <span v-if="value" class="inline-flex items-center gap-2">
+                  <img v-if="paysFlagUrl(value, paysAvecCodes)" :src="paysFlagUrl(value, paysAvecCodes)!" width="20" height="15" alt="" class="rounded-sm shadow-sm">
+                  {{ value }}
+                </span>
+                <span v-else>{{ placeholder }}</span>
+              </template>
+              <template #option="{ option }">
+                <span class="inline-flex items-center gap-2">
+                  <img v-if="paysFlagUrl(option, paysAvecCodes)" :src="paysFlagUrl(option, paysAvecCodes)!" width="20" height="15" alt="" class="rounded-sm shadow-sm">
+                  {{ option }}
+                </span>
+              </template>
+            </Select>
           </div>
           <div class="flex flex-col gap-2"><label for="ville" class="font-medium">Ville</label><InputText id="ville" v-model="localisationForm.ville" fluid /></div>
           <div class="flex flex-col gap-2"><label for="adresse" class="font-medium">Adresse</label><InputText id="adresse" v-model="localisationForm.adresse" fluid /></div>

@@ -2537,6 +2537,7 @@ export interface operations {
                             date_debut: unknown;
                             date_fin: unknown;
                         };
+                        total_valide: number;
                     };
                 };
             };

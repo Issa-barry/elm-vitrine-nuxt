@@ -11,23 +11,29 @@ export function useClientDashboard() {
   const dashboard = useState<ClientDashboardResponse | null>("client:dashboard", () => null);
   const isLoading = useState<boolean>("client:dashboard:loading", () => false);
   const error = useState<AuthErrorInfo | null>("client:dashboard:error", () => null);
+  // Une réponse lente d'une ancienne période ne remplace jamais celle de la période courante.
+  const requestSeq = useState<number>("client:dashboard:seq", () => 0);
   // useRequestFetch() plutôt qu'un ofetch importé brut : voir le commentaire
   // équivalent dans composables/useAuth.ts (résolution d'URL relative +
   // transmission du cookie de session côté SSR).
   const requestFetch = useRequestFetch();
 
   async function fetchDashboard(query: DashboardQuery = {}): Promise<boolean> {
+    const seq = ++requestSeq.value;
     isLoading.value = true;
     error.value = null;
     try {
-      dashboard.value = await requestFetch<ClientDashboardResponse>("/api/client/dashboard", { query });
+      const result = await requestFetch<ClientDashboardResponse>("/api/client/dashboard", { query });
+      if (seq !== requestSeq.value) return false;
+      dashboard.value = result;
       return true;
     } catch (fetchError) {
+      if (seq !== requestSeq.value) return false;
       error.value = normalizeAuthError(fetchError);
       dashboard.value = null;
       return false;
     } finally {
-      isLoading.value = false;
+      if (seq === requestSeq.value) isLoading.value = false;
     }
   }
 
