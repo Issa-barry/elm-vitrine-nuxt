@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import QrcodeVue from "qrcode.vue";
 import type { ActivityPeriod, ActivityType, ClientActivityItem } from "~/config/clientActivity";
-import { ACTIVITY_PERIODS, activityPeriodLabel, activityTypeLabel } from "~/config/clientActivity";
+import { ACTIVITY_PERIODS, activityPayment, activityPeriodLabel, activityTypeLabel } from "~/config/clientActivity";
 import type { PeriodeComptable } from "~/config/clientPeriodeComptable";
 import { periodeComptableQuery } from "~/config/clientPeriodeComptable";
 
@@ -220,6 +220,9 @@ const resetAllFilters = () => {
   revenirAuMoisCourant();
 };
 
+const cardAriaLabel = (item: ClientActivityItem) =>
+  [item.reference, item.statut_label, activityPayment(item)?.label].filter(Boolean).join(", ") + ". Voir les détails.";
+
 // Sévérité purement présentationnelle, dérivée du texte réel de `statut`
 // (jamais une valeur inventée) : les deux modèles (vente/logistique) ont des
 // vocabulaires distincts et ouverts (voir config/clientActivity.ts), ce
@@ -298,7 +301,7 @@ const severity = (statut: string): "success" | "info" | "danger" => {
               type="button"
               class="client-mobile-deliveries__card"
               aria-haspopup="dialog"
-              :aria-label="`${item.reference}, ${item.statut_label}. Voir les détails.`"
+              :aria-label="cardAriaLabel(item)"
               @click="openDetail(item, $event)"
             >
               <span class="client-mobile-deliveries__package" aria-hidden="true"><i class="pi pi-box" /></span>
@@ -306,7 +309,10 @@ const severity = (statut: string): "success" | "info" | "danger" => {
                 <strong>{{ item.reference }}</strong>
                 <span v-if="item.vehicule"><i class="pi pi-car" aria-hidden="true" /> {{ item.vehicule.nom_vehicule }} {{ item.vehicule.immatriculation }}</span>
               </div>
-              <Tag :value="item.statut_label" :severity="severity(item.statut)" />
+              <span class="client-mobile-deliveries__statuses">
+                <Tag :value="item.statut_label" :severity="severity(item.statut)" />
+                <Tag v-if="activityPayment(item)" :value="activityPayment(item)!.label" :severity="activityPayment(item)!.severity" />
+              </span>
               <i class="pi pi-chevron-right client-mobile-deliveries__chevron" aria-hidden="true" />
             </button>
           </div>
@@ -379,6 +385,7 @@ const severity = (statut: string): "success" | "info" | "danger" => {
         <Column header="Véhicule"><template #body="{ data }">{{ data.vehicule ? `${data.vehicule.nom_vehicule} ${data.vehicule.immatriculation}` : "—" }}</template></Column>
         <Column header="Date" field="date" sortable><template #body="{ data }">{{ formatDate(data.date) }}</template></Column>
         <Column header="Statut"><template #body="{ data }"><Tag :value="data.statut_label" :severity="severity(data.statut)" /></template></Column>
+        <Column header="Paiement"><template #body="{ data }"><Tag v-if="activityPayment(data)" :value="activityPayment(data)!.label" :severity="activityPayment(data)!.severity" /><span v-else class="text-muted-color">—</span></template></Column>
       </DataTable>
 
       <div v-else-if="!hasMore" class="flex flex-col items-center justify-center text-center py-12" role="status">
@@ -481,6 +488,10 @@ const severity = (statut: string): "success" | "info" | "danger" => {
         <div class="client-delivery-detail__row">
           <span>Type</span>
           <strong>{{ activityTypeLabel(selectedItem.type) }}</strong>
+        </div>
+        <div v-if="activityPayment(selectedItem)" class="client-delivery-detail__row">
+          <span>Paiement</span>
+          <Tag :value="activityPayment(selectedItem)!.label" :severity="activityPayment(selectedItem)!.severity" />
         </div>
         <div class="client-delivery-detail__row">
           <span>Date</span>

@@ -87,6 +87,8 @@ const valider = () => {
 
 <style lang="scss" scoped>
 .client-periode-accueil {
+  display: flex;
+  justify-content: flex-end;
   margin-top: 0.75rem;
 }
 

@@ -166,6 +166,73 @@ test.describe("Espace client — dépenses", () => {
     });
   });
 
+  test.describe("panneau Filtre : périodes rapides et quinzaine", () => {
+    const vide = { data: [], links: { first: null, last: null, prev: null, next: null }, meta: { current_page: 1, last_page: 1, per_page: 100, total: 0 }, total_valide: 0 };
+
+    async function ouvrirPanneau(page: import("@playwright/test").Page, requetes: URLSearchParams[]) {
+      await page.route("**/api/client/expenses**", (route) => {
+        const query = new URL(route.request().url()).searchParams;
+        requetes.push(query);
+        return route.fulfill({ json: { ...vide, filters: { vehicule_id: null, depense_type_id: null, statut: null, date_debut: null, date_fin: null } } });
+      });
+      await page.setViewportSize({ width: 390, height: 844 });
+      await loginAsTestUser(page);
+      await page.goto("/espace-client/depenses", { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await expect(page.locator(".client-mobile-expenses").getByText(/^Total validé · /)).toHaveText("Total validé · Ce mois", { timeout: 10_000 });
+      // Le libellé est déjà rendu côté serveur : un clic avant l'hydratation serait perdu.
+      const panneau = page.locator(".client-delivery-filter-drawer");
+      await expect(async () => {
+        await page.getByRole("button", { name: /Filtrer les dépenses/ }).click();
+        await expect(panneau).toBeVisible({ timeout: 2_000 });
+      }).toPass({ timeout: 30_000 });
+      return panneau;
+    }
+
+    test("propose les mêmes périodes que l'accueil, « Ce mois » actif par défaut", async ({ page }) => {
+      const panneau = await ouvrirPanneau(page, []);
+
+      for (const nom of ["Aujourd’hui", "Hier", "Cette semaine", "Semaine dernière", "Ce mois", "Mois dernier", "Cette année", "Année dernière", "Toutes les périodes", "Période personnalisée"]) {
+        await expect(panneau.getByRole("button", { name: nom, exact: true })).toBeVisible();
+      }
+      await expect(panneau.getByRole("button", { name: "Ce mois", exact: true })).toHaveAttribute("aria-pressed", "true");
+      await expect(panneau.getByRole("group", { name: "Quinzaine" })).toBeVisible();
+    });
+
+    test("une période rapide est calculée par le serveur et nomme le total", async ({ page }) => {
+      const requetes: URLSearchParams[] = [];
+      const panneau = await ouvrirPanneau(page, requetes);
+
+      await panneau.getByRole("button", { name: "Semaine dernière", exact: true }).click();
+      await panneau.getByRole("button", { name: "Appliquer" }).click();
+
+      const mobile = page.locator(".client-mobile-expenses");
+      await expect(mobile.getByText(/^Total validé · /)).toHaveText("Total validé · Semaine dernière");
+      const derniere = requetes.at(-1)!;
+      expect(derniere.get("periode")).toBe("semaine_precedente");
+      expect(derniere.get("date_debut")).toBeNull();
+      expect(derniere.get("annee")).toBeNull();
+    });
+
+    test("un mois et sa quinzaine P1 envoient annee, mois et quinzaine", async ({ page }) => {
+      const requetes: URLSearchParams[] = [];
+      const panneau = await ouvrirPanneau(page, requetes);
+
+      await panneau.getByRole("combobox", { name: "Mois" }).click();
+      await page.getByRole("option", { name: "Septembre", exact: true }).click();
+      await panneau.getByRole("button", { name: "P1 : 01–15" }).click();
+      await expect(panneau.getByRole("button", { name: "Ce mois", exact: true })).toHaveAttribute("aria-pressed", "false");
+      await panneau.getByRole("button", { name: "Appliquer" }).click();
+
+      const annee = new Date().getUTCFullYear();
+      await expect(page.locator(".client-mobile-expenses").getByText(/^Total validé · /)).toHaveText(`Total validé · Septembre ${annee} · P1`);
+      const derniere = requetes.at(-1)!;
+      expect(derniere.get("annee")).toBe(String(annee));
+      expect(derniere.get("mois")).toBe("9");
+      expect(derniere.get("quinzaine")).toBe("P1");
+      expect(derniere.get("periode")).toBeNull();
+    });
+  });
+
   test.describe("regroupement par mois (mobile)", () => {
     const formatGnf = (amount: number) => `${new Intl.NumberFormat("fr-FR").format(amount)} GNF`;
     const stubExpense = (id: string, date: string, montant: number, typeLabel: string, statut = "valide", commentaire: string | null = null) => ({
@@ -196,7 +263,8 @@ test.describe("Espace client — dépenses", () => {
       });
       await page.setViewportSize({ width: 390, height: 844 });
       await loginAsTestUser(page);
-      await page.goto("/espace-client/depenses", { waitUntil: "domcontentloaded", timeout: 30_000 });
+      // Toutes les périodes : le regroupement porte sur plusieurs mois et années.
+      await page.goto("/espace-client/depenses?periode=toutes", { waitUntil: "domcontentloaded", timeout: 30_000 });
       await page.waitForLoadState("load");
       await page.waitForTimeout(1000);
 
@@ -208,8 +276,7 @@ test.describe("Espace client — dépenses", () => {
     async function applyCustomPeriod(page: import("@playwright/test").Page, start: string, end: string) {
       await page.getByRole("button", { name: /Filtrer les dépenses/ }).click();
       const drawer = page.locator(".client-delivery-filter-drawer");
-      await drawer.getByRole("combobox").first().click();
-      await page.getByRole("option", { name: "Période personnalisée" }).click();
+      await drawer.getByRole("button", { name: "Période personnalisée", exact: true }).click();
       await drawer.getByLabel("Date de début").fill(start);
       await drawer.getByLabel("Date de fin").fill(end);
       await drawer.getByRole("button", { name: "Appliquer" }).click();
@@ -268,7 +335,7 @@ test.describe("Espace client — dépenses", () => {
 
       await page.getByRole("button", { name: /Filtrer les dépenses/ }).click();
       const drawer = page.locator(".client-delivery-filter-drawer");
-      await drawer.getByRole("combobox").nth(2).click();
+      await drawer.locator("label", { hasText: "Type" }).getByRole("combobox").click();
       await page.getByRole("option", { name: "Transport" }).click();
       await drawer.getByRole("button", { name: "Appliquer" }).click();
 
@@ -297,7 +364,7 @@ test.describe("Espace client — dépenses", () => {
     await expect(desktop.getByText("Entretien")).toBeVisible({ timeout: 10_000 });
 
     // Sélecteur de statut : 1er des deux Select du bandeau de filtre.
-    await desktop.getByRole("combobox").first().click();
+    await desktop.getByRole("combobox").nth(2).click();
     await page.getByRole("option", { name: "Validée", exact: true }).click();
 
     await expect(desktop.getByText("Entretien")).toHaveCount(0); // soumis
@@ -315,7 +382,7 @@ test.describe("Espace client — dépenses", () => {
     await expect(desktop.getByText("Entretien")).toBeVisible({ timeout: 10_000 });
 
     // Sélecteur de véhicule : 2e des deux Select du bandeau de filtre.
-    await desktop.getByRole("combobox").nth(1).click();
+    await desktop.getByRole("combobox").nth(3).click();
     await page.getByRole("option", { name: /ABARRY 2/ }).click();
 
     // Seules les dépenses de veh-2 (Entretien, Carburant du 18/08) restent.

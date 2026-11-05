@@ -12,9 +12,9 @@ import type { AuthContext } from "./auth";
 //
 // Principe : ne JAMAIS modéliser l'UI autour d'un rôle unique
 // (roles.includes("prestataire") ni roles[0]) — un compte cumule des
-// contextes (client + proprietaire + prestataire...), voir
-// config/auth.ts::hasClientSpaceAccess pour le même principe déjà appliqué
-// à l'accès à l'espace client lui-même. Cette couche centralise la
+// contextes (client + proprietaire + prestataire...). L'accès à l'espace
+// client, lui, ne dépend d'aucun rôle (compte unique, ADR 0055 côté
+// elm-monolithe). Cette couche centralise la
 // traduction "contextes métier -> capacités UI" en UN seul endroit : quand
 // le backend exposera réellement `prestataire_id` (ou équivalent),
 // resolveClientCapabilities() est le seul fichier à ajuster.
@@ -39,9 +39,9 @@ export interface ClientCapabilities {
   profile: boolean;
 }
 
-// Un compte sans aucun contexte métier reconnu (cas théorique : accès déjà
-// refusé plus tôt par hasClientSpaceAccess côté login/middleware) n'a droit
-// à rien ici non plus — jamais un menu affiché "par défaut".
+// Un compte sans aucun contexte métier reconnu (agent du back-office sans
+// activité, par exemple) n'a droit à aucun menu métier — jamais un menu
+// affiché "par défaut". Il arrive sur l'accueil neutre (config/clientAccueil.ts).
 const NO_CAPABILITIES: ClientCapabilities = {
   dashboard: false,
   commissions: false,
@@ -67,8 +67,10 @@ export function resolveClientCapabilities(context: AuthContext | null | undefine
   // dépenses/profil ne sont jamais réservés à un seul type de compte (voir
   // demande du 27/08/2026, section 5 : "tout le monde a des dépenses et
   // peut avoir des commissions").
+  // Un consultant perçoit des commissions (ADR 0054) : le tableau de bord et les
+  // commissions les comptent avec ses autres activités.
   const hasAnyContext = Boolean(
-    context.client_id || context.proprietaire_id || context.livreur_id || context.prestataire_id,
+    context.client_id || context.proprietaire_id || context.livreur_id || context.prestataire_id || context.consultant_ids?.length,
   );
 
   // parrain_id volontairement hors de hasAnyContext : tableau de bord,
