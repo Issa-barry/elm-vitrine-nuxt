@@ -83,6 +83,10 @@ export interface AuthContext {
   // Rattachement posé au back-office (ADR 0050 côté elm-monolithe), jamais
   // déduit du téléphone. Optionnel : absent d'un backend pas encore déployé.
   parrain_id?: string | null;
+  // Consultants dont le compte perçoit les commissions (ADR 0054), même
+  // rattachement que le parrain. Distinct de `prestataire_id` (futur espace
+  // « prestations »). Optionnel pour la même raison.
+  consultant_ids?: string[];
 }
 
 // `code` renvoyé par LoginController et par le filet de sécurité
@@ -335,23 +339,11 @@ export function shouldUseSecureCookies(environment: string): boolean {
   return environment !== "local";
 }
 
-// Rôles autorisés dans l'espace client Nuxt — même règle que le middleware
-// Laravel `role:client|proprietaire|livreur` sur gains/mine, vehicules/mine,
-// vehicules/{id}/commissions, vehicules/{id}/frais (voir
-// docs/api-auth-contract.md côté elm-monolithe). LoginController/MeController
-// ne font eux-mêmes AUCUNE vérification de rôle (partagés avec le mobile) :
-// un compte staff/admin/super_admin obtient donc un token Sanctum valide
-// comme n'importe qui. Cet espace n'étant pas l'application backoffice
-// (Inertia, séparée), c'est au frontend de refuser explicitement une session
-// pour un rôle qui n'a rien à y faire — voir composables/useAuth.ts::login()
-// et middleware/auth.ts.
-export const CLIENT_SPACE_ROLES = ["client", "proprietaire", "livreur"] as const;
-
-export function hasClientSpaceAccess(roles: string[] | undefined | null): boolean {
-  if (!roles || roles.length === 0) return false;
-  const allowed: readonly string[] = CLIENT_SPACE_ROLES;
-  return roles.some((role) => allowed.includes(role));
-}
+// Compte unique EAU LA MAMAN (ADR 0055 côté elm-monolithe) : l'espace client
+// est ouvert à tout compte actif, agents du back-office compris, quels que
+// soient ses rôles et ses activités. Aucun contrôle d'accès par rôle ici :
+// ce qui s'affiche vient de `context` (config/clientCapabilities.ts), et
+// Laravel limite chaque donnée aux activités du compte.
 
 // Libellé d'affichage pour un compte cumulant plusieurs rôles (carte d'identité
 // et panneau de profil mobiles). `context` (identité résolue par le backend)

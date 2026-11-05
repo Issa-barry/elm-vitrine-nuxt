@@ -35,6 +35,12 @@ export type ApiDashboardQuery = NonNullable<operations["client.dashboard.mine"][
 // ClientEarningsService::resolveFilters()).
 export type ApiDashboardPeriod = NonNullable<ApiDashboardQuery["period"]>;
 export type ApiVehiculeEarningsRow = ApiDashboardResponse["par_vehicule"][number];
+export type ApiActiviteEarningsRow = components["schemas"]["ActiviteEarningsRow"];
+
+// ── Commissions du compte, toutes activités (ADR 0054 côté elm-monolithe) ─
+export type ApiCommissionsCompteResponse = operations["client.commissions.mine"]["responses"][200]["content"]["application/json"];
+export type ApiCommissionsCompteQuery = NonNullable<operations["client.commissions.mine"]["parameters"]["query"]>;
+export type ApiCommissionClientRow = components["schemas"]["CommissionClientRow"];
 
 // ── Profil ───────────────────────────────────────────────────────────────
 export type ApiProfileResponse = operations["client.profile.mine"]["responses"][200]["content"]["application/json"];
@@ -48,6 +54,7 @@ export type ApiUpdateNotificationPreferencesResponse =
 // ── Véhicules ────────────────────────────────────────────────────────────
 export type ApiVehiculesMineResponse = operations["client.vehicules.mine"]["responses"][200]["content"]["application/json"];
 export type ApiVehicule = ApiVehiculesMineResponse[number];
+export type ApiVehiculesRattachesResponse = operations["client.vehicules.rattaches"]["responses"][200]["content"]["application/json"];
 export type ApiVehiculeCommissionsResponse = operations["client.vehicules.commissions"]["responses"][200]["content"]["application/json"];
 // Référence directe au schema nommé plutôt qu'un indexage `[number]` sur
 // ApiVehiculeCommissionsResponse (un union `VehiculeCommissionRow[] | []`

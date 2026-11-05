@@ -1984,6 +1984,13 @@ $bp-mobile-or-tablet-portrait: "#{$bp-mobile}, #{$bp-tablet-portrait}";
       background: color-mix(in srgb, var(--primary-color) 5%, var(--surface-card));
     }
 
+    .client-mobile-deliveries__statuses {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.3rem;
+    }
+
     .client-mobile-deliveries__chevron {
       color: var(--text-color-secondary);
       font-size: 0.75rem;

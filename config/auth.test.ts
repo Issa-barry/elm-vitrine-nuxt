@@ -5,7 +5,6 @@ import {
   buildOtpVerifyPayload,
   clientDisplayName,
   clientSpaceRoleLabel,
-  hasClientSpaceAccess,
   isAccountStatusCode,
   normalizeAuthError,
   otpChannelPresentation,
@@ -194,49 +193,6 @@ describe("shouldUseSecureCookies", () => {
     expect(shouldUseSecureCookies("preprod")).toBe(true);
     expect(shouldUseSecureCookies("recette")).toBe(true);
     expect(shouldUseSecureCookies("production")).toBe(true);
-  });
-});
-
-describe("hasClientSpaceAccess", () => {
-  it("autorise un compte avec le rôle client, proprietaire ou livreur", () => {
-    expect(hasClientSpaceAccess(["client"])).toBe(true);
-    expect(hasClientSpaceAccess(["proprietaire"])).toBe(true);
-    expect(hasClientSpaceAccess(["livreur"])).toBe(true);
-  });
-
-  it("refuse un compte staff/admin/super_admin sans aucun de ces 3 rôles", () => {
-    expect(hasClientSpaceAccess(["admin"])).toBe(false);
-    expect(hasClientSpaceAccess(["super_admin"])).toBe(false);
-    expect(hasClientSpaceAccess(["staff"])).toBe(false);
-  });
-
-  it("autorise un compte double-rôle (ex. staff ET client), même règle OR que le backend", () => {
-    expect(hasClientSpaceAccess(["admin", "client"])).toBe(true);
-  });
-
-  // Matrice de cumul de rôles confirmée côté backend le 26/08/2026
-  // (App\Models\User::hasBackofficeAccess()/hasClientAccess(),
-  // 117/117 tests backend verts) : les rôles staff et espace client ne
-  // s'excluent JAMAIS. Un rôle staff supplémentaire ne retire jamais l'accès
-  // espace client — voir aussi composables/useAuth.ts::login().
-  it("autorise toutes les combinaisons staff + rôle espace client (matrice backend)", () => {
-    expect(hasClientSpaceAccess(["admin_entreprise", "proprietaire"])).toBe(true);
-    expect(hasClientSpaceAccess(["manager", "client"])).toBe(true);
-    expect(hasClientSpaceAccess(["comptable", "livreur"])).toBe(true);
-  });
-
-  it("autorise un rôle personnalisé d'organisation cumulé à un rôle espace client, sans connaître son nom à l'avance", () => {
-    // hasClientSpaceAccess ne connaît que CLIENT_SPACE_ROLES : peu importe le
-    // nom du rôle staff (système ou personnalisé via RoleController côté
-    // backend), sa seule présence n'entre jamais en jeu ici — exactement
-    // comme User::hasClientAccess() (intersect(EXTERNAL_ROLES)) côté backend.
-    expect(hasClientSpaceAccess(["responsable-logistique-abidjan", "proprietaire"])).toBe(true);
-  });
-
-  it("refuse une liste de rôles vide, absente ou nulle", () => {
-    expect(hasClientSpaceAccess([])).toBe(false);
-    expect(hasClientSpaceAccess(undefined)).toBe(false);
-    expect(hasClientSpaceAccess(null)).toBe(false);
   });
 });
 

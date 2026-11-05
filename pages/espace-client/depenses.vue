@@ -1,8 +1,16 @@
 <script setup lang="ts">
-import type { ExpensePeriod, ExpenseStatus } from "~/config/clientExpenses";
-import { EXPENSE_PERIOD_OPTIONS, customPeriodError, expensePeriodBounds, groupExpensesByMonth } from "~/config/clientExpenses";
-import type { PeriodeComptable } from "~/config/clientPeriodeComptable";
-import { bornesDepuisLien, periodeComptableLabel, periodeComptableQuery } from "~/config/clientPeriodeComptable";
+import type { ExpenseStatus } from "~/config/clientExpenses";
+import { customPeriodError, groupExpensesByMonth } from "~/config/clientExpenses";
+import type { PeriodeComptable, PeriodeRapide } from "~/config/clientPeriodeComptable";
+import {
+  PERIODES_RAPIDES,
+  bornesDepuisLien,
+  estMoisCourant,
+  periodeComptableCourante,
+  periodeComptableLabel,
+  periodeComptableQuery,
+  periodeRapideLabel,
+} from "~/config/clientPeriodeComptable";
 
 definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Dépenses — Eau La Maman" });
@@ -21,13 +29,15 @@ const activeExpenseTab = ref<"general" | "details">("general");
 // valeur non vide comme une autre, donc affichée normalement.
 const ALL = "tous";
 
-// "comptable" : la période vient du filtre année/mois/quinzaine en tête de page.
-type ExpensePeriodChoice = ExpensePeriod | "comptable";
+// Mêmes choix que le filtre de l'accueil, bornes calculées par le serveur :
+// "comptable" = année/mois/quinzaine (filtre en tête de page, partagé entre les
+// écrans), une période rapide (`periode`), ou des dates personnalisées. "Ce mois"
+// n'est pas une période rapide de plus : c'est le mois comptable en cours.
+type RapideDepense = Exclude<PeriodeRapide, "ce_mois">;
+type ExpensePeriodChoice = "comptable" | "custom" | RapideDepense;
 
-const periodOptions: Array<{ label: string; value: ExpensePeriodChoice }> = [
-  { label: "Période comptable (en haut de page)", value: "comptable" },
-  ...EXPENSE_PERIOD_OPTIONS,
-];
+const estPeriodeRapide = (valeur: unknown): valeur is RapideDepense =>
+  valeur !== "ce_mois" && PERIODES_RAPIDES.some((periode) => periode.value === valeur);
 
 interface ExpenseFiltersState {
   period: ExpensePeriodChoice;
@@ -47,15 +57,17 @@ const createEmptyFilters = (): ExpenseFiltersState => ({
   vehiculeId: ALL,
 });
 
-// Liens de l'accueil sur une période rapide : ?periode=toutes ou ?du=…&au=… (voir
-// docs/filtre-periode-comptable.md).
+// Liens de l'accueil : ?periode=toutes (ou une autre clé de période rapide) ou
+// ?du=…&au=… (voir docs/filtre-periode-comptable.md).
 const bornesLien = bornesDepuisLien(route.query);
+const periodeLien = route.query.periode === "toutes" ? "tout" : route.query.periode;
 const appliedFilters = reactive<ExpenseFiltersState>({
   ...createEmptyFilters(),
   ...(bornesLien ? { period: "custom", customStart: bornesLien.du, customEnd: bornesLien.au } : {}),
-  ...(route.query.periode === "toutes" ? { period: "all" } : {}),
+  ...(estPeriodeRapide(periodeLien) ? { period: periodeLien } : {}),
 });
 const draftFilters = reactive<ExpenseFiltersState>(createEmptyFilters());
+const draftComptable = ref<PeriodeComptable>(periodeComptable.value);
 const filterPanelVisible = ref(false);
 const periodError = ref("");
 const search = ref("");
@@ -72,13 +84,14 @@ async function loadExpenses() {
     per_page: 100,
     statut: appliedFilters.statut !== ALL ? appliedFilters.statut : undefined,
     vehicule_id: appliedFilters.vehiculeId !== ALL ? appliedFilters.vehiculeId : undefined,
-    ...(appliedFilters.period === "comptable"
-      ? periodeComptableQuery(periodeComptable.value)
-      : expensePeriodBounds(appliedFilters.period, new Date().toISOString().slice(0, 10), {
-        start: appliedFilters.customStart,
-        end: appliedFilters.customEnd,
-      })),
+    ...periodQuery(),
   });
+}
+
+function periodQuery() {
+  if (appliedFilters.period === "comptable") return periodeComptableQuery(periodeComptable.value);
+  if (appliedFilters.period === "custom") return { date_debut: appliedFilters.customStart, date_fin: appliedFilters.customEnd };
+  return { periode: appliedFilters.period };
 }
 
 onMounted(() => {
@@ -96,7 +109,7 @@ const choisirPeriodeComptable = (periode: PeriodeComptable) => {
   periodeComptable.value = periode;
   Object.assign(appliedFilters, { period: "comptable", customStart: "", customEnd: "" });
 };
-const voirToutesLesPeriodes = () => { appliedFilters.period = "all"; };
+const voirToutesLesPeriodes = () => { appliedFilters.period = "tout"; };
 const periodeVide = computed(() => periodeComptableActive.value && !isLoading.value && !error.value && hasLoaded.value && expenses.value.length === 0);
 
 const expenses = computed(() => response.value?.data ?? []);
@@ -168,17 +181,16 @@ const formatDate = (date: string) => new Intl.DateTimeFormat("fr-FR", {
   timeZone: "UTC",
 }).format(new Date(`${date}T00:00:00Z`));
 
-const periodFilterLabel = computed(() => (appliedFilters.period === "custom"
-  ? `${formatDate(appliedFilters.customStart)} – ${formatDate(appliedFilters.customEnd)}`
-  : EXPENSE_PERIOD_OPTIONS.find((option) => option.value === appliedFilters.period)?.label ?? ""));
 // Période sur laquelle porte le "Total validé" : le montant seul ne le dit pas.
-const totalPeriodLabel = computed(() => (appliedFilters.period === "comptable"
-  ? periodeComptableLabel(periodeComptable.value)
-  : periodFilterLabel.value));
+const totalPeriodLabel = computed(() => {
+  if (appliedFilters.period === "comptable") return periodeComptableLabel(periodeComptable.value);
+  if (appliedFilters.period === "custom") return `${formatDate(appliedFilters.customStart)} – ${formatDate(appliedFilters.customEnd)}`;
+  return periodeRapideLabel(appliedFilters.period);
+});
 
 const activeFilters = computed(() => {
   const filters: Array<{ key: "period" | "statut" | "typeLabel" | "vehiculeId"; label: string; value: string }> = [
-    { key: "period", label: "Période", value: appliedFilters.period !== "comptable" ? periodFilterLabel.value : "" },
+    { key: "period", label: "Période", value: appliedFilters.period !== "comptable" ? totalPeriodLabel.value : "" },
     { key: "statut", label: "Statut", value: statutOptions.find((option) => option.value === appliedFilters.statut && option.value !== ALL)?.label ?? "" },
     { key: "typeLabel", label: "Type", value: appliedFilters.typeLabel !== ALL ? appliedFilters.typeLabel : "" },
     { key: "vehiculeId", label: "Véhicule", value: appliedFilters.vehiculeId !== ALL
@@ -190,17 +202,37 @@ const activeFilters = computed(() => {
 
 const openFilterPanel = () => {
   Object.assign(draftFilters, appliedFilters);
+  draftComptable.value = periodeComptable.value;
   periodError.value = "";
   filterPanelVisible.value = true;
+};
+const draftPeriodOptions = [...PERIODES_RAPIDES, { value: "custom" as const, label: "Période personnalisée" }];
+// Bouton du panneau actif pour la période en brouillon ("Ce mois" = mois comptable en cours).
+const draftPeriodeActive = (valeur: PeriodeRapide | "custom") => (valeur === "ce_mois"
+  ? draftFilters.period === "comptable" && estMoisCourant(draftComptable.value)
+  : draftFilters.period === valeur);
+const choisirDraftPeriode = (valeur: PeriodeRapide | "custom") => {
+  if (valeur === "ce_mois") {
+    draftFilters.period = "comptable";
+    draftComptable.value = periodeComptableCourante();
+  } else {
+    draftFilters.period = valeur;
+  }
+};
+const choisirDraftComptable = (periode: PeriodeComptable) => {
+  draftComptable.value = periode;
+  draftFilters.period = "comptable";
 };
 const applyFilters = () => {
   periodError.value = draftFilters.period === "custom" ? customPeriodError(draftFilters.customStart, draftFilters.customEnd) : "";
   if (periodError.value) return;
   Object.assign(appliedFilters, draftFilters);
+  if (draftFilters.period === "comptable") periodeComptable.value = draftComptable.value;
   filterPanelVisible.value = false;
 };
 const resetDraftFilters = () => {
   Object.assign(draftFilters, createEmptyFilters());
+  draftComptable.value = periodeComptableCourante();
   periodError.value = "";
 };
 const removeFilter = (key: "period" | "statut" | "typeLabel" | "vehiculeId") => {
@@ -494,10 +526,30 @@ const expenseComparisonMax = computed(() => Math.max(...expenseComparison.value.
     <form id="client-expense-filter-form" class="client-delivery-filter" @submit.prevent="applyFilters">
       <p>Affinez la liste avec un ou plusieurs critères.</p>
       <div class="client-delivery-filter__grid">
-        <label class="client-delivery-filter__field">
+        <div class="client-delivery-filter__field" role="group" aria-label="Périodes rapides">
           <span>Période</span>
-          <Select v-model="draftFilters.period" :options="periodOptions" option-label="label" option-value="value" fluid />
-        </label>
+          <div class="client-delivery-filter__periods">
+            <button
+              v-for="periode in draftPeriodOptions"
+              :key="periode.value"
+              type="button"
+              :class="{ 'is-active': draftPeriodeActive(periode.value) }"
+              :aria-pressed="draftPeriodeActive(periode.value)"
+              @click="choisirDraftPeriode(periode.value)"
+            >
+              {{ periode.label }}
+            </button>
+          </div>
+        </div>
+        <div class="client-delivery-filter__field">
+          <span>Année, mois et quinzaine</span>
+          <ClientPeriodeComptableFilter
+            :model-value="draftComptable"
+            :actif="draftFilters.period === 'comptable'"
+            compact
+            @update:model-value="choisirDraftComptable"
+          />
+        </div>
         <template v-if="draftFilters.period === 'custom'">
           <label class="client-delivery-filter__field">
             <span>Date de début</span>

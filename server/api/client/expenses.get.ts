@@ -23,6 +23,7 @@ export default defineEventHandler(async (event) => {
         vehicule_id: query.vehicule_id,
         depense_type_id: query.depense_type_id,
         statut: query.statut,
+        periode: query.periode,
         annee: query.annee,
         mois: query.mois,
         quinzaine: query.quinzaine,

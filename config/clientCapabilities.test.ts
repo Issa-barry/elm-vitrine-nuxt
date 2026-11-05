@@ -84,6 +84,19 @@ describe("resolveClientCapabilities", () => {
     expect(cumul).toEqual({ ...seul, parrain: true });
   });
 
+  it("consultant seul : tableau de bord, commissions et dépenses, sans véhicule ni espace prestations", () => {
+    expect(resolveClientCapabilities(ctx({ consultant_ids: ["prest-1"] }))).toEqual({
+      dashboard: true, commissions: true, expenses: true, vehicles: false,
+      logisticsActivity: false, orders: false, services: false, parrain: false, profile: true,
+    });
+    expect(resolveClientCapabilities(ctx({ consultant_ids: [] })).dashboard).toBe(false);
+  });
+
+  it("propriétaire + livreur + parrain + consultant : un seul tableau de bord, l'espace parrain en plus", () => {
+    const caps = resolveClientCapabilities(ctx({ proprietaire_id: "prop-1", livreur_id: "liv-1", parrain_id: "par-1", consultant_ids: ["prest-1"] }));
+    expect(caps).toMatchObject({ dashboard: true, commissions: true, vehicles: true, parrain: true, services: false });
+  });
+
   it("client + proprietaire + prestataire : tout est visible", () => {
     const caps = resolveClientCapabilities(ctx({ client_id: "cli-1", proprietaire_id: "prop-1", prestataire_id: "prest-1" }));
     expect(caps).toEqual({

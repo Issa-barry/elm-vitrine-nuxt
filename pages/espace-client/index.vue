@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { dashboardExpensesTotal, type ClientDashboardResponse } from "~/config/clientDashboard";
+import { dashboardExpensesTotal, type ClientDashboardResponse, type DashboardVehiculeBalance } from "~/config/clientDashboard";
 import type { ClientExpensesResponse } from "~/config/clientExpenses";
 import { periodeComptableQuery, periodePrecedente } from "~/config/clientPeriodeComptable";
 import { clientDisplayName, clientSpaceRoleLabel } from "~/config/auth";
-import { PARRAIN_SPACE_HOME } from "~/config/clientParrain";
 import { notificationResourceToRoute } from "~/config/clientNotifications";
 import type { ClientNotification } from "~/config/clientNotifications";
+import { ordonnerActivites } from "~/config/clientActivites";
 
 definePageMeta({ layout: "client", middleware: ["auth", "accueil-espace-client"] });
 useHead({
@@ -131,11 +131,19 @@ const previousSummary = computed(() => previousDashboard.value?.summary ?? null)
 const parVehicule = computed(() => dashboard.value?.par_vehicule ?? []);
 const hasVehicles = computed(() => parVehicule.value.length > 0);
 // Aperçu limité à 3 véhicules sur le dashboard (mobile "Commissions par
-// véhicule" et desktop "Solde par véhicule") — "Tout voir" reste le chemin
-// vers la liste complète des véhicules ; les lignes individuelles mènent
-// maintenant aux commissions (voir topVehicleLink ci-dessous), pas à la fiche
-// véhicule.
+// véhicule" et desktop "Solde par véhicule"). "Tout voir" et chaque ligne mènent
+// aux commissions sur la période affichée (une ligne filtre en plus sur son
+// véhicule), jamais à la liste ou à la fiche véhicule.
 const topVehicles = computed(() => parVehicule.value.slice(0, 3));
+// Gains multi-activités (ADR 0054). Badges d'un véhicule : nature du rattachement actuel, sinon les
+// activités de ses gains sur la période (véhicule quitté, consultant).
+const badgesVehicule = (vehicle: DashboardVehiculeBalance) => ordonnerActivites(
+  (vehicle.liens?.length ? vehicle.liens : (vehicle.par_activite ?? []).map((ligne) => ligne.activite)) as string[],
+);
+// La section reste réservée aux comptes à véhicules ; un compte qui n'en a qu'au
+// travers de ses commissions (parrain, consultant) la voit dès qu'une ligne existe.
+const afficherVehicules = computed(() => capabilities.value.vehicles || hasVehicles.value);
+const commissionsLink = computed(() => ({ path: "/espace-client/commissions", query: lienPeriode.value }));
 const topVehicleLink = (vehiculeId: string) => ({
   path: "/espace-client/commissions",
   query: { vehicule_id: vehiculeId, ...lienPeriode.value },
@@ -185,14 +193,6 @@ const recentNotifications = computed(() => notificationItems.value.slice(0, 6));
   <div class="client-mobile-dashboard">
     <ClientMobileIdentityQr :name="displayName" :phone="displayPhone" :role="displayRole" :qr-value="displayQr" />
 
-    <div v-if="capabilities.parrain" class="client-mobile-summary-grid">
-      <NuxtLink :to="PARRAIN_SPACE_HOME" class="client-mobile-summary-card" aria-label="Ouvrir l'espace parrain" data-testid="carte-espace-parrain">
-        <span class="client-mobile-summary-icon"><i class="pi pi-users" /></span>
-        <div><span>Espace parrain</span><strong>Mes parrainages</strong></div>
-        <i class="pi pi-chevron-right client-mobile-summary-chevron" aria-hidden="true" />
-      </NuxtLink>
-    </div>
-
     <ClientPeriodeAccueilFilter :chargement="isLoading" />
 
     <div v-if="error" class="p-4 text-red-500" role="alert">
@@ -229,10 +229,10 @@ const recentNotifications = computed(() => notificationItems.value.slice(0, 6));
         </NuxtLink>
       </div>
 
-      <template v-if="capabilities.vehicles">
+      <template v-if="afficherVehicules">
         <div class="client-mobile-section-heading">
           <h2>Commissions par véhicule</h2>
-          <NuxtLink to="/espace-client/vehicules">Tout voir <i class="pi pi-arrow-right" /></NuxtLink>
+          <NuxtLink :to="commissionsLink">Tout voir <i class="pi pi-arrow-right" /></NuxtLink>
         </div>
         <div v-if="hasVehicles" class="client-mobile-vehicle-list">
           <NuxtLink
@@ -245,6 +245,9 @@ const recentNotifications = computed(() => notificationItems.value.slice(0, 6));
             <div>
               <span class="client-mobile-vehicle-name">{{ vehicle.nom_vehicule }}</span>
               <span class="client-mobile-vehicle-registration">{{ vehicle.immatriculation }}</span>
+              <span v-if="badgesVehicule(vehicle).length" class="client-vehicle-badges">
+                <ClientActiviteBadge v-for="activite in badgesVehicule(vehicle)" :key="activite" :activite="activite" />
+              </span>
             </div>
             <div class="client-mobile-vehicle-finance">
               <span class="client-mobile-vehicle-amount">{{ formatGnf(vehicle.total_earned) }}</span>
@@ -315,16 +318,21 @@ const recentNotifications = computed(() => notificationItems.value.slice(0, 6));
       />
     </div>
 
-    <div v-if="capabilities.vehicles" class="col-span-12 xl:col-span-6">
+    <div v-if="afficherVehicules" class="col-span-12 xl:col-span-6">
       <div class="card">
         <div class="flex items-center justify-between mb-4">
           <div><div class="font-semibold text-xl">Solde par véhicule</div><span class="text-muted-color">Total des commissions générées</span></div>
-          <NuxtLink to="/espace-client/vehicules" class="flex items-center gap-2 text-primary font-medium hover:underline">Tout voir <i class="pi pi-arrow-right text-sm" /></NuxtLink>
+          <NuxtLink :to="commissionsLink" class="flex items-center gap-2 text-primary font-medium hover:underline">Tout voir <i class="pi pi-arrow-right text-sm" /></NuxtLink>
         </div>
         <ul v-if="hasVehicles" class="list-none p-0 m-0">
           <li v-for="vehicle in topVehicles" :key="vehicle.vehicule_id" class="border-b border-surface last:border-b-0">
             <NuxtLink :to="topVehicleLink(vehicle.vehicule_id)" class="flex items-center justify-between gap-4 py-4 group">
-              <div class="min-w-0"><span class="block text-surface-900 dark:text-surface-0 font-semibold group-hover:text-primary">{{ vehicle.nom_vehicule }}</span><span class="block text-muted-color text-sm mt-1">{{ vehicle.immatriculation }}</span></div>
+              <div class="min-w-0">
+                <span class="block text-surface-900 dark:text-surface-0 font-semibold group-hover:text-primary">{{ vehicle.nom_vehicule }}</span><span class="block text-muted-color text-sm mt-1">{{ vehicle.immatriculation }}</span>
+                <span v-if="badgesVehicule(vehicle).length" class="client-vehicle-badges">
+                  <ClientActiviteBadge v-for="activite in badgesVehicule(vehicle)" :key="activite" :activite="activite" />
+                </span>
+              </div>
               <div class="shrink-0 text-right"><strong class="block text-surface-900 dark:text-surface-0">{{ formatGnf(vehicle.total_earned) }}</strong></div>
             </NuxtLink>
           </li>
@@ -333,7 +341,7 @@ const recentNotifications = computed(() => notificationItems.value.slice(0, 6));
       </div>
     </div>
 
-    <div class="col-span-12" :class="{ 'xl:col-span-6': capabilities.vehicles }">
+    <div class="col-span-12" :class="{ 'xl:col-span-6': afficherVehicules }">
       <div class="card">
         <div class="flex items-center justify-between mb-6">
           <div class="font-semibold text-xl">Notifications</div>
@@ -350,3 +358,12 @@ const recentNotifications = computed(() => notificationItems.value.slice(0, 6));
   </div>
   </div>
 </template>
+
+<style scoped>
+.client-vehicle-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.375rem;
+}
+</style>

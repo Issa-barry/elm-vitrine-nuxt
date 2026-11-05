@@ -29,12 +29,18 @@ export interface ActivityVehicle {
   immatriculation: string;
 }
 
+export type ActivityPaymentStatus = "creee" | "impayee" | "partiel" | "payee" | "annulee";
+
 export interface ClientActivityItem {
   id: string;
   type: ActivityType;
   reference: string;
   statut: string;
+  /** Libellé affiché au back-office pour une vente (ex. « Commissions à verser »), `statut` reste la valeur brute. */
   statut_label: string;
+  /** Statut de la facture d'une vente (`StatutFactureVente`) — null pour un transfert ou une vente sans facture. */
+  statut_paiement: ActivityPaymentStatus | null;
+  statut_paiement_label: string | null;
   site_source: string;
   site_destination: string;
   vehicule: ActivityVehicle | null;
@@ -94,4 +100,16 @@ export type ActivityQuery = Omit<ApiActiviteQuery, "statut"> & { page?: number; 
 /** Libellé du type, pour un badge — ne reformule jamais `statut_label` (déjà fourni par le backend). */
 export function activityTypeLabel(type: ActivityType): string {
   return type === "vente" ? "Vente" : "Logistique";
+}
+
+/**
+ * Paiement affiché à côté du statut d'une vente, comme sur la fiche back-office
+ * (« Livrée » + « Partiellement payée »). Rien pour une facture encore « Créée »
+ * (aucun encaissement attendu) ni « Annulée » (le statut de la vente le dit déjà).
+ */
+export function activityPayment(item: Pick<ClientActivityItem, "statut_paiement" | "statut_paiement_label">): { label: string; severity: "success" | "warn" } | null {
+  if (!item.statut_paiement || !item.statut_paiement_label) return null;
+  if (item.statut_paiement === "payee") return { label: item.statut_paiement_label, severity: "success" };
+  if (item.statut_paiement === "partiel" || item.statut_paiement === "impayee") return { label: item.statut_paiement_label, severity: "warn" };
+  return null;
 }

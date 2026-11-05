@@ -70,6 +70,24 @@ test.describe("Espace client — activité", () => {
     await expect(detail.getByText("12")).toBeVisible();
   });
 
+  test("une vente livrée partiellement payée affiche aussi son paiement, comme le back-office", async ({ page }) => {
+    await page.setViewportSize({ width: 440, height: 956 });
+    await loginAsTestUser(page);
+    await page.goto("/espace-client/activite", { waitUntil: "domcontentloaded", timeout: 30_000 });
+
+    // TEST_ACTIVITY : CMD-2839 livrée + facture partielle, CMD-2847 facture encore « Créée ».
+    const carte = page.getByRole("button", { name: "CMD-2839, Livrée, Partiellement payée. Voir les détails." });
+    await expect(carte).toBeVisible({ timeout: 30_000 });
+    await expect(carte.getByText("Partiellement payée")).toBeVisible();
+    await expect(page.getByRole("button", { name: "CMD-2847, Livraison en cours. Voir les détails." })).toBeVisible();
+    await expect(page.locator(".client-mobile-deliveries").getByText("Créée")).toHaveCount(0);
+
+    await carte.click();
+    const detail = page.locator(".client-delivery-detail");
+    await expect(detail.getByText("Paiement")).toBeVisible();
+    await expect(detail.getByText("Partiellement payée")).toBeVisible();
+  });
+
   // Réponses interceptées au niveau du BFF : le filtrage réel est testé côté
   // backend (ActiviteControllerTest), la transmission par le BFF dans
   // tests/server/activity.get.test.ts. Ici : ce que l'écran demande et affiche.
@@ -84,6 +102,8 @@ test.describe("Espace client — activité", () => {
       reference: id,
       statut: "livree",
       statut_label: "Livrée",
+      statut_paiement: "payee",
+      statut_paiement_label: "Payée",
       site_source: "Siège de Matoto",
       site_destination: "Client X",
       vehicule: { id: "veh-1", nom_vehicule: "ABARRY", immatriculation: "OU3859" },
@@ -122,6 +142,30 @@ test.describe("Espace client — activité", () => {
     const ouvrirFiltre = (page: Page) => page.getByRole("button", { name: "Filtrer l’activité" }).click();
     const periodes = (page: Page) => page.getByRole("group", { name: "Période" });
     const liste = (page: Page) => page.locator(".client-mobile-deliveries");
+
+    test("sans interception : la période traverse le BFF et filtre côté backend (mock)", async ({ page }) => {
+      await page.setViewportSize({ width: 440, height: 956 });
+      await loginAsTestUser(page);
+      await page.goto("/espace-client/activite", { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await expect(liste(page).getByText("4 opérations", { exact: true })).toBeVisible({ timeout: 30_000 });
+
+      await ouvrirFiltre(page);
+      await periodes(page).getByRole("button", { name: "Hier" }).click();
+      const reponseHier = page.waitForResponse((r) => r.url().includes("/api/client/activity") && r.url().includes("periode=hier"));
+      await page.getByRole("button", { name: "Appliquer" }).click();
+
+      // Le filtre renvoyé vient du backend : il a donc bien reçu la clé.
+      const corps = await (await reponseHier).json();
+      expect(corps.filters.periode).toBe("hier");
+      expect(corps.filters.date_debut).toBe(corps.filters.date_fin);
+
+      // TEST_ACTIVITY date d'août 2026 : rien « hier » à partir de septembre 2026.
+      await expect(liste(page).getByText("0 opération", { exact: true })).toBeVisible();
+      await expect(liste(page).getByText("Aucune opération trouvée")).toBeVisible();
+
+      await liste(page).getByRole("button", { name: "Retirer le filtre Période : Hier" }).click();
+      await expect(liste(page).getByText("4 opérations", { exact: true })).toBeVisible();
+    });
 
     test("affiche les sept périodes dans le panneau, sans débordement à 440 px", async ({ page }) => {
       await ouvrirActivite(page, () => reponse(["VTE-1"]));
