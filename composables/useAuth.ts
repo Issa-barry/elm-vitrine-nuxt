@@ -1,5 +1,5 @@
 import type { AuthContext, AuthErrorInfo, AuthUser, LoginInput, OtpVerifyInput } from "~/config/auth";
-import { buildOtpVerifyPayload, hasClientSpaceAccess, normalizeAuthError } from "~/config/auth";
+import { buildOtpVerifyPayload, normalizeAuthError } from "~/config/auth";
 
 // État d'authentification partagé (useState = singleton réactif par clé,
 // hydraté du serveur vers le client sans re-fetch — voir ensureFetched() plus
@@ -17,16 +17,6 @@ interface LoginResponse {
 }
 
 export type LoginResult = { ok: true } | { ok: false; error: AuthErrorInfo };
-
-// Code synthétique, décidé et calculé CÔTÉ FRONTEND (voir config/auth.ts::
-// hasClientSpaceAccess) : /api/auth/login et /api/auth/me ne renvoient
-// aujourd'hui aucun code de ce type (aucune vérification de rôle côté
-// backend sur ces endpoints — voir docs/api-auth-contract.md). Nommé
-// `client_access_denied` par anticipation d'un futur contrat backend dédié
-// (endpoint de login espace client), pas parce qu'il existe déjà : si ce
-// contrat est livré un jour avec son propre code, aligner cette valeur dessus
-// plutôt que la deviner à l'avance.
-const CLIENT_ACCESS_DENIED_CODE = "client_access_denied";
 
 export function useAuth() {
   const user = useState<AuthUser | null>("auth:user", () => null);
@@ -48,6 +38,7 @@ export function useAuth() {
   // hydratation (ex. clic sur "Se connecter").
   const requestFetch = useRequestFetch();
   const { reset: resetNotifications } = useClientNotifications();
+  const { closeOverlays } = useClientLayout();
   // Web Push (chantier du 28/08/2026, voir composables/useWebPush.ts) :
   // syncWebPushSubscription resynchronise silencieusement un abonnement
   // navigateur déjà existant vers le compte qui vient de se connecter
@@ -57,7 +48,6 @@ export function useAuth() {
   const { syncSubscription: syncWebPushSubscription, unlinkFromAccount: unlinkWebPushSubscription } = useWebPush();
 
   const isAuthenticated = computed(() => status.value === "authenticated");
-  const hasClientAccess = computed(() => hasClientSpaceAccess(user.value?.roles));
 
   function applyMe(data: MeResponse) {
     const { context: ctx, ...rest } = data;
@@ -76,6 +66,9 @@ export function useAuth() {
     context.value = null;
     status.value = "unauthenticated";
     resetNotifications();
+    // Le panneau Profil (d'où l'on se déconnecte) partage son état entre
+    // sessions : sans ça, la connexion suivante rouvre l'accueil panneau ouvert.
+    closeOverlays();
     // Best-effort, non bloquant (voir useWebPush.ts::unlinkFromAccount()) :
     // ne retire QUE l'association serveur de cet endpoint, jamais
     // l'abonnement navigateur — une connexion suivante le resynchronise (voir
@@ -176,33 +169,10 @@ export function useAuth() {
       // user/status restent ceux posés ci-dessus.
     }
 
-    // LoginController/OtpLogin\VerifyController/MeController ne vérifient
-    // AUCUN rôle côté backend (partagés avec le mobile) : un compte
-    // staff/admin/super_admin obtient un token Sanctum valide comme
-    // n'importe qui, quel que soit le moyen de preuve. Cet espace n'est pas
-    // l'application backoffice (Inertia, séparée) — refus explicite ici,
-    // avec révocation immédiate du token qui vient d'être émis (pas de
-    // session qui traîne pour un rôle qui n'a rien à faire dans cette app).
+    // Compte unique (ADR 0055 côté elm-monolithe) : tout compte actif entre,
+    // agents du back-office compris, même sans activité — jamais de refus
+    // par rôle ici. Un compte désactivé est déjà refusé par Laravel (403).
     //
-    // hasClientSpaceAccess() est un OR sur les rôles présents (voir
-    // config/auth.ts) : un compte cumulant un rôle staff ET un rôle
-    // client/proprietaire/livreur (ex. admin_entreprise + proprietaire,
-    // supporté côté backend depuis le 26/08/2026 — App\Models\User::
-    // hasBackofficeAccess()/hasClientAccess()) est bien accepté ici. Ne
-    // JAMAIS transformer ceci en vérification exclusive ("roles.length===1"
-    // ou "roles[0] === 'client'") : les rôles sont cumulables, un rôle
-    // staff supplémentaire ne retire jamais l'accès espace client.
-    if (!hasClientSpaceAccess(user.value?.roles)) {
-      await logout();
-      const info: AuthErrorInfo = {
-        status: 403,
-        message: "Ce compte n'a pas accès à l'espace client.",
-        code: CLIENT_ACCESS_DENIED_CODE,
-      };
-      lastError.value = info;
-      return { ok: false, error: info };
-    }
-
     // Best-effort, non bloquant : un abonnement Web Push déjà créé sur ce
     // navigateur (compte précédent ou même compte) est réassocié au compte
     // qui vient de se connecter (section 22/24). Ne crée jamais de nouvel
@@ -258,7 +228,6 @@ export function useAuth() {
     status,
     lastError,
     isAuthenticated,
-    hasClientAccess,
     ensureFetched,
     refreshMe,
     reloadUser,

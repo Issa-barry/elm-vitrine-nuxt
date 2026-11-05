@@ -23,13 +23,18 @@ test.describe("Espace client — commissions (vue statistique)", () => {
     await expect(mobile.getByText(`${new Intl.NumberFormat("fr-FR").format(4_240_000)} GNF`)).toBeVisible({ timeout: 10_000 });
   });
 
-  test("aucune commande individuelle affichée (plus de référence CMD-...)", async ({ page }) => {
+  // Révisé par l'ADR 0054 (demande du 03/11/2026) : chaque commission a désormais
+  // sa ligne, avec son origine, dans « Détail des commissions » — et seulement là.
+  // Les statistiques au-dessus restent agrégées.
+  test("les commandes individuelles n'apparaissent que dans le détail des commissions", async ({ page }) => {
     await loginAsTestUser(page);
     await page.goto("/espace-client/commissions", { waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.waitForLoadState("load");
-    await page.waitForTimeout(1000);
 
-    await expect(page.getByText(/CMD-\d+/)).toHaveCount(0);
+    const bureau = page.locator(".client-desktop-expenses");
+    await expect(bureau.getByTestId("commission-ligne")).toHaveCount(2, { timeout: 10_000 });
+    await expect(bureau.getByText(/CMD-\d+/)).toHaveCount(2);
+    await expect(bureau.getByTestId("commissions-detail").getByText(/CMD-\d+/)).toHaveCount(2);
   });
 
   test("répartition par véhicule triée par gain décroissant, avec part du total", async ({ page }) => {

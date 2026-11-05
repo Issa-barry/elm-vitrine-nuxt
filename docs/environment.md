@@ -121,13 +121,22 @@ Décision motivée dans l'audit et acceptée le 26/08/2026 : voir la section
 "Prêt pour SPA directe ?" de `docs/api-auth-contract.md` côté `elm-monolithe`
 si cette architecture doit être reconsidérée plus tard.
 
-`POST /api/auth/login` et `GET /api/auth/me` côté Laravel ne vérifient aucun
-rôle (partagés avec le mobile) : un compte staff/admin/super_admin obtient un
-token Sanctum valide comme n'importe qui. C'est donc le frontend qui refuse
-explicitement l'accès (`config/auth.ts::hasClientSpaceAccess`, appliqué dans
-`composables/useAuth.ts::login()` et `middleware/auth.ts`) à tout compte sans
-rôle `client`/`proprietaire`/`livreur` — même règle que le middleware Laravel
-`role:client|proprietaire|livreur` sur les endpoints métier.
+Compte unique (ADR 0055 côté `elm-monolithe`) : « Le front Nuxt est un espace
+ouvert à tous les utilisateurs. Toute personne peut le consulter. Tout
+utilisateur disposant d'un compte actif peut s'y connecter avec son identité
+EAU LA MAMAN existante, quels que soient ses rôles et ses activités métier.
+L'absence d'activité n'est jamais un motif de refus d'accès au front. Seules
+les données et fonctionnalités métier restent conditionnées par les
+rattachements et autorisations propres à chaque utilisateur. »
+
+`POST /api/auth/login` et la connexion OTP authentifient donc tout compte
+actif, agents du back-office compris, sans jamais créer de second compte.
+L'espace client est ouvert à tout compte actif : `middleware/auth.ts` ne
+vérifie que la session, jamais un rôle ni une activité. Les menus viennent de
+`context` (`config/clientCapabilities.ts`), jamais des rôles back-office. Un
+compte sans activité arrive sur l'accueil neutre `/espace-client/bienvenue`
+(`config/clientAccueil.ts`). Laravel limite chaque donnée aux activités du
+compte.
 
 **Aucun bypass d'auth runtime, y compris en `nuxt dev`** (décision du
 26/08/2026, revenant sur un choix antérieur) : `pages/connexion.vue`,

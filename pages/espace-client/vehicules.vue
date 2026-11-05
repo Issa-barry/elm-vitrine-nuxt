@@ -1,16 +1,19 @@
 <script setup lang="ts">
 import QrcodeVue from "qrcode.vue";
 import { clientDisplayName } from "~/config/auth";
-import { vehicleTeamRoleLabel, type ClientVehicle } from "~/config/clientVehicles";
+import { vehicleTeamRoleLabel, vehiculeRechercheTexte, type ClientVehicleRattache } from "~/config/clientVehicles";
 
 definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Mes véhicules — Eau La Maman" });
 
-// GET /v1/mobile/vehicules/mine via le BFF (server/api/client/vehicles.get.ts)
-// — pas de pagination côté backend (collection complète, voir
-// config/clientVehicles.ts), pas de statut "Entretien" dans le modèle ELM :
+// GET /v1/mobile/vehicules/rattaches via le BFF (server/api/client/vehicles/
+// rattaches.get.ts, ADR 0054 côté elm-monolithe) : tous les véhicules rattachés
+// au compte — propriétaire, livreur de l'équipe actuelle, parrain —, chacun une
+// seule fois avec ses liens. Un véhicule seulement parrainé est en lecture
+// restreinte : le backend n'en renvoie que l'identité et le nom du propriétaire.
+// Pas de pagination côté backend, pas de statut "Entretien" dans le modèle ELM :
 // seul `is_active` existe (voir demande du 26/08/2026, section 15).
-const { vehicles, isLoading, error, hasLoaded, fetchVehicles } = useClientVehicles();
+const { vehicles, isLoading, error, hasLoaded, fetchVehicles } = useClientVehiclesRattaches();
 
 onMounted(() => {
   fetchVehicles();
@@ -27,21 +30,17 @@ const vehicleFilterVisible = ref(false);
 const appliedStatus = ref<typeof ALL | "active" | "inactive">(ALL);
 const draftStatus = ref<typeof ALL | "active" | "inactive">(ALL);
 
-// Champ hérité, quasi toujours vide côté backend réel (voir
-// config/clientVehicles.ts) : ne sert plus que de repli quand
-// `capacites[]` est vide (véhicule sans catégorie configurée).
-const formatCapacity = (capacite: number | null) =>
-  capacite === null ? "—" : `${new Intl.NumberFormat("fr-FR").format(capacite)} packs`;
-
 // Résumés compacts pour la carte mobile / le tableau desktop (une seule
-// ligne disponible) — `equipe[]`/`capacites[]` (chantier "équipe complète +
-// capacités réelles" du 27/08/2026, voir config/clientVehicles.ts) restent
-// la source canonique ; `conducteur`/`capacite` ne sont lus qu'en repli
-// quand les nouveaux tableaux sont vides.
-const vehicleDriverSummary = (vehicle: ClientVehicle) =>
-  vehicle.equipe.length ? clientDisplayName(vehicle.equipe[0]) : vehicle.conducteur || "Non assigné";
+// ligne disponible) — `equipe[]`/`capacites[]` sont la source canonique
+// (chantier "équipe complète + capacités réelles" du 27/08/2026, voir
+// config/clientVehicles.ts). Un véhicule en lecture restreinte n'a ni l'un ni
+// l'autre : rien n'est inventé à leur place.
+const vehicleDriverSummary = (vehicle: ClientVehicleRattache) => {
+  if (vehicle.lecture_restreinte) return null;
+  return vehicle.equipe.length ? clientDisplayName(vehicle.equipe[0]) : "Non assigné";
+};
 
-const vehicleCapacitySummary = (vehicle: ClientVehicle) => {
+const vehicleCapacitySummary = (vehicle: ClientVehicleRattache) => {
   if (vehicle.capacites.length === 1) {
     const [capacite] = vehicle.capacites;
     return `${formatNumber(capacite.capacite)} ${capacite.categorie ?? ""}`.trim();
@@ -49,7 +48,7 @@ const vehicleCapacitySummary = (vehicle: ClientVehicle) => {
   if (vehicle.capacites.length > 1) {
     return `${vehicle.capacites.length} catégories`;
   }
-  return formatCapacity(vehicle.capacite);
+  return "—";
 };
 
 const filteredVehicles = computed(() => {
@@ -58,11 +57,7 @@ const filteredVehicles = computed(() => {
     const matchesStatus =
       appliedStatus.value === ALL ||
       (appliedStatus.value === "active" ? vehicle.is_active : !vehicle.is_active);
-    const haystack = [vehicle.nom, vehicle.immatriculation, vehicle.type, vehicleDriverSummary(vehicle)]
-      .filter(Boolean)
-      .join(" ")
-      .toLocaleLowerCase("fr");
-    const matchesSearch = !query || haystack.includes(query);
+    const matchesSearch = !query || vehiculeRechercheTexte(vehicle, vehicleDriverSummary(vehicle)).includes(query);
     return matchesStatus && matchesSearch;
   });
 });
@@ -99,11 +94,11 @@ const applyVehicleFilter = () => {
 // contrat pour compatibilité descendante mais ne sont plus lus ici QUE
 // lorsque `equipe`/`capacites` sont vides (véhicule sans équipe/catégorie
 // configurée) — jamais pour l'affichage principal.
-const selectedVehicle = ref<ClientVehicle | null>(null);
+const selectedVehicle = ref<ClientVehicleRattache | null>(null);
 const detailVisible = ref(false);
 const lastVehicleTrigger = ref<HTMLElement | null>(null);
 
-const openVehicleDetail = (vehicle: ClientVehicle, event: MouseEvent) => {
+const openVehicleDetail = (vehicle: ClientVehicleRattache, event: MouseEvent) => {
   lastVehicleTrigger.value = event.currentTarget as HTMLElement;
   selectedVehicle.value = vehicle;
   detailVisible.value = true;
@@ -134,7 +129,7 @@ const openVehicleDetail = (vehicle: ClientVehicle, event: MouseEvent) => {
       <label class="client-mobile-vehicles-search">
         <i class="pi pi-search" aria-hidden="true" />
         <span class="sr-only">Rechercher un véhicule</span>
-        <input v-model="search" type="search" inputmode="search" placeholder="Nom, type, immatriculation ou conducteur" autocomplete="off">
+        <input v-model="search" type="search" inputmode="search" placeholder="Nom, immatriculation, conducteur ou propriétaire" autocomplete="off">
         <button v-if="search" type="button" aria-label="Effacer la recherche" @click="search = ''">
           <i class="pi pi-times" aria-hidden="true" />
         </button>
@@ -161,7 +156,14 @@ const openVehicleDetail = (vehicle: ClientVehicle, event: MouseEvent) => {
             </span>
           </div>
 
-          <div class="client-mobile-vehicles-card__meta">
+          <div class="client-vehicle-liens">
+            <ClientActiviteBadge v-for="lien in vehicle.liens" :key="lien" :activite="lien" />
+          </div>
+
+          <div v-if="vehicle.lecture_restreinte" class="client-mobile-vehicles-card__meta">
+            <span v-if="vehicle.proprietaire"><i class="pi pi-user" aria-hidden="true" /> Propriétaire : {{ vehicle.proprietaire.nom_complet }}</span>
+          </div>
+          <div v-else class="client-mobile-vehicles-card__meta">
             <span><i class="pi pi-box" aria-hidden="true" /> {{ vehicleCapacitySummary(vehicle) }}</span>
             <span><i class="pi pi-user" aria-hidden="true" /> {{ vehicleDriverSummary(vehicle) }}</span>
             <span v-if="vehicle.en_livraison"><i class="pi pi-send" aria-hidden="true" /> En livraison</span>
@@ -194,8 +196,9 @@ const openVehicleDetail = (vehicle: ClientVehicle, event: MouseEvent) => {
         <Column field="nom" header="Véhicule" sortable><template #body="{ data }"><button type="button" class="font-medium text-primary hover:underline" @click="openVehicleDetail(data, $event)">{{ data.nom }}</button></template></Column>
         <Column field="immatriculation" header="Immatriculation" sortable />
         <Column field="type" header="Type" sortable />
-        <Column header="Capacité"><template #body="{ data }">{{ vehicleCapacitySummary(data) }}</template></Column>
-        <Column header="Conducteur"><template #body="{ data }">{{ vehicleDriverSummary(data) }}</template></Column>
+        <Column header="Rattachement"><template #body="{ data }"><div class="client-vehicle-liens"><ClientActiviteBadge v-for="lien in data.liens" :key="lien" :activite="lien" /></div></template></Column>
+        <Column header="Capacité"><template #body="{ data }">{{ data.lecture_restreinte ? "—" : vehicleCapacitySummary(data) }}</template></Column>
+        <Column header="Conducteur"><template #body="{ data }">{{ vehicleDriverSummary(data) ?? "—" }}</template></Column>
         <Column header="Statut"><template #body="{ data }"><Tag :value="data.is_active ? 'Actif' : 'Inactif'" :severity="data.is_active ? 'success' : 'warn'" /></template></Column>
         <Column header="Actions"><template #body="{ data }"><Button icon="pi pi-eye" text rounded severity="secondary" :aria-label="`Voir ${data.nom}`" @click="openVehicleDetail(data, $event)" /></template></Column>
       </DataTable>
@@ -263,6 +266,13 @@ const openVehicleDetail = (vehicle: ClientVehicle, event: MouseEvent) => {
         <span class="client-delivery-detail__qr-ref">{{ selectedVehicle.immatriculation }}</span>
       </div>
 
+      <div class="client-vehicle-liens client-vehicle-liens--detail" aria-label="Votre rattachement au véhicule">
+        <ClientActiviteBadge v-for="lien in selectedVehicle.liens" :key="lien" :activite="lien" />
+      </div>
+      <p v-if="selectedVehicle.lecture_restreinte" class="client-vehicle-restreint" role="note">
+        Véhicule que vous parrainez : vous voyez son identité, son propriétaire et votre rémunération. Son équipe, ses ventes et ses dépenses ne sont pas affichées.
+      </p>
+
       <div class="client-delivery-detail__rows">
         <div class="client-delivery-detail__row">
           <span>Immatriculation</span>
@@ -277,15 +287,18 @@ const openVehicleDetail = (vehicle: ClientVehicle, event: MouseEvent) => {
           <strong>Oui</strong>
         </div>
         <!-- Replis (véhicule sans équipe/catégorie configurée) : affichés
-          UNIQUEMENT quand les sources canoniques ci-dessous sont vides. -->
-        <div v-if="!selectedVehicle.capacites.length" class="client-delivery-detail__row">
-          <span>Capacité</span>
-          <strong>{{ formatCapacity(selectedVehicle.capacite) }}</strong>
-        </div>
-        <div v-if="!selectedVehicle.equipe.length" class="client-delivery-detail__row">
-          <span>Conducteur</span>
-          <strong>{{ selectedVehicle.conducteur || "Non assigné" }}</strong>
-        </div>
+          UNIQUEMENT quand les sources canoniques ci-dessous sont vides, et
+          jamais pour un véhicule en lecture restreinte. -->
+        <template v-if="!selectedVehicle.lecture_restreinte">
+          <div v-if="!selectedVehicle.capacites.length" class="client-delivery-detail__row">
+            <span>Capacité</span>
+            <strong>—</strong>
+          </div>
+          <div v-if="!selectedVehicle.equipe.length" class="client-delivery-detail__row">
+            <span>Conducteur</span>
+            <strong>Non assigné</strong>
+          </div>
+        </template>
       </div>
 
       <div v-if="selectedVehicle.proprietaire" class="client-delivery-detail__order">
@@ -294,9 +307,17 @@ const openVehicleDetail = (vehicle: ClientVehicle, event: MouseEvent) => {
           <span>Nom</span>
           <strong>{{ selectedVehicle.proprietaire.nom_complet }}</strong>
         </div>
-        <div class="client-delivery-detail__row">
+        <div v-if="!selectedVehicle.lecture_restreinte" class="client-delivery-detail__row">
           <span>Téléphone</span>
           <strong>{{ selectedVehicle.proprietaire.telephone || "—" }}</strong>
+        </div>
+      </div>
+
+      <div v-if="selectedVehicle.remuneration_parrain.length" class="client-delivery-detail__order">
+        <h3>Votre rémunération de parrain</h3>
+        <div v-for="part in selectedVehicle.remuneration_parrain" :key="`${part.processus_label}-${part.categorie_nom}`" class="client-delivery-detail__row">
+          <span>{{ part.processus_label }} · {{ part.categorie_nom }}</span>
+          <strong>{{ part.a_definir ? "À définir" : `${formatGnf(part.montant)} / pack` }}</strong>
         </div>
       </div>
 
@@ -340,5 +361,27 @@ const openVehicleDetail = (vehicle: ClientVehicle, event: MouseEvent) => {
 
 .client-mobile-vehicles-status--error {
   color: var(--p-red-600, #dc2626);
+}
+
+.client-vehicle-liens {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.client-mobile-vehicles-card .client-vehicle-liens {
+  margin-top: 0.625rem;
+}
+
+.client-vehicle-liens--detail {
+  justify-content: center;
+  margin-bottom: 0.75rem;
+}
+
+.client-vehicle-restreint {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--p-text-muted-color);
+  text-align: center;
 }
 </style>

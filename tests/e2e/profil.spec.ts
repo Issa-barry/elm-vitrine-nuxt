@@ -249,4 +249,25 @@ test.describe("Espace client — profil", () => {
     await page.goto("/espace-client/profil", { waitUntil: "domcontentloaded", timeout: 30_000 });
     await expect(page).toHaveURL(/\/connexion$/, { timeout: 10_000 });
   });
+
+  // Régression 04/11 : déconnexion depuis le panneau mobile puis reconnexion sans
+  // rechargement — l'accueil s'ouvrait avec le panneau Profil encore affiché.
+  test("après déconnexion depuis le panneau mobile, la reconnexion ouvre l'accueil panneau fermé", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await loginAsTestUser(page);
+    await page.waitForTimeout(1000);
+
+    await page.getByRole("button", { name: "Ouvrir mon profil et mes paramètres" }).click();
+    await page.locator(".client-mobile-profile-logout").click();
+    await page.getByRole("button", { name: "Oui" }).click();
+    await expect(page).toHaveURL(/\/connexion$/, { timeout: 10_000 });
+
+    await page.getByLabel("Numéro de téléphone").fill("601020304");
+    await page.getByPlaceholder("••••••••").fill("MotDePasse123");
+    await page.getByRole("button", { name: "Se connecter", exact: true }).click();
+    await expect(page).toHaveURL(/\/espace-client$/, { timeout: 20_000 });
+
+    await expect(page.getByRole("button", { name: "Ouvrir mon profil et mes paramètres" })).toHaveAttribute("aria-expanded", "false");
+    await expect(page.locator(".client-mobile-profile-identity-info")).toBeHidden();
+  });
 });

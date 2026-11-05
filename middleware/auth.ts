@@ -1,11 +1,9 @@
 // Protège /espace-client/* (voir definePageMeta({ middleware: "auth" }) sur
 // chaque page du dossier) : redirige vers /connexion si aucune session
-// valide n'est trouvée via GET /api/auth/me (composables/useAuth.ts), ou si
-// le compte n'a pas un rôle client|proprietaire|livreur (ex. staff/admin —
-// voir config/auth.ts::hasClientSpaceAccess). Ce 2ᵉ cas est surtout un filet
-// de sécurité : le refus principal a déjà lieu à la connexion elle-même
-// (composables/useAuth.ts::login()), avant même qu'une session existe. Il
-// couvre le cas où un rôle serait retiré à un compte déjà en session.
+// valide n'est trouvée via GET /api/auth/me (composables/useAuth.ts). Tout
+// compte actif entre, quels que soient ses rôles et ses activités (compte
+// unique, ADR 0055 côté elm-monolithe) : un compte désactivé perd déjà sa
+// session côté Laravel (403 sur /me).
 //
 // Actif dans TOUS les environnements, y compris `nuxt dev` — décision du
 // 26/08/2026 : aucun bypass d'auth runtime, même en développement local
@@ -21,11 +19,6 @@ export default defineNuxtRouteMiddleware(async () => {
   await auth.ensureFetched();
 
   if (!auth.isAuthenticated.value) {
-    return navigateTo("/connexion");
-  }
-
-  if (!auth.hasClientAccess.value) {
-    await auth.logout();
     return navigateTo("/connexion");
   }
 });

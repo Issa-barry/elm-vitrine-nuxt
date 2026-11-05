@@ -59,6 +59,13 @@ const PARRAIN_ACCOUNTS = {
     user: { ...TEST_USER, id: "e2e-user-cumul", prenom: "Binta", nom: "Sow", telephone: "+224601020398" },
     context: { organization_id: "org-e2e", client_id: null, proprietaire_id: "proprietaire-e2e", livreur_id: null, parrain_id: "parrain-e2e" },
   },
+  // Scénario de référence de l'ADR 0054 (tests/e2e/commissions-activites.spec.ts) :
+  // propriétaire, livreur, parrain et consultant sur un même compte.
+  "+224601020397": {
+    token: "e2e-multi-token",
+    user: { ...TEST_USER, id: "e2e-user-multi", prenom: "Hassane", nom: "Diallo", telephone: "+224601020397", roles: ["client", "proprietaire", "livreur"] },
+    context: { organization_id: "org-e2e", client_id: null, proprietaire_id: "proprietaire-multi", livreur_id: "livreur-multi", parrain_id: "parrain-multi", consultant_ids: ["consultant-multi"] },
+  },
 };
 const PARRAIN_TOKENS = Object.values(PARRAIN_ACCOUNTS).map((account) => account.token);
 
@@ -439,6 +446,152 @@ router.get(
   }),
 );
 
+// ── Gains multi-activités (ADR 0054 côté elm-monolithe) ───────────────────
+// Compte e2e-multi-token : propriétaire ET livreur du véhicule BE8120 (un seul
+// véhicule, deux liens), parrain du véhicule BE7955 d'un tiers (lecture
+// restreinte : nom du propriétaire seulement), consultant de SOGECO Conseil.
+const isMulti = (event) => getHeader(event, "authorization") === "Bearer e2e-multi-token";
+
+const MULTI_VEHICULE_A = { id: "veh-a", nom_vehicule: "KALOUM", immatriculation: "BE8120" };
+const MULTI_VEHICULE_C = { id: "veh-c", nom_vehicule: "MATOTO", immatriculation: "BE7955" };
+
+const MULTI_VEHICULES_RATTACHES = [
+  {
+    id: "veh-a", nom: "KALOUM", immatriculation: "BE8120", type: "Camion", statut: "actif", is_active: true, photo_url: null,
+    liens: ["proprietaire", "livreur"], lecture_restreinte: false, en_livraison: false, role: "proprietaire",
+    proprietaire: { id: "proprietaire-multi", nom_complet: "Hassane Diallo", telephone: "+224601020397" },
+    equipe: [{ id: "livreur-multi", nom_complet: "Hassane Diallo", prenom: "Hassane", nom: "Diallo", telephone: "+224601020397", role: "chauffeur", ordre: 0 }],
+    capacites: [{ categorie_id: "cat-1", categorie: "Sachet eau", capacite: 800 }],
+    remuneration_parrain: [],
+  },
+  {
+    id: "veh-c", nom: "MATOTO", immatriculation: "BE7955", type: "Minibus", statut: "actif", is_active: true, photo_url: null,
+    liens: ["parrain"], lecture_restreinte: true, en_livraison: null, role: "parrain",
+    proprietaire: { id: null, nom_complet: "Mamadou BAH", telephone: null },
+    equipe: [],
+    capacites: [],
+    remuneration_parrain: [{ processus_label: "Ventes", categorie_nom: "Sachet eau", montant: 200, a_definir: false, depuis: "2026-10-01" }],
+  },
+];
+
+const MULTI_LIGNES = [
+  { id: "part-1", activite: "parrain", reference: "VTE-031126-001", vehicule: MULTI_VEHICULE_C, montant_a_payer: 25_000, montant_verse: 0, statut: "impaye", date: "2026-11-03" },
+  { id: "part-2", activite: "proprietaire", reference: "VTE-031126-002", vehicule: MULTI_VEHICULE_A, montant_a_payer: 40_000, montant_verse: 10_000, statut: "partiel", date: "2026-11-03" },
+  { id: "part-3", activite: "livreur", reference: "VTE-031126-003", vehicule: MULTI_VEHICULE_A, montant_a_payer: 15_000, montant_verse: 0, statut: "impaye", date: "2026-11-03" },
+  { id: "part-4", activite: "consultant", reference: "VTE-031126-004", vehicule: MULTI_VEHICULE_A, montant_a_payer: 50_000, montant_verse: 0, statut: "impaye", date: "2026-11-02", beneficiaire_libelle: "SOGECO Conseil" },
+  { id: "part-5", activite: "proprietaire", reference: "VTE-031126-005", vehicule: MULTI_VEHICULE_A, montant_a_payer: 7_000, montant_verse: 0, statut: "annulee", date: "2026-11-01" },
+];
+
+// Compte par défaut (propriétaire seul) : une seule activité, la répartition reste masquée.
+const DEFAULT_LIGNES = [
+  { id: "part-d1", activite: "proprietaire", reference: "CMD-2847", vehicule: { id: "veh-1", nom_vehicule: "ABARRY", immatriculation: "OU3859" }, montant_a_payer: 50_000, montant_verse: 50_000, statut: "paye", date: "2026-08-20" },
+  { id: "part-d2", activite: "proprietaire", reference: "CMD-2839", vehicule: { id: "veh-2", nom_vehicule: "ABARRY 2", immatriculation: "OU4217" }, montant_a_payer: 38_000, montant_verse: 0, statut: "impaye", date: "2026-08-17" },
+];
+
+const ACTIVITE_LABELS = { proprietaire: "Propriétaire", livreur: "Livreur", parrain: "Parrain", consultant: "Consultant" };
+const STATUT_LABELS = { creee: "Créée", impaye: "Impayée", partiel: "Partiellement payée", paye: "Payée", annulee: "Annulée" };
+
+// Même règle que ClientEarningsService : chaque part dans l'activité de son
+// bénéficiaire, l'annulée hors des montants, reste à payer jamais négatif.
+function parActiviteDe(lignes, activites) {
+  return activites.map((activite) => {
+    const actives = lignes.filter((l) => l.activite === activite && l.statut !== "annulee");
+    const totalEarned = actives.reduce((s, l) => s + l.montant_a_payer, 0);
+    const totalPaid = actives.reduce((s, l) => s + l.montant_verse, 0);
+    return {
+      activite, libelle: ACTIVITE_LABELS[activite], total_earned: totalEarned, total_paid: totalPaid,
+      en_attente_validation: 0, frais_depenses_total: 0, balance: Math.max(0, totalEarned - totalPaid), operations_count: actives.length,
+    };
+  });
+}
+
+function summaryDe(parActivite) {
+  const somme = (champ) => parActivite.reduce((s, l) => s + l[champ], 0);
+  return {
+    total_earned: somme("total_earned"), total_paid: somme("total_paid"), en_attente_validation: somme("en_attente_validation"),
+    frais_depenses_total: somme("frais_depenses_total"), balance: somme("balance"), operations_count: somme("operations_count"),
+  };
+}
+
+router.get(
+  "/api/v1/mobile/vehicules/rattaches",
+  defineEventHandler((event) => {
+    requireTestToken(event);
+    if (isMulti(event)) return MULTI_VEHICULES_RATTACHES;
+    // Forme de vehicules/rattaches : sans les champs hérités `capacite` et `conducteur`.
+    return TEST_VEHICLES.map((vehicle) => {
+      const rattache = { ...vehicle, liens: ["proprietaire"], lecture_restreinte: false, remuneration_parrain: [] };
+      delete rattache.capacite;
+      delete rattache.conducteur;
+      return rattache;
+    });
+  }),
+);
+
+router.get(
+  "/api/v1/mobile/commissions",
+  defineEventHandler((event) => {
+    requireTestToken(event);
+    const query = getQuery(event);
+    const multi = isMulti(event);
+    const recherche = String(query.recherche || "").toLowerCase();
+    const lignes = (multi ? MULTI_LIGNES : DEFAULT_LIGNES)
+      .filter((l) => !query.activite || l.activite === query.activite)
+      .filter((l) => !query.statut || l.statut === query.statut)
+      .filter((l) => !query.vehicule_id || l.vehicule?.id === query.vehicule_id)
+      .filter((l) => !recherche || [l.reference, l.vehicule?.nom_vehicule, l.vehicule?.immatriculation].join(" ").toLowerCase().includes(recherche))
+      .map((l) => ({
+        beneficiaire_libelle: null, operation: "vente", operation_label: "Ventes", montant_restant: Math.max(0, l.montant_a_payer - l.montant_verse), ...l,
+        activite_label: ACTIVITE_LABELS[l.activite], statut_label: STATUT_LABELS[l.statut],
+      }));
+    const activites = (multi ? ["proprietaire", "livreur", "parrain", "consultant"] : ["proprietaire"])
+      .filter((a) => !query.activite || a === query.activite);
+    const parActivite = parActiviteDe(lignes, activites);
+    const filters = {
+      periode: query.periode || null, annee: query.annee ? Number(query.annee) : null, mois: query.mois ? Number(query.mois) : null, quinzaine: query.quinzaine || null,
+      date_debut: query.date_debut || null, date_fin: query.date_fin || null, vehicule_id: query.vehicule_id || null,
+      activite: query.activite || null, statut: query.statut || null, recherche: query.recherche || null,
+    };
+
+    return { ...paginate(lignes, query, filters, "/api/v1/mobile/commissions"), resume: { summary: summaryDe(parActivite), par_activite: parActivite } };
+  }),
+);
+
+function multiDashboard(query) {
+  const parActivite = parActiviteDe(MULTI_LIGNES, ["proprietaire", "livreur", "parrain", "consultant"]);
+  const parVehicule = [
+    { vehicule: MULTI_VEHICULE_A, liens: ["proprietaire", "livreur"] },
+    { vehicule: MULTI_VEHICULE_C, liens: ["parrain"] },
+  ].map(({ vehicule, liens }) => {
+    const actives = MULTI_LIGNES.filter((l) => l.vehicule.id === vehicule.id && l.statut !== "annulee");
+    const totalEarned = actives.reduce((s, l) => s + l.montant_a_payer, 0);
+    const totalPaid = actives.reduce((s, l) => s + l.montant_verse, 0);
+    return {
+      vehicule_id: vehicule.id, nom_vehicule: vehicule.nom_vehicule, immatriculation: vehicule.immatriculation,
+      frais_depenses: 0, total_earned: totalEarned, total_paid: totalPaid, balance: totalEarned - totalPaid, liens,
+      par_activite: ["proprietaire", "livreur", "parrain", "consultant"]
+        .map((activite) => ({ activite, total_earned: actives.filter((l) => l.activite === activite).reduce((s, l) => s + l.montant_a_payer, 0) }))
+        .filter((ligne) => ligne.total_earned > 0),
+    };
+  });
+
+  return {
+    filters: {
+      period: query.annee || query.periode ? "custom" : query.period || "ce_mois", date_debut: query.date_debut || "2026-11-01", date_fin: query.date_fin || "2026-11-30",
+      periode: query.periode || null, annee: query.annee ? Number(query.annee) : null, mois: query.mois ? Number(query.mois) : null, quinzaine: query.quinzaine || null,
+      vehicule_id: query.vehicule_id || null, statut: query.statut || null,
+    },
+    summary: summaryDe(parActivite),
+    par_activite: parActivite,
+    depenses_total: 0,
+    par_vehicule: parVehicule,
+    vehicules: [
+      { ...MULTI_VEHICULE_A, liens: ["proprietaire", "livreur"] },
+      { ...MULTI_VEHICULE_C, liens: ["parrain"] },
+    ],
+  };
+}
+
 // Commissions par véhicule (contrat vérifié le 27/08/2026 contre le code réel
 // de App\Http\Controllers\Api\Client\VehiculeCommissionsController — voir
 // config/clientCommissions.ts). Scopé à un seul véhicule à la fois, comme le
@@ -530,6 +683,7 @@ router.get(
   defineEventHandler((event) => {
     requireTestToken(event);
     const query = getQuery(event);
+    if (isMulti(event)) return multiDashboard(query);
     const vehiculeId = query.vehicule_id || null;
     // Filtre de période de l'accueil : le mois en cours ou un mois passé, pour des tendances réelles.
     const period = query.period || (query.annee && Number(query.mois) !== new Date().getUTCMonth() + 1 ? "mois_passe" : "ce_mois");
@@ -562,7 +716,9 @@ router.get(
         vehicule_id: vehiculeId,
         statut: query.statut || null,
       },
-      summary,
+      summary: { ...summary, en_attente_validation: 0 },
+      // Compte propriétaire seul : une activité, égale au résumé (ADR 0054).
+      par_activite: [{ activite: "proprietaire", libelle: "Propriétaire", ...summary, en_attente_validation: 0 }],
       par_vehicule: parVehicule.map((v) => ({
         vehicule_id: v.vehicule_id,
         nom_vehicule: v.nom_vehicule,
@@ -571,8 +727,10 @@ router.get(
         total_earned: v.total_earned,
         total_paid: v.total_paid,
         balance: v.balance,
+        liens: ["proprietaire"],
+        par_activite: [{ activite: "proprietaire", total_earned: v.total_earned }],
       })),
-      vehicules: DASHBOARD_VEHICULES,
+      vehicules: DASHBOARD_VEHICULES.map((v) => ({ ...v, liens: ["proprietaire"] })),
     };
   }),
 );

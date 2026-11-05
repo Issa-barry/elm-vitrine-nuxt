@@ -120,6 +120,15 @@ test.describe("Dashboard — cartes KPI (tablette paysage / desktop)", () => {
     await expect(desktop.getByText("100%")).toBeVisible();
   });
 
+  test("\"Tout voir\" de \"Solde par véhicule\" mène aux commissions, pas à la liste des véhicules", async ({ page }) => {
+    await loginAsTestUser(page);
+    const kpiRow = page.locator(".client-desktop-dashboard");
+    await expect(kpiRow.getByText("ABARRY", { exact: true })).toBeVisible({ timeout: 10_000 });
+
+    await kpiRow.getByRole("link", { name: "Tout voir" }).click();
+    await expect(page).toHaveURL(/\/espace-client\/commissions$/);
+  });
+
   test("retour sur le dashboard après navigation : les données réelles restent visibles immédiatement (pas de page vide)", async ({ page }) => {
     await loginAsTestUser(page);
     const kpiRow = page.locator(".client-desktop-dashboard");

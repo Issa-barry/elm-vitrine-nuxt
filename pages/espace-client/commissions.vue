@@ -2,6 +2,8 @@
 import type { ClientDashboardResponse, DashboardPeriod, DashboardQuery, DashboardVehiculeBalance } from "~/config/clientDashboard";
 import type { PeriodeComptable } from "~/config/clientPeriodeComptable";
 import { TOUTE_ANNEE, bornesDepuisLien, periodeComptableQuery, periodePrecedente } from "~/config/clientPeriodeComptable";
+import { activiteLabel, estActivite, ordonnerActivites, repartitionVisible, type ActiviteCompte } from "~/config/clientActivites";
+import { periodeDuDetail } from "~/config/clientCommissionsCompte";
 
 // Refonte du 27/08/2026 (chantier relayé par une session Claude parallèle,
 // "elm-vitrine-nuxt-a4") : la page passe d'une liste de commissions
@@ -15,12 +17,18 @@ import { TOUTE_ANNEE, bornesDepuisLien, periodeComptableQuery, periodePrecedente
 // déconseillé (voir docs/api-espace-client-contract.md §5) — l'utiliser
 // aurait risqué un total divergent de celui, faisant autorité, affiché sur
 // le tableau de bord.
+//
+// Gains multi-activités (ADR 0054 côté elm-monolithe) : le tableau de bord
+// compte propriétaire, livreur, parrain et consultant ; la répartition par
+// activité s'affiche à partir de deux activités, et le détail des commissions
+// (GET /v1/mobile/commissions) porte l'origine de chaque part. Le détail suit la
+// période résolue par le serveur pour le tableau de bord (periodeDuDetail()).
 definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Commissions — Eau La Maman" });
 
 const { dashboard, isLoading, error, fetchDashboard } = useClientDashboard();
-const { vehicles: ownedVehicles, fetchVehicles } = useClientVehicles();
 const { periodeComptable } = useClientPeriodeComptable();
+const detail = useClientCommissionsCompte();
 const requestFetch = useRequestFetch();
 const route = useRoute();
 
@@ -51,10 +59,47 @@ const customDateFin = ref(bornesLien?.au ?? "");
 // carte "Solde par véhicule").
 const vehiculeFilter = ref<string>(typeof route.query.vehicule_id === "string" ? route.query.vehicule_id : ALL);
 
+// Véhicules du dashboard : rattachés (propriétaire, livreur, parrain) puis ceux
+// qui portent une part du compte (équipe quittée, consultant). Le libellé dit la
+// nature du lien quand le compte n'est pas propriétaire.
 const vehiculeOptions = computed(() => [
   { label: "Tous les véhicules", value: ALL },
-  ...ownedVehicles.value.map((vehicle) => ({ label: `${vehicle.nom} · ${vehicle.immatriculation}`, value: vehicle.id })),
+  ...(dashboard.value?.vehicules ?? []).map((vehicle) => {
+    const liens = ordonnerActivites((vehicle.liens ?? []) as string[]).filter((lien) => lien !== "proprietaire");
+    const precision = liens.length ? ` (${liens.map(activiteLabel).join(", ")})` : "";
+    return { label: `${vehicle.nom_vehicule} · ${vehicle.immatriculation}${precision}`, value: vehicle.id };
+  }),
 ]);
+
+// Détail des commissions : filtre Activité et recherche propres au détail.
+const TOUTES = "toutes";
+const activiteFilter = ref<ActiviteCompte | typeof TOUTES>(estActivite(route.query.activite) ? route.query.activite : TOUTES);
+const recherche = ref("");
+const parActivite = computed(() => dashboard.value?.par_activite ?? []);
+const activitesDuCompte = computed(() => ordonnerActivites(parActivite.value.map((ligne) => ligne.activite)));
+
+function chargerDetail() {
+  const filters = dashboard.value?.filters;
+  if (!filters) return;
+  detail.fetchCommissions({
+    ...periodeDuDetail(filters),
+    vehicule_id: vehiculeFilter.value !== ALL ? vehiculeFilter.value : undefined,
+    activite: activiteFilter.value !== TOUTES ? activiteFilter.value : undefined,
+    recherche: recherche.value.trim() || undefined,
+    per_page: 20,
+  });
+}
+
+let rechercheTimer: ReturnType<typeof setTimeout> | undefined;
+watch(recherche, () => {
+  clearTimeout(rechercheTimer);
+  rechercheTimer = setTimeout(chargerDetail, 300);
+});
+watch(activiteFilter, chargerDetail);
+onBeforeUnmount(() => clearTimeout(rechercheTimer));
+
+const detailTotal = computed(() => detail.reponse.value?.resume.summary.total_earned ?? null);
+const detailNombre = computed(() => detail.reponse.value?.meta.total ?? null);
 
 function buildDashboardQuery(): DashboardQuery | null {
   const vehiculeId = vehiculeFilter.value !== ALL ? vehiculeFilter.value : undefined;
@@ -99,6 +144,7 @@ async function loadDashboard() {
   const previousQuery = buildPreviousQuery(query.vehicule_id);
   const isCurrent = await fetchDashboard(query);
   if (!isCurrent) return;
+  chargerDetail();
 
   if (previousQuery) {
     try {
@@ -111,10 +157,7 @@ async function loadDashboard() {
   }
 }
 
-onMounted(() => {
-  loadDashboard();
-  fetchVehicles();
-});
+onMounted(loadDashboard);
 
 watch([periodFilter, vehiculeFilter, customDateDebut, customDateFin, periodeComptable], loadDashboard);
 
@@ -197,12 +240,14 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
         <small>Déjà payé : {{ formatGnf(summary.total_paid) }}</small>
       </div>
 
+      <ClientRepartitionActivites v-if="repartitionVisible(parActivite)" :par-activite="parActivite" />
+
       <section class="client-mobile-expenses__chart" aria-labelledby="commissions-evolution-title">
         <div class="client-mobile-expenses__chart-heading">
           <h2 id="commissions-evolution-title">Évolution des gains</h2>
         </div>
         <p class="text-muted-color text-sm mb-0">
-          Bientôt disponible — nécessite un endpoint backend dédié (série temporelle), voir le rapport de ce chantier.
+          Bientôt disponible
         </p>
       </section>
 
@@ -231,6 +276,19 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
         </div>
       </section>
       <p v-else class="client-mobile-empty-state">Aucun véhicule associé pour le moment.</p>
+
+      <ClientCommissionsDetail
+        v-model:activite="activiteFilter"
+        v-model:recherche="recherche"
+        :lignes="detail.lignes.value"
+        :total="detailTotal"
+        :nombre="detailNombre"
+        :chargement="detail.isLoading.value"
+        :erreur="detail.error.value?.message ?? null"
+        :a-d-autres-pages="detail.aDAutresPages.value"
+        :activites="activitesDuCompte"
+        @voir-plus="detail.voirPlus"
+      />
     </template>
   </section>
 
@@ -292,7 +350,6 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
           <div class="flex flex-col items-center justify-center text-center py-12" role="status">
             <i class="pi pi-chart-line text-muted-color !text-3xl mb-3" aria-hidden="true" />
             <strong class="text-lg">Bientôt disponible</strong>
-            <p class="text-muted-color mt-2 mb-0">Nécessite un endpoint backend dédié (série temporelle) — voir le rapport de ce chantier.</p>
           </div>
         </div>
       </div>
@@ -328,6 +385,27 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
             </li>
           </ul>
           <p v-else class="text-muted-color">Aucun véhicule associé pour le moment.</p>
+        </div>
+      </div>
+
+      <div v-if="repartitionVisible(parActivite)" class="col-span-12 xl:col-span-4">
+        <ClientRepartitionActivites class="card !mb-0" :par-activite="parActivite" />
+      </div>
+      <div class="col-span-12" :class="{ 'xl:col-span-8': repartitionVisible(parActivite) }">
+        <div class="card">
+          <ClientCommissionsDetail
+            v-model:activite="activiteFilter"
+            v-model:recherche="recherche"
+            class="!mt-0"
+            :lignes="detail.lignes.value"
+            :total="detailTotal"
+            :nombre="detailNombre"
+            :chargement="detail.isLoading.value"
+            :erreur="detail.error.value?.message ?? null"
+            :a-d-autres-pages="detail.aDAutresPages.value"
+            :activites="activitesDuCompte"
+            @voir-plus="detail.voirPlus"
+          />
         </div>
       </div>
     </template>

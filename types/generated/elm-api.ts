@@ -209,7 +209,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description `roles` liste **tous** les rôles du compte (un compte peut cumuler un rôle staff ET un rôle client/proprietaire/livreur, cf. décision multi-rôle du 26/08/2026) — **tableau non ordonné**, ne jamais utiliser `roles[0]` comme "rôle principal" (bug de conception déjà rencontré côté frontend). Un frontend doit vérifier `roles.some(r => ['client','proprietaire','livreur'].includes(r))` pour l'accès espace client, jamais une égalité stricte. `context` est résolu exclusivement via `ClientIdentityResolver` à partir du compte authentifié, jamais un paramètre client. `context.parrain_id` suit uniquement le rattachement posé au back-office (ADR 0050). */
+        /** @description `roles` liste **tous** les rôles du compte (un compte peut cumuler un rôle staff ET un rôle client/proprietaire/livreur, cf. décision multi-rôle du 26/08/2026) — **tableau non ordonné**, ne jamais utiliser `roles[0]` comme "rôle principal" (bug de conception déjà rencontré côté frontend). Les rôles ne décident jamais de l'accès à l'espace client : tout compte actif y entre (compte unique, ADR 0055). Ce qui s'affiche vient de `context` (activités du compte) ; tous ses ids à `null` et `consultant_ids` vide = compte sans activité, accueil neutre. `context` est résolu exclusivement via `ClientIdentityResolver` à partir du compte authentifié, jamais un paramètre client. `context.parrain_id` et `context.consultant_ids` suivent le rattachement posé sur la fiche, automatique ou manuel (ADR 0050, ADR 0056). */
         get: operations["auth.me"];
         put?: never;
         post?: never;
@@ -275,6 +275,46 @@ export interface paths {
             cookie?: never;
         };
         get: operations["auth.confirm-email"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mobile/commissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Détail des commissions (toutes activités)
+         * @description Une ligne par part du compte, de la plus récente à la plus ancienne (date de gain). `activite` (`proprietaire`, `livreur`, `parrain`, `consultant`) vient du type de bénéficiaire enregistré sur la part, jamais des rôles du compte ; `beneficiaire_libelle` nomme l'entreprise (ou la personne) pour un consultant. Les commissions annulées restent listées avec leur statut mais sortent de `resume`. `resume` porte, sur les mêmes filtres et toutes les pages, les mêmes champs que `summary` et `par_activite` du dashboard. Période : `periode` (période rapide), `annee` + `mois` + `quinzaine` (`P1` du 1er au 15, `P2` du 16 à la fin du mois, `TOUT` ou omise = le mois) ou `date_debut`/`date_fin`, exclusifs (422 sinon). `recherche` : référence de l'opération, nom ou immatriculation du véhicule. Un `vehicule_id` sans part du compte renvoie une liste vide.
+         */
+        get: operations["client.commissions.mine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mobile/vehicules/rattaches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Véhicules rattachés au compte (propriétaire, livreur, parrain)
+         * @description Un véhicule par ligne, jamais dupliqué : `liens` porte chaque nature de rattachement actuel (`proprietaire`, `livreur` de l'équipe actuelle, `parrain`). Un consultant n'a aucun véhicule rattaché. Un véhicule quitté sort de la liste ; ses commissions restent dans `GET /v1/mobile/commissions`. **Lecture seule.** `lecture_restreinte` = véhicule seulement parrainé : identité du véhicule et nom du propriétaire, jamais ses coordonnées ni son identifiant (`proprietaire.id`/`telephone` à `null`), ni l'équipe, ni les capacités, ni l'état de livraison (`en_livraison` à `null`) ; ventes et dépenses de ce véhicule restent fermées. `remuneration_parrain` : part du parrain en vigueur (GNF par pack) quand le compte le parraine.
+         */
+        get: operations["client.vehicules.rattaches"];
         put?: never;
         post?: never;
         delete?: never;
@@ -412,22 +452,35 @@ export interface paths {
          * @description Montants en **GNF** (franc guinéen), sans décimales dans la pratique mais
          *     typés nombre (jamais des centimes, jamais un float à diviser par 100).
          *
+         *     Toutes les activités du compte sont comptées (ADR 0054) : propriétaire, livreur, parrain et
+         *     consultant. Chaque part l'est une seule fois, dans l'activité de son bénéficiaire (la part du
+         *     parrain est déjà prise sur l'enveloppe Livreur). Une commission annulée n'entre dans aucun
+         *     montant.
+         *
          *     Définitions exactes des champs de `summary` (mêmes noms, mêmes valeurs que
          *     le dashboard Inertia — `App\Services\Client\ClientEarningsService`) :
-         *     - `total_earned` : commissions de vente + logistique gagnées sur la période (brut dû).
+         *     - `total_earned` : commissions gagnées sur la période, toutes activités (brut dû, parts « Créée » comprises).
          *     - `total_paid` : déjà versé sur ces mêmes commissions.
-         *     - `frais_depenses_total` : dépenses véhicule validées sur la période (proprietaire uniquement — jamais imputées à un livreur dans ce moteur).
-         *     - `balance` : `total_earned - frais_depenses_total - total_paid`, **jamais négatif** (plancher à 0 — un solde négatif n'est jamais affiché comme dette du propriétaire).
-         *     - `operations_count` : nombre de commissions (vente + logistique) entrant dans `total_earned`.
+         *     - `en_attente_validation` : part de `total_earned` encore « Créée » (période de paiement pas encore validée).
+         *     - `frais_depenses_total` : dépenses validées que les fiches de paiement déduisent sur la période (dépenses imputées à chaque bénéficiaire du compte, et dépenses des véhicules du propriétaire). Filtré sur un véhicule : seules les dépenses de ce véhicule.
+         *     - `balance` (reste à payer) : par activité `total_earned - en_attente_validation - frais_depenses_total - total_paid`, **jamais négatif**, puis additionné.
+         *     - `operations_count` : nombre de parts entrant dans `total_earned`.
          *
-         *     `depenses_total` (hors `summary`, affichage seul) : `frais_depenses_total` + dépenses validées
-         *     rattachées directement au livreur sur la période (ex. avance sur salaire), sauf filtre
-         *     `vehicule_id`. **Jamais déduit de `balance`.**
+         *     `par_activite` : les mêmes champs par activité du compte (toutes ses activités, même à 0) ;
+         *     leur somme donne `summary`.
+         *
+         *     `depenses_total` (hors `summary`) : égal à `frais_depenses_total`.
          *
          *     `par_vehicule` : même détail que `summary` mais par véhicule (schéma
-         *     `VehiculeEarningsRow`), **toujours la liste complète du parc accessible**
-         *     même si `vehicule_id` filtre le calcul (les véhicules hors filtre
-         *     apparaissent avec des montants à 0) — ce n'est pas un bug.
+         *     `VehiculeEarningsRow`), **toujours la liste complète des véhicules rattachés**
+         *     (propriétaire, livreur de l'équipe actuelle, parrain) même si `vehicule_id` filtre le calcul
+         *     (les véhicules hors filtre apparaissent avec des montants à 0) — ce n'est pas un bug. S'y
+         *     ajoute tout véhicule portant une part du compte sur la période (équipe quittée, commission
+         *     de consultant), avec `liens` vide. `liens` : nature du rattachement ; `par_activite` : gains
+         *     du compte sur ce véhicule, par activité.
+         *
+         *     `vehicules` : véhicules rattachés puis véhicules portant une part du compte (toutes
+         *     périodes), avec `liens` ; c'est la liste acceptée par le filtre `vehicule_id` (ignoré sinon).
          *
          *     `filters.period` : raccourci appliqué (`custom` = `date_debut`/`date_fin`
          *     pris tels quels, sinon calculés serveur — jamais un défaut inventé côté
@@ -825,7 +878,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Liste des véhicules du proprietaire (les siens) ou du livreur (ceux de son équipe) — jamais toute la flotte de l'organisation. **Aucun statut "Entretien"/maintenance n'existe dans le modèle ELM** — seul `is_active` (booléen) existe ; n'affichez pas un statut de ce type sans colonne backend dédiée (elle n'existe pas). `capacite`/`conducteur` sont des champs hérités conservés pour compatibilité descendante — la source canonique est désormais `capacites[]` (une entrée par catégorie, cf. VehiculeCapacite) et `equipe[]` (tous les membres actifs, avec `role` = valeur réelle stockée en base : `chauffeur`/`convoyeur`, jamais traduite ; `nom_complet` peut être une désignation provisoire comme `Chauffeur-1`, à remplacer à l'affichage par `prenom` + `nom` quand les deux sont renseignés). `proprietaire` est `null` si le véhicule n'a aucun propriétaire renseigné. */
+        /** @description Liste des véhicules du proprietaire (les siens) ou du livreur (ceux de son équipe) — jamais toute la flotte de l'organisation. **Aucun statut "Entretien"/maintenance n'existe dans le modèle ELM** — seul `is_active` (booléen) existe ; n'affichez pas un statut de ce type sans colonne backend dédiée (elle n'existe pas). `capacite`/`conducteur` sont des champs hérités conservés pour compatibilité descendante — la source canonique est désormais `capacites[]` (une entrée par catégorie, cf. VehiculeCapacite) et `equipe[]` (tous les membres actifs, avec `role` = valeur réelle stockée en base : `chauffeur`/`convoyeur`, jamais traduite ; `nom_complet` peut être une désignation provisoire comme `Chauffeur-1`, à remplacer à l'affichage par `prenom` + `nom` quand les deux sont renseignés). `proprietaire` est `null` si le véhicule n'a aucun propriétaire renseigné. Les véhicules parrainés n'y figurent pas : cf. `GET /v1/mobile/vehicules/rattaches`. */
         get: operations["client.vehicules.mine"];
         put?: never;
         post?: never;
@@ -871,6 +924,17 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ActiviteEarningsRow */
+        ActiviteEarningsRow: {
+            activite: string;
+            libelle: string;
+            total_earned: number;
+            total_paid: number;
+            en_attente_validation: number;
+            frais_depenses_total: number;
+            balance: number;
+            operations_count: number;
+        };
         /** CheckPhoneRequest */
         CheckPhoneRequest: {
             telephone: string;
@@ -897,6 +961,26 @@ export interface components {
                 prix_vente_snapshot: number;
                 total_ligne: number;
             }[];
+        };
+        /** CommissionClientRow */
+        CommissionClientRow: {
+            id: string;
+            activite: string | null;
+            /** @enum {string|null} */
+            activite_label: "Propriétaire" | "Livreur" | "Parrain" | "Consultant" | null;
+            beneficiaire_libelle: string | null;
+            /** @enum {string} */
+            operation: "logistique" | "vente";
+            operation_label: string | null;
+            reference: string;
+            vehicule: components["schemas"]["VehiculeSummary"] | null;
+            date: string;
+            montant_a_payer: number;
+            montant_verse: number;
+            montant_restant: number;
+            statut: string;
+            /** @enum {string} */
+            statut_label: "Créée" | "Impayée" | "Partiellement payée" | "Payée" | "Annulée";
         };
         /** CommissionParrainResource */
         CommissionParrainResource: {
@@ -1249,6 +1333,24 @@ export interface components {
             total_earned: number;
             total_paid: number;
             balance: number;
+            liens: unknown[];
+            par_activite: {
+                activite: string;
+                total_earned: number;
+            }[];
+        };
+        /** VehiculeLieSummary */
+        VehiculeLieSummary: {
+            id: string;
+            nom_vehicule: string;
+            immatriculation: string;
+            liens: unknown[];
+        };
+        /** VehiculeSummary */
+        VehiculeSummary: {
+            id: string;
+            nom_vehicule: string;
+            immatriculation: string;
         };
         /**
          * WebPushSubscriptionStoreRequest
@@ -1300,18 +1402,6 @@ export interface components {
         };
         /** @description Not found */
         ModelNotFoundException: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": {
-                    /** @description Error overview. */
-                    message: string;
-                };
-            };
-        };
-        /** @description Authorization error */
-        AuthorizationException: {
             headers: {
                 [name: string]: unknown;
             };
@@ -1412,7 +1502,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
             422: components["responses"]["ValidationException"];
         };
     };
@@ -1857,6 +1946,12 @@ export interface operations {
                             livreur_id: null;
                             /** @description Lu sur le rattachement posé au back-office (ADR 0050), jamais sur le téléphone. */
                             parrain_id: string | null;
+                            /**
+                             * @description Consultants (prestataires) dont le compte perçoit les commissions, même rattachement
+                             *     que le parrain (ADR 0050, 0054). Jamais `prestataire_id` : ce nom est réservé côté
+                             *     frontend à un futur espace « prestations ».
+                             */
+                            consultant_ids: string[];
                         };
                     };
                 };
@@ -2058,6 +2153,145 @@ export interface operations {
             };
         };
     };
+    "client.commissions.mine": {
+        parameters: {
+            query?: {
+                periode?: "aujourd_hui" | "hier" | "cette_semaine" | "semaine_precedente" | "ce_mois" | "mois_precedent" | "cette_annee" | "annee_precedente" | "tout" | null;
+                annee?: number | null;
+                mois?: number | null;
+                quinzaine?: "P1" | "P2" | "TOUT" | null;
+                date_debut?: string | null;
+                date_fin?: string | null;
+                vehicule_id?: string | null;
+                activite?: "proprietaire" | "livreur" | "parrain" | "consultant" | null;
+                statut?: "creee" | "impaye" | "partiel" | "paye" | "annulee" | null;
+                recherche?: string | null;
+                per_page?: number | null;
+                page?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["CommissionClientRow"][];
+                        links: {
+                            first: string;
+                            last: string;
+                            prev: string | null;
+                            next: string | null;
+                        };
+                        meta: {
+                            current_page: number;
+                            last_page: number;
+                            per_page: number;
+                            total: number;
+                        };
+                        resume: {
+                            summary: {
+                                total_earned: number;
+                                total_paid: number;
+                                en_attente_validation: number;
+                                frais_depenses_total: number;
+                                balance: number;
+                                operations_count: number;
+                            };
+                            par_activite: unknown[];
+                        };
+                        filters: {
+                            periode: unknown;
+                            annee: number | null;
+                            mois: number | null;
+                            quinzaine: string | null;
+                            date_debut: string;
+                            date_fin: string;
+                            vehicule_id: unknown;
+                            activite: string | null;
+                            statut: unknown;
+                            recherche: string | null;
+                        };
+                    };
+                };
+            };
+            401: components["responses"]["AuthenticationException"];
+            422: components["responses"]["ValidationException"];
+        };
+    };
+    "client.vehicules.rattaches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                        nom: string;
+                        immatriculation: string;
+                        type: string;
+                        /** @enum {string} */
+                        statut: "actif" | "inactif";
+                        is_active: boolean;
+                        photo_url: string | null;
+                        liens: unknown[];
+                        lecture_restreinte: boolean;
+                        en_livraison: string | null;
+                        role: string;
+                        proprietaire: {
+                            id: string;
+                            nom_complet: string;
+                            telephone: string;
+                        } | null | {
+                            id: null;
+                            nom_complet: string;
+                            telephone: null;
+                        };
+                        equipe: {
+                            id: string;
+                            nom_complet: string | null;
+                            /**
+                             * @description nom_complet peut être une désignation provisoire ("Chauffeur-1") : le frontend
+                             *     préfère prénom + nom quand les deux sont connus.
+                             */
+                            prenom: string;
+                            nom: string;
+                            telephone: string;
+                            role: string;
+                            ordre: number;
+                        }[];
+                        capacites: {
+                            categorie_id: string;
+                            categorie: string;
+                            capacite: number;
+                        }[];
+                        remuneration_parrain: {
+                            processus_label: string;
+                            categorie_nom: string;
+                            montant: number;
+                            a_definir: boolean;
+                            /** @description PARRAIN-023 : date de début de la part en vigueur. */
+                            depuis: string | null;
+                        }[];
+                    }[];
+                };
+            };
+            401: components["responses"]["AuthenticationException"];
+        };
+    };
     "client.parrain.synthese": {
         parameters: {
             query?: never;
@@ -2091,7 +2325,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
         };
     };
     "client.parrain.vehicules": {
@@ -2129,7 +2362,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
         };
     };
     "client.parrain.commissions": {
@@ -2197,7 +2429,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
             422: components["responses"]["ValidationException"];
         };
     };
@@ -2255,7 +2486,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
             422: components["responses"]["ValidationException"];
         };
     };
@@ -2372,34 +2602,21 @@ export interface operations {
                         summary: {
                             total_earned: number;
                             total_paid: number;
+                            en_attente_validation: number;
                             frais_depenses_total: number;
-                            /**
-                             * @description (float) explicite : max(0, float) renvoie l'entier littéral 0 (pas 0.0) dès que le
-                             *     solde est nul/négatif — même sortie JSON (0), mais un type PHP sans ambiguïté pour
-                             *     l'inférence statique (Scramble/PHPStan) et pour tout futur usage strict du retour.
-                             */
                             balance: number;
-                            /**
-                             * @description (int) explicite pour la même raison que (float) ci-dessus sur `balance` — la
-                             *     somme de deux Collection::count() est déjà un int à l'exécution, ce cast ne
-                             *     change rien au comportement, seulement à la clarté du type pour l'analyse statique.
-                             */
                             operations_count: number;
                         };
+                        par_activite: components["schemas"]["ActiviteEarningsRow"][];
                         depenses_total: number;
                         summary_evolution: components["schemas"]["SummaryEvolution"] | null;
                         comparison_period: components["schemas"]["ComparisonPeriod"] | null;
                         par_vehicule: components["schemas"]["VehiculeEarningsRow"][];
-                        vehicules: {
-                            id: string;
-                            nom_vehicule: string;
-                            immatriculation: string;
-                        }[];
+                        vehicules: components["schemas"]["VehiculeLieSummary"][];
                     };
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
             422: components["responses"]["ValidationException"];
         };
     };
@@ -2437,7 +2654,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
         };
     };
     "client.contact": {
@@ -2574,7 +2790,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
             422: components["responses"]["ValidationException"];
         };
     };
@@ -2845,7 +3060,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
         };
     };
     "client.push-token": {
@@ -3035,7 +3249,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
             422: components["responses"]["ValidationException"];
         };
     };
@@ -3062,7 +3275,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3094,7 +3306,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
         };
     };
     "client.profile.update": {
@@ -3119,7 +3330,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3158,7 +3368,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
             422: components["responses"]["ValidationException"];
         };
     };
@@ -3183,7 +3392,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
         };
     };
     "client.propositions-vehicules.store": {
@@ -3211,7 +3419,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
             422: components["responses"]["ValidationException"];
         };
     };
@@ -3308,7 +3515,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
         };
     };
     "client.vehicules.commissions": {
@@ -3331,7 +3537,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3374,7 +3579,6 @@ export interface operations {
                 };
             };
             401: components["responses"]["AuthenticationException"];
-            403: components["responses"]["AuthorizationException"];
             404: {
                 headers: {
                     [name: string]: unknown;

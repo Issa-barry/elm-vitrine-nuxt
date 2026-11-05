@@ -95,8 +95,9 @@ test.describe("Espace client — véhicules", () => {
     await expect(detail.getByText("+224620333444")).toBeVisible();
     await expect(detail.getByText("Convoyeur", { exact: true })).toBeVisible();
 
-    // Propriétaire (nouveau, jamais affiché avant le 27/08/2026).
-    await expect(detail.getByText("Propriétaire")).toBeVisible();
+    // Propriétaire (nouveau, jamais affiché avant le 27/08/2026). Par son titre : le
+    // badge de rattachement « Propriétaire » (ADR 0054) porte le même mot.
+    await expect(detail.getByRole("heading", { name: "Propriétaire" })).toBeVisible();
     await expect(detail.getByText("Issa Barry")).toBeVisible();
     await expect(detail.getByText("+224620010203")).toBeVisible();
 
@@ -129,7 +130,7 @@ test.describe("Espace client — véhicules", () => {
     await expect(detail.getByText("Capacité", { exact: true })).toBeVisible();
     await expect(detail.getByText("Équipe de livraison")).toHaveCount(0);
     await expect(detail.getByText("Capacités", { exact: true })).toHaveCount(0);
-    await expect(detail.getByText("Propriétaire")).toHaveCount(0);
+    await expect(detail.getByRole("heading", { name: "Propriétaire" })).toHaveCount(0);
   });
 
   test("desktop : l'action \"œil\" ouvre la même boîte de dialogue", async ({ page }) => {

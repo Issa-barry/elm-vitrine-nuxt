@@ -36,8 +36,8 @@ async function fillCredentials(page: Page) {
   await page.getByPlaceholder("••••••••").fill("MotDePasse123");
 }
 
-async function mockLoginSuccess(page: Page, roles: string[]) {
-  const meResponse = { ...mockMeResponse, roles };
+async function mockLoginSuccess(page: Page, roles: string[], overrides: Record<string, unknown> = {}) {
+  const meResponse = { ...mockMeResponse, roles, ...overrides };
   await page.route("**/api/auth/login", (route) =>
     route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ user: meResponse }) }),
   );
@@ -95,15 +95,16 @@ test.describe("Connexion", () => {
     await expect(page).toHaveURL(/\/connexion$/);
   });
 
-  // Un compte staff/admin/super_admin obtient un token Sanctum valide comme
-  // n'importe qui (LoginController ne vérifie aucun rôle, partagé avec le
-  // mobile) — c'est au frontend de refuser explicitement l'accès à cet
-  // espace, qui n'est pas l'application backoffice. Voir
-  // composables/useAuth.ts::login() et config/auth.test.ts pour la règle.
-  test("compte sans rôle client/proprietaire/livreur (ex. admin) est refusé sans rediriger", async ({ page }) => {
+  // Compte unique (ADR 0055 côté elm-monolithe) : l'espace client est ouvert à
+  // tout compte actif. Un agent du back-office sans activité se connecte avec
+  // ses identifiants habituels et arrive sur l'accueil neutre, sans erreur ni
+  // déconnexion. Voir config/clientAccueil.ts.
+  test("agent du back-office sans activité (ex. admin) est accepté sur l'accueil neutre", async ({ page }) => {
     let logoutCalled = false;
 
-    await mockLoginSuccess(page, ["admin"]);
+    await mockLoginSuccess(page, ["admin"], {
+      context: { organization_id: "org-1", client_id: null, proprietaire_id: null, livreur_id: null, parrain_id: null, consultant_ids: [] },
+    });
     await page.route("**/api/auth/logout", (route) => {
       logoutCalled = true;
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ message: "ok" }) });
@@ -116,18 +117,31 @@ test.describe("Connexion", () => {
     await fillCredentials(page);
     await page.getByRole("button", { name: "Se connecter", exact: true }).click();
 
-    await expect(page.getByText("Ce compte n'a pas accès à l'espace client.")).toBeVisible();
-    await expect(page).toHaveURL(/\/connexion$/);
-    expect(logoutCalled).toBe(true);
+    await expect(page).toHaveURL(/\/espace-client\/bienvenue$/, { timeout: 10_000 });
+    await expect(page.getByTestId("accueil-sans-activite")).toContainText("Aucune activité");
+    expect(logoutCalled).toBe(false);
   });
 
-  // Matrice de cumul de rôles confirmée côté backend le 26/08/2026 (117/117
-  // tests, App\Models\User::hasBackofficeAccess()/hasClientAccess()) : couche
-  // exhaustivement en unitaire dans config/auth.test.ts (hasClientSpaceAccess).
-  // Ici, seulement 2 cas représentatifs pour prouver le branchement bout en
-  // bout via la vraie UI — pas une répétition de la matrice complète en E2E.
+  // Cumul de rôles : un rôle back-office ne change rien à l'accès, les menus
+  // suivent `context` (config/clientCapabilities.test.ts). Ici, quelques cas
+  // représentatifs pour prouver le branchement bout en bout via la vraie UI.
   test("compte propriétaire seul est accepté", async ({ page }) => {
     await mockLoginSuccess(page, ["proprietaire"]);
+
+    await page.goto("/connexion", { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(300);
+
+    await fillCredentials(page);
+    await page.getByRole("button", { name: "Se connecter", exact: true }).click();
+
+    await expect(page).toHaveURL(/\/espace-client$/, { timeout: 10_000 });
+  });
+
+  test("agent du back-office rattaché à une activité, sans rôle externe, est accepté avec son compte habituel", async ({ page }) => {
+    await mockLoginSuccess(page, ["comptable"], {
+      context: { organization_id: "org-1", client_id: null, proprietaire_id: "proprietaire-1", livreur_id: null },
+    });
 
     await page.goto("/connexion", { waitUntil: "domcontentloaded" });
     await page.waitForLoadState("load");
@@ -150,6 +164,35 @@ test.describe("Connexion", () => {
     await page.getByRole("button", { name: "Se connecter", exact: true }).click();
 
     await expect(page).toHaveURL(/\/espace-client$/, { timeout: 10_000 });
+  });
+
+  // Format national français (06/07…) : le 0 initial doit pouvoir être saisi
+  // en plus des 9 chiffres du pays, puis être retiré du numéro envoyé (E.164).
+  // Pays choisi via la clé localStorage relue au montage (login_country_code),
+  // plutôt qu'en manipulant le Select PrimeVue.
+  test("France : le 0 initial est accepté à la saisie et retiré du numéro envoyé", async ({ page }) => {
+    let sentTelephone: string | undefined;
+
+    await mockLoginSuccess(page, ["client"]);
+    await page.route("**/api/auth/login", (route) => {
+      sentTelephone = route.request().postDataJSON().telephone;
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ user: mockMeResponse }) });
+    });
+    await page.addInitScript(() => localStorage.setItem("login_country_code", "FR"));
+
+    await page.goto("/connexion", { waitUntil: "domcontentloaded" });
+    await page.waitForLoadState("load");
+    await page.waitForTimeout(300);
+
+    const phoneInput = page.getByLabel("Numéro de téléphone");
+    await phoneInput.pressSequentially("07588550391");
+    await expect(phoneInput).toHaveValue("0758855039");
+
+    await page.getByPlaceholder("••••••••").fill("MotDePasse123");
+    await page.getByRole("button", { name: "Se connecter", exact: true }).click();
+
+    await expect(page).toHaveURL(/\/espace-client$/, { timeout: 10_000 });
+    expect(sentTelephone).toBe("+33758855039");
   });
 
   test("le lien mot de passe oublié mène à /mot-de-passe-oublie", async ({ page }) => {

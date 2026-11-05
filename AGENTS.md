@@ -83,6 +83,24 @@ Règles pour tout agent IA intervenant sur ce dépôt :
    fichiers et signaler le conflit de périmètre plutôt que de retenter en
    boucle.
 
+## Compte unique EAU LA MAMAN
+
+Règle (ADR 0055 côté `elm-monolithe`) : « Le front Nuxt est un espace ouvert à
+tous les utilisateurs. Toute personne peut le consulter. Tout utilisateur
+disposant d'un compte actif peut s'y connecter avec son identité EAU LA MAMAN
+existante, quels que soient ses rôles et ses activités métier. L'absence
+d'activité n'est jamais un motif de refus d'accès au front. Seules les données
+et fonctionnalités métier restent conditionnées par les rattachements et
+autorisations propres à chaque utilisateur. »
+
+- Le front est ouvert à tous : visiteurs pour les pages publiques, et tout
+  compte actif pour l'espace client, même sans activité. Ne jamais refuser une
+  connexion pour un rôle ou une activité manquants, ni créer de compte
+  « front ». Les menus suivent `context` (`config/clientCapabilities.ts`) ; un
+  compte sans activité arrive sur `/espace-client/bienvenue`.
+- Ne pas modifier l'inscription, la connexion ou l'OTP pour un besoin d'accès.
+  Les données restent limitées côté Laravel aux activités du compte.
+
 ## PWA
 
 Voir [`docs/pwa.md`](docs/pwa.md) pour le détail (manifest, service worker,

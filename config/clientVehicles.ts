@@ -1,4 +1,5 @@
-import type { ApiVehicule } from "~/types/api";
+import type { ApiVehicule, ApiVehiculesRattachesResponse } from "~/types/api";
+import { activiteLabel, type ActiviteCompte } from "./clientActivites";
 
 // Membre d'équipe (véhicule.equipe[]) — `role` est la valeur RÉELLE stockée
 // en base côté elm-monolithe (`chauffeur`/`convoyeur`), jamais traduite par
@@ -66,6 +67,29 @@ export type ClientVehicle = Omit<ApiVehicule, "en_livraison"> & {
   equipe: ClientVehicleTeamMember[];
   capacites: ClientVehicleCapacity[];
 };
+
+// Véhicule rattaché au compte (GET /v1/mobile/vehicules/rattaches, ADR 0054 côté
+// elm-monolithe) : un véhicule par ligne, `liens` = chaque nature de rattachement
+// (propriétaire, livreur, parrain). `lecture_restreinte` : véhicule seulement
+// parrainé, le backend ne renvoie alors que son identité et le nom du
+// propriétaire — équipe, capacités, coordonnées et état de livraison restent
+// vides (`en_livraison` à null). Corrections du type généré : `liens` typé, et
+// `en_livraison` booléen (généré en string, même imperfection que ClientVehicle).
+export type ClientVehicleRattache = Omit<ApiVehiculesRattachesResponse[number], "en_livraison" | "liens" | "proprietaire" | "equipe" | "capacites"> & {
+  en_livraison: boolean | null;
+  liens: ActiviteCompte[];
+  proprietaire: { id: string | null; nom_complet: string; telephone: string | null } | null;
+  equipe: ClientVehicleTeamMember[];
+  capacites: ClientVehicleCapacity[];
+};
+
+/** Texte recherché par la page Véhicules : identité, conducteur, propriétaire et nature du lien. */
+export function vehiculeRechercheTexte(vehicle: Pick<ClientVehicleRattache, "nom" | "immatriculation" | "type" | "proprietaire" | "liens">, conducteur: string | null): string {
+  return [vehicle.nom, vehicle.immatriculation, vehicle.type, conducteur, vehicle.proprietaire?.nom_complet, ...vehicle.liens.map(activiteLabel)]
+    .filter(Boolean)
+    .join(" ")
+    .toLocaleLowerCase("fr");
+}
 
 // Libellé d'affichage — le backend ne traduit jamais `role` (valeur brute
 // chauffeur/convoyeur). Repli sur la valeur brute capitalisée pour un rôle

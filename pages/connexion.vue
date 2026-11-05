@@ -112,12 +112,19 @@ watch(selectedCode, (code) => {
   }
 });
 
+// Le 0 initial du format national (06/07… en France) est accepté à la saisie
+// en plus des chiffres du pays, puis retiré du numéro envoyé — même règle que
+// pages/inscription.vue et pages/mot-de-passe-oublie.vue.
 const onPhoneInput = (event: Event) => {
   const target = event.target as HTMLInputElement;
-  const digitsOnly = target.value.replace(/\D/g, "").slice(0, selectedCountry.value.digits);
+  const raw = target.value.replace(/\D/g, "");
+  const maxDigits = selectedCountry.value.digits + (raw.startsWith("0") ? 1 : 0);
+  const digitsOnly = raw.slice(0, maxDigits);
   phoneDigits.value = digitsOnly;
   target.value = digitsOnly;
 };
+
+const telephone = computed(() => `${selectedCountry.value.dial}${phoneDigits.value.replace(/^0/, "")}`);
 
 // Reproduit exactement App\Services\PhoneNormalizer::normalize() côté back :
 // le numéro final doit commencer par "+" et compter entre 7 et 15 chiffres
@@ -138,7 +145,7 @@ const hasAttemptedSubmit = ref(false);
 // le back ne l'exige pas.
 const phoneError = computed(() => {
   if (!phoneDigits.value) return "Numéro de téléphone requis.";
-  if (!normalizePhone(`${selectedCountry.value.dial}${phoneDigits.value}`).isValid) {
+  if (!normalizePhone(telephone.value).isValid) {
     return "Numéro de téléphone invalide.";
   }
   return "";
@@ -158,7 +165,7 @@ const passwordError = computed(() => (password.value ? "" : "Mot de passe requis
 // par server/api/auth/login.post.ts) pour ne jamais le dupliquer/diverger
 // entre composants.
 const buildCredentials = () => ({
-  telephone: `${selectedCountry.value.dial}${phoneDigits.value}`,
+  telephone: telephone.value,
   password: password.value,
 });
 
@@ -244,7 +251,7 @@ const switchToPassword = () => {
   mode.value = "password";
 };
 
-const otpTelephone = computed(() => `${selectedCountry.value.dial}${phoneDigits.value}`);
+const otpTelephone = telephone;
 
 // Le téléphone reste éditable tant qu'aucun code n'a été envoyé (mode
 // password, ou mode otp avant "code"/"verifying") — au-delà, affiché en
@@ -401,7 +408,7 @@ onBeforeUnmount(() => {
               inputmode="numeric"
               autocomplete="tel-national"
               :placeholder="`${selectedCountry.digits} chiffres`"
-              :maxlength="selectedCountry.digits"
+              :maxlength="selectedCountry.digits + 1"
               aria-label="Numéro de téléphone"
               :aria-invalid="hasAttemptedSubmit && !!phoneError"
               :aria-describedby="hasAttemptedSubmit && phoneError ? 'connexion-phone-error' : undefined"
