@@ -113,14 +113,15 @@ test.describe("Espace parrain", () => {
     await expect(page).toHaveURL(/\/espace-client\//);
   });
 
-  test("propriétaire et parrain : son menu ne change pas et une carte ouvre l'espace parrain", async ({ page }) => {
+  test("propriétaire et parrain : son menu ne change pas, l'accueil n'a pas de carte vers l'espace parrain", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await loginCumul(page);
 
     const items = page.locator(".client-mobile-bottom-nav .client-mobile-nav-item");
     await expect(items).toHaveText(["Accueil", "Véhicules", "Livraisons", "Commissions", "Dépenses"], { timeout: 20_000 });
+    await expect(page.locator(".client-mobile-dashboard").getByText("Mes parrainages")).toHaveCount(0);
 
-    await page.getByTestId("carte-espace-parrain").click();
+    await page.goto("/espace-client/parrain");
     await expect(page).toHaveURL(/\/espace-client\/parrain$/);
     await expect(items).toHaveText(["Accueil", "Véhicules", "Commissions", "Paiements", "Mon espace"]);
 
@@ -143,7 +144,6 @@ test.describe("Espace parrain", () => {
     await loginAsTestUser(page);
 
     await expect(page.locator(".layout-menu").getByText("Espace parrain")).toHaveCount(0);
-    await expect(page.getByTestId("carte-espace-parrain")).toHaveCount(0);
 
     await page.goto("/espace-client/parrain");
     await expect(page).toHaveURL(/\/espace-client$/);

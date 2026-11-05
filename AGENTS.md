@@ -101,6 +101,12 @@ autorisations propres à chaque utilisateur. »
 - Ne pas modifier l'inscription, la connexion ou l'OTP pour un besoin d'accès.
   Les données restent limitées côté Laravel aux activités du compte.
 
+## Écrans
+
+Ne jamais ajouter une carte ou un autre bloc à un écran sans demande explicite
+de l'utilisateur, même si le besoin semble évident. Proposer l'ajout dans le
+rapport et attendre sa réponse.
+
 ## PWA
 
 Voir [`docs/pwa.md`](docs/pwa.md) pour le détail (manifest, service worker,
