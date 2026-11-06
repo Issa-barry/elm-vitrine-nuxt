@@ -41,6 +41,16 @@ export function repartitionVisible(parActivite: readonly unknown[] | null | unde
   return (parActivite?.length ?? 0) >= 2;
 }
 
+/** Du gain le plus élevé au plus faible, égalité départagée par libellé (même tri que « Gains par véhicule »). */
+export function trierActivitesParGain<T extends { activite: string; total_earned: number }>(lignes: readonly T[]): T[] {
+  return [...lignes].sort((a, b) => b.total_earned - a.total_earned || activiteLabel(a.activite).localeCompare(activiteLabel(b.activite), "fr"));
+}
+
+/** Part relative d'un montant dans le total reçu du backend, arrondie ; 0 si le total est nul. */
+export function partDuTotal(montant: number, total: number): number {
+  return total > 0 ? Math.round((montant / total) * 100) : 0;
+}
+
 /** Trie des valeurs d'activité dans l'ordre d'affichage, sans doublon. */
 export function ordonnerActivites(activites: readonly string[]): ActiviteCompte[] {
   return ACTIVITES.map((item) => item.value).filter((value) => activites.includes(value));

@@ -2,8 +2,7 @@
 import type { ClientDashboardResponse, DashboardPeriod, DashboardQuery, DashboardVehiculeBalance } from "~/config/clientDashboard";
 import type { PeriodeComptable } from "~/config/clientPeriodeComptable";
 import { TOUTE_ANNEE, bornesDepuisLien, periodeComptableQuery, periodePrecedente } from "~/config/clientPeriodeComptable";
-import { activiteLabel, estActivite, ordonnerActivites, repartitionVisible, type ActiviteCompte } from "~/config/clientActivites";
-import { periodeDuDetail } from "~/config/clientCommissionsCompte";
+import { activiteLabel, ordonnerActivites, partDuTotal, repartitionVisible } from "~/config/clientActivites";
 
 // Refonte du 27/08/2026 (chantier relayé par une session Claude parallèle,
 // "elm-vitrine-nuxt-a4") : la page passe d'une liste de commissions
@@ -20,15 +19,14 @@ import { periodeDuDetail } from "~/config/clientCommissionsCompte";
 //
 // Gains multi-activités (ADR 0054 côté elm-monolithe) : le tableau de bord
 // compte propriétaire, livreur, parrain et consultant ; la répartition par
-// activité s'affiche à partir de deux activités, et le détail des commissions
-// (GET /v1/mobile/commissions) porte l'origine de chaque part. Le détail suit la
-// période résolue par le serveur pour le tableau de bord (periodeDuDetail()).
+// activité s'affiche à partir de deux activités. La liste « Détail des
+// commissions » a été retirée de cette page le 05/11/2026 : l'écran reste une vue
+// statistique, sans ligne par commission.
 definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Commissions — Eau La Maman" });
 
 const { dashboard, isLoading, error, fetchDashboard } = useClientDashboard();
 const { periodeComptable } = useClientPeriodeComptable();
-const detail = useClientCommissionsCompte();
 const requestFetch = useRequestFetch();
 const route = useRoute();
 
@@ -71,35 +69,7 @@ const vehiculeOptions = computed(() => [
   }),
 ]);
 
-// Détail des commissions : filtre Activité et recherche propres au détail.
-const TOUTES = "toutes";
-const activiteFilter = ref<ActiviteCompte | typeof TOUTES>(estActivite(route.query.activite) ? route.query.activite : TOUTES);
-const recherche = ref("");
 const parActivite = computed(() => dashboard.value?.par_activite ?? []);
-const activitesDuCompte = computed(() => ordonnerActivites(parActivite.value.map((ligne) => ligne.activite)));
-
-function chargerDetail() {
-  const filters = dashboard.value?.filters;
-  if (!filters) return;
-  detail.fetchCommissions({
-    ...periodeDuDetail(filters),
-    vehicule_id: vehiculeFilter.value !== ALL ? vehiculeFilter.value : undefined,
-    activite: activiteFilter.value !== TOUTES ? activiteFilter.value : undefined,
-    recherche: recherche.value.trim() || undefined,
-    per_page: 20,
-  });
-}
-
-let rechercheTimer: ReturnType<typeof setTimeout> | undefined;
-watch(recherche, () => {
-  clearTimeout(rechercheTimer);
-  rechercheTimer = setTimeout(chargerDetail, 300);
-});
-watch(activiteFilter, chargerDetail);
-onBeforeUnmount(() => clearTimeout(rechercheTimer));
-
-const detailTotal = computed(() => detail.reponse.value?.resume.summary.total_earned ?? null);
-const detailNombre = computed(() => detail.reponse.value?.meta.total ?? null);
 
 function buildDashboardQuery(): DashboardQuery | null {
   const vehiculeId = vehiculeFilter.value !== ALL ? vehiculeFilter.value : undefined;
@@ -144,7 +114,6 @@ async function loadDashboard() {
   const previousQuery = buildPreviousQuery(query.vehicule_id);
   const isCurrent = await fetchDashboard(query);
   if (!isCurrent) return;
-  chargerDetail();
 
   if (previousQuery) {
     try {
@@ -191,8 +160,7 @@ const sortedParVehicule = computed(() => [...(dashboard.value?.par_vehicule ?? [
 // du 27/08/2026, section 15 : "calculer une part relative simple si le total
 // backend est fiable"), jamais une formule financière (net à payer, etc.).
 function vehiclePercent(vehicle: DashboardVehiculeBalance): number {
-  const total = summary.value?.total_earned ?? 0;
-  return total > 0 ? Math.round((vehicle.total_earned / total) * 100) : 0;
+  return partDuTotal(vehicle.total_earned, summary.value?.total_earned ?? 0);
 }
 
 const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
@@ -240,7 +208,7 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
         <small>Déjà payé : {{ formatGnf(summary.total_paid) }}</small>
       </div>
 
-      <ClientRepartitionActivites v-if="repartitionVisible(parActivite)" :par-activite="parActivite" />
+      <ClientRepartitionActivites v-if="repartitionVisible(parActivite)" mobile :par-activite="parActivite" :total="summary.total_earned" />
 
       <section class="client-mobile-expenses__chart" aria-labelledby="commissions-evolution-title">
         <div class="client-mobile-expenses__chart-heading">
@@ -276,19 +244,6 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
         </div>
       </section>
       <p v-else class="client-mobile-empty-state">Aucun véhicule associé pour le moment.</p>
-
-      <ClientCommissionsDetail
-        v-model:activite="activiteFilter"
-        v-model:recherche="recherche"
-        :lignes="detail.lignes.value"
-        :total="detailTotal"
-        :nombre="detailNombre"
-        :chargement="detail.isLoading.value"
-        :erreur="detail.error.value?.message ?? null"
-        :a-d-autres-pages="detail.aDAutresPages.value"
-        :activites="activitesDuCompte"
-        @voir-plus="detail.voirPlus"
-      />
     </template>
   </section>
 
@@ -388,25 +343,8 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
         </div>
       </div>
 
-      <div v-if="repartitionVisible(parActivite)" class="col-span-12 xl:col-span-4">
-        <ClientRepartitionActivites class="card !mb-0" :par-activite="parActivite" />
-      </div>
-      <div class="col-span-12" :class="{ 'xl:col-span-8': repartitionVisible(parActivite) }">
-        <div class="card">
-          <ClientCommissionsDetail
-            v-model:activite="activiteFilter"
-            v-model:recherche="recherche"
-            class="!mt-0"
-            :lignes="detail.lignes.value"
-            :total="detailTotal"
-            :nombre="detailNombre"
-            :chargement="detail.isLoading.value"
-            :erreur="detail.error.value?.message ?? null"
-            :a-d-autres-pages="detail.aDAutresPages.value"
-            :activites="activitesDuCompte"
-            @voir-plus="detail.voirPlus"
-          />
-        </div>
+      <div v-if="repartitionVisible(parActivite)" class="col-span-12">
+        <ClientRepartitionActivites class="!mb-0" :par-activite="parActivite" :total="summary.total_earned" />
       </div>
     </template>
   </div>

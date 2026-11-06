@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ACTIVITES, activiteIcon, activiteLabel, estActivite, ordonnerActivites, repartitionVisible } from "./clientActivites";
+import { ACTIVITES, activiteIcon, activiteLabel, estActivite, ordonnerActivites, partDuTotal, repartitionVisible, trierActivitesParGain } from "./clientActivites";
 
 describe("activités du compte", () => {
   it("garde l'ordre du backend : propriétaire, livreur, parrain, consultant", () => {
@@ -27,6 +27,22 @@ describe("activités du compte", () => {
     expect(repartitionVisible([])).toBe(false);
     expect(repartitionVisible([{ activite: "proprietaire" }])).toBe(false);
     expect(repartitionVisible([{ activite: "proprietaire" }, { activite: "parrain" }])).toBe(true);
+  });
+
+  it("trie la répartition par gain décroissant, égalité par libellé, sans modifier la source", () => {
+    const lignes = [
+      { activite: "proprietaire", total_earned: 100 },
+      { activite: "parrain", total_earned: 300 },
+      { activite: "livreur", total_earned: 100 },
+    ];
+    expect(trierActivitesParGain(lignes).map((l) => l.activite)).toEqual(["parrain", "livreur", "proprietaire"]);
+    expect(lignes[0]?.activite).toBe("proprietaire");
+  });
+
+  it("calcule la part du total sans diviser par zéro", () => {
+    expect(partDuTotal(162_000, 177_000)).toBe(92);
+    expect(partDuTotal(15_000, 177_000)).toBe(8);
+    expect(partDuTotal(0, 0)).toBe(0);
   });
 
   it("ordonne des liens sans doublon", () => {
