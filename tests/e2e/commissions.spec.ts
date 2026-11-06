@@ -23,18 +23,24 @@ test.describe("Espace client — commissions (vue statistique)", () => {
     await expect(mobile.getByText(`${new Intl.NumberFormat("fr-FR").format(4_240_000)} GNF`)).toBeVisible({ timeout: 10_000 });
   });
 
-  // Révisé par l'ADR 0054 (demande du 03/11/2026) : chaque commission a désormais
-  // sa ligne, avec son origine, dans « Détail des commissions » — et seulement là.
-  // Les statistiques au-dessus restent agrégées.
-  test("les commandes individuelles n'apparaissent que dans le détail des commissions", async ({ page }) => {
-    await loginAsTestUser(page);
-    await page.goto("/espace-client/commissions", { waitUntil: "domcontentloaded", timeout: 30_000 });
-    await page.waitForLoadState("load");
+  // « Détail des commissions » retiré de la page (demande du 05/11/2026) : en mobile
+  // comme au bureau, l'écran reste agrégé, sans ligne par commission.
+  test("la page n'affiche plus le détail des commissions", async ({ page }) => {
+    for (const { largeur, hauteur, conteneur } of [
+      { largeur: 1280, hauteur: 800, conteneur: ".client-desktop-expenses" },
+      { largeur: 390, hauteur: 844, conteneur: ".client-mobile-expenses" },
+    ]) {
+      await page.setViewportSize({ width: largeur, height: hauteur });
+      await loginAsTestUser(page);
+      await page.goto("/espace-client/commissions", { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await page.waitForLoadState("load");
 
-    const bureau = page.locator(".client-desktop-expenses");
-    await expect(bureau.getByTestId("commission-ligne")).toHaveCount(2, { timeout: 10_000 });
-    await expect(bureau.getByText(/CMD-\d+/)).toHaveCount(2);
-    await expect(bureau.getByTestId("commissions-detail").getByText(/CMD-\d+/)).toHaveCount(2);
+      const ecran = page.locator(conteneur);
+      await expect(ecran.getByText("Gains par véhicule")).toBeVisible({ timeout: 10_000 });
+      await expect(ecran.getByText("Détail des commissions")).toHaveCount(0);
+      await expect(ecran.getByText(/CMD-\d+/)).toHaveCount(0);
+      await page.context().clearCookies();
+    }
   });
 
   test("répartition par véhicule triée par gain décroissant, avec part du total", async ({ page }) => {
