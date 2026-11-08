@@ -111,9 +111,9 @@ onBeforeUnmount(() => {
 
       <div class="layout-topbar-menu" :class="{ 'topbar-menu-visible': state.topbarMenuVisible }">
         <div class="layout-topbar-menu-content">
-          <NuxtLink to="/espace-client/activite" class="layout-topbar-action">
-            <i class="pi pi-calendar" />
-            <span>Activité</span>
+          <NuxtLink to="/espace-client/commandes" class="layout-topbar-action">
+            <i class="pi pi-shopping-bag" />
+            <span>Commandes</span>
           </NuxtLink>
           <NuxtLink to="/espace-client/profil" class="layout-topbar-action">
             <i class="pi pi-user" />

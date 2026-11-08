@@ -71,10 +71,6 @@ export type ApiDepensesQuery = NonNullable<operations["client.depenses.mine"]["p
 // ── Activité ─────────────────────────────────────────────────────────────
 export type ApiActiviteResponse = operations["client.activite.mine"]["responses"][200]["content"]["application/json"];
 export type ApiActiviteQuery = NonNullable<operations["client.activite.mine"]["parameters"]["query"]>;
-// OpenAPI ne peut pas exprimer "statut nécessite type" (règle inter-champs,
-// voir ActiviteMineRequest côté elm-monolithe) — cette contrainte reste
-// documentée en commentaire, jamais dans un type (voir config/
-// clientActivity.ts).
 
 // ── Espace parrain (ADR 0050 côté elm-monolithe) ─────────────────────────
 export type ApiParrainSyntheseResponse = operations["client.parrain.synthese"]["responses"][200]["content"]["application/json"];

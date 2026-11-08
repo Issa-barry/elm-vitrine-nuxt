@@ -8,9 +8,13 @@ import { resolveClientCapabilities } from "./clientCapabilities";
 export const ACCUEIL_SANS_ACTIVITE = "/espace-client/bienvenue";
 
 // `context` inconnu (/me en échec juste après la connexion) : on ne conclut
-// rien, le compte garde l'accueil habituel.
+// rien, le compte garde l'accueil habituel. `orders` n'est pas une activité :
+// la liste « Commandes » est ouverte à tout compte (ADR 0058 côté elm-monolithe),
+// la compter rendrait tout compte « avec activité ».
 export function compteSansActivite(context: AuthContext | null | undefined): boolean {
   if (!context) return false;
 
-  return !Object.values(resolveClientCapabilities(context)).some(Boolean);
+  const { orders: _ouverteATous, ...activites } = resolveClientCapabilities(context);
+
+  return !Object.values(activites).some(Boolean);
 }

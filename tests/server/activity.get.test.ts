@@ -12,6 +12,7 @@ vi.mock("../../server/utils/authSession", () => ({
 vi.stubGlobal("defineEventHandler", (handler: unknown) => handler);
 vi.stubGlobal("createError", (input: unknown) => input);
 vi.stubGlobal("getQuery", (event: { query: Record<string, unknown> }) => event.query);
+vi.stubGlobal("getRouterParam", (event: { params: Record<string, string> }, name: string) => event.params?.[name]);
 
 describe("GET /api/client/activity", () => {
   beforeEach(() => callMonolith.mockReset());
@@ -21,13 +22,14 @@ describe("GET /api/client/activity", () => {
     callMonolith.mockResolvedValue({ data: [] });
 
     await (handler as unknown as (event: unknown) => Promise<unknown>)({
-      query: { periode: "cette_semaine", type: "vente", vehicule_id: "veh-1", per_page: "50", page: "2" },
+      query: { periode: "cette_semaine", type: "vente", lien: "livreur", vehicule_id: "veh-1", per_page: "50", page: "2", statut: "cloturee" },
     });
 
     expect(callMonolith).toHaveBeenCalledWith("/api/v1/mobile/activite", {
       token: "token-test",
       query: {
         type: "vente",
+        lien: "livreur",
         vehicule_id: "veh-1",
         periode: "cette_semaine",
         annee: undefined,
@@ -39,6 +41,30 @@ describe("GET /api/client/activity", () => {
         page: "2",
       },
     });
+  });
+});
+
+describe("GET /api/client/activity/{type}/{id}", () => {
+  beforeEach(() => callMonolith.mockReset());
+
+  const appeler = async (params: Record<string, string>) => {
+    const { default: handler } = await import("../../server/api/client/activity/[type]/[id].get");
+    return (handler as unknown as (event: unknown) => Promise<unknown>)({ params });
+  };
+
+  it("relaie le détail d'une vente ou d'un transfert au backend", async () => {
+    callMonolith.mockResolvedValue({ data: { id: "v-1" } });
+
+    await expect(appeler({ type: "vente", id: "v-1" })).resolves.toEqual({ data: { id: "v-1" } });
+    expect(callMonolith).toHaveBeenCalledWith("/api/v1/mobile/activite/vente/v-1", { token: "token-test" });
+
+    await appeler({ type: "logistique", id: "t/../1" });
+    expect(callMonolith).toHaveBeenLastCalledWith("/api/v1/mobile/activite/logistique/t%2F..%2F1", { token: "token-test" });
+  });
+
+  it("refuse un type inconnu sans appeler le backend", async () => {
+    await expect(appeler({ type: "commissions", id: "x" })).rejects.toMatchObject({ statusCode: 404 });
+    expect(callMonolith).not.toHaveBeenCalled();
   });
 });
 

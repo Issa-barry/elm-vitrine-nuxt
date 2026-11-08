@@ -30,41 +30,36 @@ test.describe("Preview UI — capacités espace client (dev uniquement)", () => 
     await expect(sidebar.getByRole("link", { name: "Prestations" })).toBeVisible();
     await expect(sidebar.getByRole("link", { name: "Mon profil" })).toBeVisible();
     await expect(sidebar.getByRole("link", { name: "Véhicules" })).toHaveCount(0);
+    // Commandes : liste unique ouverte à tout compte (ADR 0058).
+    await expect(sidebar.getByRole("link", { name: "Commandes" })).toBeVisible();
     await expect(sidebar.getByRole("link", { name: "Livraisons" })).toHaveCount(0);
-
-    // Checklist "Capacités résolues" — couvre aussi "orders" (pas d'entrée de
-    // menu du tout aujourd'hui, voir config/clientNavigation.ts) via son état
-    // "Masqué" explicite, plutôt que juste l'absence d'un lien.
-    const checklist = page.locator(".client-desktop-expenses");
-    await expect(checklist.getByText("Mes commandes")).toBeVisible();
-    await expect(checklist.getByText("(pas encore d'entrée de menu)")).toBeVisible();
   });
 
-  test("client + prestataire : ajoute Mes commandes dans la checklist (Visible)", async ({ page }) => {
+  test("client + prestataire : Commandes visible dans la checklist", async ({ page }) => {
     await page.goto("/dev-preview/espace-client/client-prestataire", { waitUntil: "domcontentloaded" });
     const sidebar = page.locator(".layout-menu");
     await expect(sidebar.getByRole("link", { name: "Véhicules" })).toHaveCount(0);
 
-    const ordersRow = page.locator(".client-desktop-expenses").getByText("Mes commandes").locator("xpath=ancestor::li[1]");
+    const ordersRow = page.locator(".client-desktop-expenses").getByText("Commandes", { exact: true }).locator("xpath=ancestor::li[1]");
     await expect(ordersRow.getByText("Visible", { exact: true })).toBeVisible();
   });
 
-  test("propriétaire + prestataire : ajoute Véhicules/Activité, sans Mes commandes", async ({ page }) => {
+  test("propriétaire + prestataire : ajoute Véhicules, Commandes restant visible", async ({ page }) => {
     await page.goto("/dev-preview/espace-client/proprietaire-prestataire", { waitUntil: "domcontentloaded" });
     const sidebar = page.locator(".layout-menu");
     await expect(sidebar.getByRole("link", { name: "Véhicules" })).toBeVisible();
-    await expect(sidebar.getByRole("link", { name: "Livraisons" })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Commandes" })).toBeVisible();
     await expect(sidebar.getByRole("link", { name: "Prestations" })).toBeVisible();
 
-    const ordersRow = page.locator(".client-desktop-expenses").getByText("Mes commandes").locator("xpath=ancestor::li[1]");
-    await expect(ordersRow.getByText("Masqué", { exact: true })).toBeVisible();
+    const ordersRow = page.locator(".client-desktop-expenses").getByText("Commandes", { exact: true }).locator("xpath=ancestor::li[1]");
+    await expect(ordersRow.getByText("Visible", { exact: true })).toBeVisible();
   });
 
   test("client + propriétaire + prestataire : tout est visible dans le menu", async ({ page }) => {
     await page.goto("/dev-preview/espace-client/client-proprietaire-prestataire", { waitUntil: "domcontentloaded" });
     const sidebar = page.locator(".layout-menu");
     await expect(sidebar.getByRole("link", { name: "Véhicules" })).toBeVisible();
-    await expect(sidebar.getByRole("link", { name: "Livraisons" })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Commandes" })).toBeVisible();
     await expect(sidebar.getByRole("link", { name: "Commissions" })).toBeVisible();
     await expect(sidebar.getByRole("link", { name: "Dépenses" })).toBeVisible();
     await expect(sidebar.getByRole("link", { name: "Prestations" })).toBeVisible();

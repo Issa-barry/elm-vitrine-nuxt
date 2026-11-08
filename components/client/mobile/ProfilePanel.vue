@@ -28,7 +28,7 @@ const groups: ProfileGroup[] = [
   {
     title: "Services",
     rows: [
-      { label: "Livraisons", icon: "pi-box", to: "/espace-client/activite" },
+      { label: "Commandes", icon: "pi-shopping-bag", to: "/espace-client/commandes" },
       { label: "Véhicules", icon: "pi-car", to: "/espace-client/vehicules" },
     ],
   },

@@ -3,11 +3,9 @@ import { callMonolith } from "../../utils/monolithClient";
 import { clearAuthSession, getSessionToken } from "../../utils/authSession";
 
 // GET /api/client/activity (Nuxt) → GET /v1/mobile/activite (Laravel,
-// auth:sanctum + role:client|proprietaire|livreur). Historique complet
-// (ventes + transferts logistiques, tous statuts) — voir
-// docs/api-espace-client-contract.md §5 côté elm-monolithe. `statut` n'est
-// volontairement pas transmis ici : le backend l'exige accompagné de `type`
-// (422 sinon), voir config/clientActivity.ts.
+// auth:sanctum, sans garde par rôle : ADR 0055). Liste unique « Commandes »
+// (ADR 0058) : le périmètre et les données visibles sont décidés par le
+// serveur selon les liens du compte — voir config/clientActivity.ts.
 export default defineEventHandler(async (event) => {
   const token = await getSessionToken(event);
 
@@ -22,6 +20,7 @@ export default defineEventHandler(async (event) => {
       token,
       query: {
         type: query.type,
+        lien: query.lien,
         vehicule_id: query.vehicule_id,
         periode: query.periode,
         annee: query.annee,

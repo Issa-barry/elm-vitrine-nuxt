@@ -9,7 +9,8 @@ test.describe("Espace client — navigation", () => {
     await expect(page.getByText("Solde par véhicule")).toBeVisible();
     const sidebar = page.locator(".layout-menu");
     await expect(sidebar.getByRole("link", { name: "Véhicules" })).toBeVisible();
-    await expect(sidebar.getByRole("link", { name: "Livraisons" })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Commandes" })).toBeVisible();
+    await expect(sidebar.getByRole("link", { name: "Livraisons" })).toHaveCount(0);
     await expect(sidebar.getByRole("link", { name: "Mon profil" })).toBeVisible();
   });
 
@@ -19,10 +20,10 @@ test.describe("Espace client — navigation", () => {
     await expect(page).toHaveURL(/\/espace-client\/vehicules$/);
   });
 
-  test("navigue vers Livraisons depuis le menu", async ({ page }) => {
+  test("navigue vers Commandes depuis le menu", async ({ page }) => {
     await loginAsTestUser(page);
-    await page.locator(".layout-menu").getByRole("link", { name: "Livraisons" }).click();
-    await expect(page).toHaveURL(/\/espace-client\/activite$/);
+    await page.locator(".layout-menu").getByRole("link", { name: "Commandes" }).click();
+    await expect(page).toHaveURL(/\/espace-client\/commandes$/);
   });
 
   test("navigue vers Commissions depuis le menu", async ({ page }) => {

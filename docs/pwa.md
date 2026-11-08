@@ -394,7 +394,9 @@ ambigu à ce sujet) : le JSON reçu par le navigateur est **aplati**,
 ```
 
 Seul `commande_vente_validee` a une route connue côté Nuxt
-(`/espace-client/activite?commande=<id>`, même destination que
+(`/espace-client/commandes?commande=<id>` depuis le 06/11/2026 ; l'ancienne adresse
+`/espace-client/activite` redirige en conservant `?commande=` pour les service workers déjà
+installés — même destination que
 `notificationResourceToRoute()` dans `config/clientNotifications.ts` pour la
 cloche database — vocabulaire différent, écran identique). `transfert_created`
 n'a pas de page dédiée : repli sur `/espace-client/notifications`, jamais une

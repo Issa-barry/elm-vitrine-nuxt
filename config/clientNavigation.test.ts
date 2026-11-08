@@ -3,9 +3,14 @@ import { bottomNavItems, CLIENT_NAV_ITEMS, visibleNavItems } from "./clientNavig
 import { resolveClientCapabilities } from "./clientCapabilities";
 
 describe("CLIENT_NAV_ITEMS — menu bas mobile", () => {
-  it("contient Accueil, Véhicules, Livraisons, Commissions et Dépenses, dans cet ordre", () => {
+  it("contient Accueil, Véhicules, Commandes, Commissions et Dépenses, dans cet ordre", () => {
     const labels = CLIENT_NAV_ITEMS.filter((item) => item.mobileBottomNav).map((item) => item.label);
-    expect(labels).toEqual(["Accueil", "Véhicules", "Livraisons", "Commissions", "Dépenses"]);
+    expect(labels).toEqual(["Accueil", "Véhicules", "Commandes", "Commissions", "Dépenses"]);
+  });
+
+  it("Commandes remplace Livraisons, sans rubrique par profil (ADR 0058)", () => {
+    expect(CLIENT_NAV_ITEMS.find((item) => item.key === "orders")).toMatchObject({ label: "Commandes", to: "/espace-client/commandes" });
+    expect(CLIENT_NAV_ITEMS.some((item) => item.label === "Livraisons" || item.to === "/espace-client/activite")).toBe(false);
   });
 });
 
@@ -16,11 +21,11 @@ describe("visibleNavItems", () => {
     });
     const items = visibleNavItems(capabilities);
     expect(items.map((item) => item.key).sort()).toEqual(
-      ["commissions", "dashboard", "expenses", "logisticsActivity", "profile", "vehicles"].sort(),
+      ["commissions", "dashboard", "expenses", "orders", "profile", "vehicles"].sort(),
     );
   });
 
-  it("aucune capacité -> aucun item (jamais un menu affiché par défaut)", () => {
+  it("contexte inconnu -> aucun item (jamais un menu affiché par défaut)", () => {
     expect(visibleNavItems(resolveClientCapabilities(null))).toEqual([]);
   });
 
@@ -39,19 +44,23 @@ describe("bottomNavItems", () => {
   const labels = (context: Parameters<typeof resolveClientCapabilities>[0], path: string) =>
     bottomNavItems(resolveClientCapabilities(context), path).map((item) => item.mobileLabel ?? item.label);
 
-  it("propriétaire : barre habituelle, inchangée", () => {
-    expect(labels({ ...base, proprietaire_id: "p" }, "/espace-client")).toEqual(["Accueil", "Véhicules", "Livraisons", "Commissions", "Dépenses"]);
+  it("propriétaire : Commandes à la place de Livraisons", () => {
+    expect(labels({ ...base, proprietaire_id: "p" }, "/espace-client")).toEqual(["Accueil", "Véhicules", "Commandes", "Commissions", "Dépenses"]);
   });
 
-  it("parrain seul : sa barre partout, profil compris, jamais vide", () => {
+  it("client seul : Commandes sans Véhicules", () => {
+    expect(labels({ ...base, client_id: "c" }, "/espace-client")).toEqual(["Accueil", "Commandes", "Commissions", "Dépenses"]);
+  });
+
+  it("parrain seul : sa barre partout, profil compris, Commandes via le Profil", () => {
     const attendu = ["Accueil", "Véhicules", "Commissions", "Paiements", "Profil"];
     expect(labels({ ...base, parrain_id: "par" }, "/espace-client/parrain")).toEqual(attendu);
-    expect(labels({ ...base, parrain_id: "par" }, "/espace-client/profil")).toEqual(attendu);
+    expect(labels({ ...base, parrain_id: "par" }, "/espace-client/commandes")).toEqual(attendu);
   });
 
   it("propriétaire + parrain : barre habituelle hors de l'espace parrain", () => {
     expect(labels({ ...base, proprietaire_id: "p", parrain_id: "par" }, "/espace-client/vehicules"))
-      .toEqual(["Accueil", "Véhicules", "Livraisons", "Commissions", "Dépenses"]);
+      .toEqual(["Accueil", "Véhicules", "Commandes", "Commissions", "Dépenses"]);
   });
 
   it("propriétaire + parrain : la barre de l'espace parrain propose le retour", () => {
@@ -65,7 +74,15 @@ describe("bottomNavItems", () => {
     }
   });
 
-  it("aucun contexte : aucune entrée", () => {
-    expect(labels({ ...base }, "/espace-client")).toEqual([]);
+  it("compte sans activité : son accueil neutre et ses Commandes", () => {
+    const items = bottomNavItems(resolveClientCapabilities({ ...base }), "/espace-client/bienvenue");
+    expect(items.map((item) => [item.label, item.to])).toEqual([
+      ["Accueil", "/espace-client/bienvenue"],
+      ["Commandes", "/espace-client/commandes"],
+    ]);
+  });
+
+  it("contexte inconnu : aucune entrée", () => {
+    expect(bottomNavItems(resolveClientCapabilities(null), "/espace-client")).toEqual([]);
   });
 });

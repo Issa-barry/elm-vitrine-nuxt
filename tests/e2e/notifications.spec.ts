@@ -76,7 +76,7 @@ test.describe("Espace client — centre de notifications", () => {
   // et casserait l'assertion "1 non lue" ci-dessous si ce test s'exécutait
   // après. mark-all-read reste, lui, correct quel que soit l'ordre (renvoie
   // toujours unread_count: 0).
-  test("desktop : une notification \"delivery.assigned\" exploitable redirige vers Livraisons et ouvre le bon détail", async ({ page }) => {
+  test("desktop : une notification \"delivery.assigned\" exploitable redirige vers Commandes et ouvre le bon détail", async ({ page }) => {
     await mockNotifications(page);
     await loginAsTestUser(page);
 
@@ -92,7 +92,7 @@ test.describe("Espace client — centre de notifications", () => {
     const panel = page.locator("section[aria-label='Notifications']");
     await panel.getByText("Nouvelle commande attribuée").click();
 
-    await expect(page).toHaveURL(/\/espace-client\/activite\?commande=act-1$/);
+    await expect(page).toHaveURL(/\/espace-client\/commandes\?commande=act-1$/);
     const detail = page.locator(".client-delivery-detail");
     await expect(detail).toBeVisible({ timeout: 10_000 });
     // "CMD-2847" apparaît deux fois par design (légende sous le QR + en-tête
