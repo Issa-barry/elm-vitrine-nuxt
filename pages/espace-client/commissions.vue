@@ -241,15 +241,6 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
 
       <ClientRepartitionActivites v-if="repartitionVisible(parActivite)" mobile :par-activite="parActivite" :total="summary.total_earned" />
 
-      <section class="client-mobile-expenses__chart" aria-labelledby="commissions-evolution-title">
-        <div class="client-mobile-expenses__chart-heading">
-          <h2 id="commissions-evolution-title">Évolution des gains</h2>
-        </div>
-        <p class="text-muted-color text-sm mb-0">
-          Bientôt disponible
-        </p>
-      </section>
-
       <section v-if="sortedParVehicule.length" class="client-mobile-expenses__chart" aria-labelledby="commissions-by-vehicle-title">
         <div class="client-mobile-expenses__chart-heading">
           <h2 id="commissions-by-vehicle-title">Gains par véhicule</h2>
@@ -275,6 +266,15 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
         </div>
       </section>
       <p v-else class="client-mobile-empty-state">Aucun véhicule associé pour le moment.</p>
+
+      <section class="client-mobile-expenses__chart" aria-labelledby="commissions-evolution-title">
+        <div class="client-mobile-expenses__chart-heading">
+          <h2 id="commissions-evolution-title">Évolution des gains</h2>
+        </div>
+        <p class="text-muted-color text-sm mb-0">
+          Bientôt disponible
+        </p>
+      </section>
     </template>
   </section>
 
@@ -376,16 +376,6 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
       </div>
 
       <div class="col-span-12 xl:col-span-6">
-        <div class="card h-full">
-          <div class="font-semibold text-xl mb-4">Évolution des gains</div>
-          <div class="flex flex-col items-center justify-center text-center py-12" role="status">
-            <i class="pi pi-chart-line text-muted-color !text-3xl mb-3" aria-hidden="true" />
-            <strong class="text-lg">Bientôt disponible</strong>
-          </div>
-        </div>
-      </div>
-
-      <div class="col-span-12 xl:col-span-6">
         <div class="card">
           <div class="flex items-center justify-between mb-4">
             <div class="font-semibold text-xl">Gains par véhicule</div>
@@ -421,6 +411,16 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
 
       <div v-if="repartitionVisible(parActivite)" class="col-span-12">
         <ClientRepartitionActivites class="!mb-0" :par-activite="parActivite" :total="summary.total_earned" />
+      </div>
+
+      <div class="col-span-12 xl:col-span-6">
+        <div class="card h-full">
+          <div class="font-semibold text-xl mb-4">Évolution des gains</div>
+          <div class="flex flex-col items-center justify-center text-center py-12" role="status">
+            <i class="pi pi-chart-line text-muted-color !text-3xl mb-3" aria-hidden="true" />
+            <strong class="text-lg">Bientôt disponible</strong>
+          </div>
+        </div>
       </div>
     </template>
   </div>
