@@ -1,10 +1,10 @@
-import type { ActivityQuery, ClientActivityItem, ClientActivityResponse } from "~/config/clientActivity";
+import type { ActivityQuery, ActivityType, ClientActivityItem, ClientActivityResponse, ClientOperationDetail } from "~/config/clientActivity";
 import type { AuthErrorInfo } from "~/config/auth";
 import { normalizeAuthError } from "~/config/auth";
 
-// Historique d'activité (GET /v1/mobile/activite, via
-// server/api/client/activity.get.ts) — ventes + transferts logistiques, tous
-// statuts, pagination Laravel standard. Voir config/clientActivity.ts.
+// Liste « Commandes » (GET /v1/mobile/activite, via
+// server/api/client/activity.get.ts) — ventes et transferts logistiques du
+// compte, pagination Laravel standard. Voir config/clientActivity.ts.
 export function useClientActivity() {
   const response = useState<ClientActivityResponse | null>("client:activity", () => null);
   const isLoading = useState<boolean>("client:activity:loading", () => false);
@@ -71,4 +71,35 @@ export function useClientActivity() {
   }
 
   return { response, isLoading, isLoadingMore, error, loadMoreError, hasLoaded, hasMore, fetchActivity, loadMore };
+}
+
+// Détail d'une opération (GET /v1/mobile/activite/{type}/{id}) : le serveur
+// répond 404 hors du périmètre du compte, jamais 403.
+export function useClientOperation() {
+  const operation = ref<ClientOperationDetail | null>(null);
+  const isLoading = ref(false);
+  const error = ref<AuthErrorInfo | null>(null);
+  const requestFetch = useRequestFetch();
+  let seq = 0;
+
+  async function fetchOperation(type: ActivityType, id: string): Promise<boolean> {
+    const current = ++seq;
+    isLoading.value = true;
+    error.value = null;
+    operation.value = null;
+    try {
+      const result = await requestFetch<{ data: ClientOperationDetail }>(`/api/client/activity/${type}/${encodeURIComponent(id)}`);
+      if (current !== seq) return false;
+      operation.value = result.data;
+      return true;
+    } catch (fetchError) {
+      if (current !== seq) return false;
+      error.value = normalizeAuthError(fetchError);
+      return false;
+    } finally {
+      if (current === seq) isLoading.value = false;
+    }
+  }
+
+  return { operation, isLoading, error, fetchOperation };
 }

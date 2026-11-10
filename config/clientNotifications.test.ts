@@ -39,9 +39,9 @@ describe("notificationVisual", () => {
 });
 
 describe("notificationResourceToRoute", () => {
-  it("redirige une ressource commande_vente vers Livraisons avec son id réel", () => {
+  it("redirige une ressource commande_vente vers Commandes avec son id réel", () => {
     expect(notificationResourceToRoute({ type: "commande_vente", id: "cmd-123" })).toEqual({
-      path: "/espace-client/activite",
+      path: "/espace-client/commandes",
       query: { commande: "cmd-123" },
     });
   });

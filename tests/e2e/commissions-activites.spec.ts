@@ -19,11 +19,11 @@ async function loginMulti(page: Page): Promise<void> {
   }).toPass({ timeout: 45_000 });
 }
 
-function requetesCommissions(page: Page): URLSearchParams[] {
+function requetesDashboard(page: Page): URLSearchParams[] {
   const requetes: URLSearchParams[] = [];
   page.on("request", (request) => {
     const url = new URL(request.url());
-    if (url.pathname === "/api/client/commissions") requetes.push(url.searchParams);
+    if (url.pathname === "/api/client/dashboard") requetes.push(url.searchParams);
   });
   return requetes;
 }
@@ -56,65 +56,59 @@ test.describe("Gains multi-activités", () => {
     await expect(mobile.locator(".client-mobile-vehicle-row", { hasText: "MATOTO" }).locator('[data-activite="parrain"]')).toBeVisible();
   });
 
-  test("chaque commission porte son origine, l'annulée reste visible", async ({ page }) => {
+  test("la page Commissions répartit les gains par activité, sans détail par commission", async ({ page }) => {
     await loginMulti(page);
-    await page.goto("/espace-client/commissions");
-    const detail = page.locator(".client-desktop-expenses").getByTestId("commissions-detail");
-    const lignes = detail.getByTestId("commission-ligne");
-
-    await expect(lignes).toHaveCount(5, { timeout: 20_000 });
-    await expect(lignes.filter({ hasText: "VTE-031126-001" }).locator('[data-activite="parrain"]')).toBeVisible();
-    await expect(lignes.filter({ hasText: "VTE-031126-001" })).toContainText("MATOTO · BE7955");
-    await expect(lignes.filter({ hasText: "VTE-031126-002" }).locator('[data-activite="proprietaire"]')).toBeVisible();
-    await expect(lignes.filter({ hasText: "VTE-031126-003" }).locator('[data-activite="livreur"]')).toBeVisible();
-    await expect(lignes.filter({ hasText: "VTE-031126-004" })).toContainText("Consultant · SOGECO Conseil");
-    await expect(lignes.filter({ hasText: "VTE-031126-005" })).toContainText("Annulée");
-    // Total du détail = résumé du backend, sans l'annulée.
-    await expect(detail.getByTestId("commissions-detail-resume")).toContainText(/130\s000 GNF/);
-    await expect(page.locator(".client-desktop-expenses").getByTestId("repartition-activites").locator("li")).toHaveCount(4);
-  });
-
-  test("le filtre Activité et la recherche passent par le backend", async ({ page }) => {
-    await loginMulti(page);
-    const requetes = requetesCommissions(page);
+    const requetes: string[] = [];
+    page.on("request", (request) => {
+      const { pathname } = new URL(request.url());
+      if (pathname === "/api/client/commissions") requetes.push(pathname);
+    });
     await page.goto("/espace-client/commissions");
     const bureau = page.locator(".client-desktop-expenses");
-    const lignes = bureau.getByTestId("commission-ligne");
-    await expect(lignes).toHaveCount(5, { timeout: 20_000 });
 
-    await bureau.getByRole("combobox", { name: "Filtrer par activité" }).click();
-    await page.getByRole("option", { name: "Parrain" }).click();
-    await expect(lignes).toHaveCount(1);
-    await expect(lignes.first().locator('[data-activite="parrain"]')).toBeVisible();
-    expect(requetes.at(-1)?.get("activite")).toBe("parrain");
+    await expect(bureau.getByTestId("repartition-activites").locator("li")).toHaveCount(4, { timeout: 20_000 });
+    await expect(bureau.getByText("Détail des commissions")).toHaveCount(0);
+    expect(requetes).toHaveLength(0);
+  });
 
-    await bureau.getByRole("combobox", { name: "Filtrer par activité" }).click();
-    await page.getByRole("option", { name: "Toutes les activités" }).click();
-    await expect(lignes).toHaveCount(5);
+  // Même présentation que « Gains par véhicule » : gain décroissant, part du total, barre.
+  test("la répartition par activité suit la présentation de Gains par véhicule", async ({ page }) => {
+    await loginMulti(page);
+    await page.goto("/espace-client/commissions");
 
-    await bureau.getByRole("searchbox", { name: "Rechercher une commission" }).fill("BE7955");
-    await expect(lignes).toHaveCount(1);
-    expect(requetes.at(-1)?.get("recherche")).toBe("BE7955");
-    expect(requetes.at(-1)?.has("activite")).toBe(false);
+    const bureau = page.locator(".client-desktop-expenses").getByTestId("repartition-activites");
+    const lignes = bureau.locator("li");
+    await expect(lignes).toHaveCount(4, { timeout: 20_000 });
+    await expect(bureau.getByText("Sur la période")).toBeVisible();
+    await expect(lignes.nth(0)).toHaveAttribute("data-activite", "consultant");
+    await expect(lignes.nth(0)).toContainText("38%");
+    await expect(lignes.nth(1)).toHaveAttribute("data-activite", "proprietaire");
+    await expect(lignes.nth(2)).toHaveAttribute("data-activite", "parrain");
+    await expect(lignes.nth(3)).toHaveAttribute("data-activite", "livreur");
+    await expect(bureau.getByRole("progressbar")).toHaveCount(4);
+    await expect(bureau.getByRole("progressbar", { name: "Consultant, 38%" })).toHaveAttribute("aria-valuenow", "38");
+    await expect(bureau.getByText("Reste à payer")).toHaveCount(0);
 
-    await bureau.getByRole("searchbox", { name: "Rechercher une commission" }).fill("inconnu");
-    await expect(bureau.getByText("Aucune commission ne correspond à cette recherche.")).toBeVisible();
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobile = page.locator(".client-mobile-expenses").getByTestId("repartition-activites");
+    await expect(mobile.getByRole("progressbar")).toHaveCount(4);
+    await expect(mobile.locator("[data-activite]").first()).toContainText(/Consultant.*50\s000 GNF · 38%/);
+    await expect(mobile.getByText("Sur la période")).toBeVisible();
   });
 
   test("le filtre véhicule propose le véhicule parrainé avec la nature du lien", async ({ page }) => {
     await loginMulti(page);
-    const requetes = requetesCommissions(page);
+    const requetes = requetesDashboard(page);
     await page.goto("/espace-client/commissions");
     const bureau = page.locator(".client-desktop-expenses");
-    await expect(bureau.getByTestId("commission-ligne")).toHaveCount(5, { timeout: 20_000 });
+    await expect(bureau.getByTestId("repartition-activites")).toBeVisible({ timeout: 20_000 });
 
     // Année et mois de la période comptable, puis Période, puis Véhicule.
     await bureau.getByRole("combobox").nth(3).click();
     await expect(page.getByRole("option", { name: "KALOUM · BE8120 (Livreur)" })).toBeVisible();
     await page.getByRole("option", { name: "MATOTO · BE7955 (Parrain)" }).click();
 
-    await expect(bureau.getByTestId("commission-ligne")).toHaveCount(1);
-    expect(requetes.at(-1)?.get("vehicule_id")).toBe("veh-c");
+    await expect.poll(() => requetes.at(-1)?.get("vehicule_id")).toBe("veh-c");
   });
 
   test("Mes véhicules liste chaque véhicule une fois, le parrainé en lecture restreinte", async ({ page }) => {
@@ -156,15 +150,14 @@ test.describe("Gains multi-activités", () => {
     await expect(tableau.getByRole("row", { name: /MATOTO/ })).toBeVisible();
   });
 
-  test("un compte à une seule activité n'a pas de répartition mais garde le badge", async ({ page }) => {
+  test("un compte à une seule activité n'a pas de répartition", async ({ page }) => {
     await loginAsTestUser(page);
     await expect(page.locator(".client-desktop-dashboard").getByText(/Commission générée/)).toBeVisible({ timeout: 20_000 });
     await expect(page.getByTestId("repartition-activites")).toHaveCount(0);
 
     await page.goto("/espace-client/commissions");
-    const lignes = page.locator(".client-desktop-expenses").getByTestId("commission-ligne");
-    await expect(lignes).toHaveCount(2, { timeout: 20_000 });
-    await expect(lignes.locator('[data-activite="proprietaire"]')).toHaveCount(2);
-    await expect(page.locator(".client-desktop-expenses").getByRole("combobox", { name: "Filtrer par activité" })).toHaveCount(0);
+    const bureau = page.locator(".client-desktop-expenses");
+    await expect(bureau.getByText("Gains par véhicule")).toBeVisible({ timeout: 20_000 });
+    await expect(bureau.getByTestId("repartition-activites")).toHaveCount(0);
   });
 });

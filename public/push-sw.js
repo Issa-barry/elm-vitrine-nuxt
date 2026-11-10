@@ -19,7 +19,7 @@ var WEBPUSH_FALLBACK_PATH = "/espace-client/notifications";
 
 function webPushResolveTargetPath(payload) {
   if (payload && payload.type === "commande_vente_validee" && typeof payload.commande_id === "string" && payload.commande_id) {
-    return "/espace-client/activite?commande=" + encodeURIComponent(payload.commande_id);
+    return "/espace-client/commandes?commande=" + encodeURIComponent(payload.commande_id);
   }
   return WEBPUSH_FALLBACK_PATH;
 }

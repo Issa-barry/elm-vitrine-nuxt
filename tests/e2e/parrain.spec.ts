@@ -35,6 +35,8 @@ test.describe("Espace parrain", () => {
     await expect(menu.getByRole("link", { name: "Mon profil" })).toBeVisible();
     await expect(menu.getByRole("link", { name: "Dépenses" })).toHaveCount(0);
     await expect(menu.getByRole("link", { name: "Livraisons" })).toHaveCount(0);
+    // Liste unique ouverte à tout compte (ADR 0058) : ses commandes personnelles.
+    await expect(menu.getByRole("link", { name: "Commandes" })).toBeVisible();
   });
 
   test("un parrain seul a sa barre mobile partout, profil compris", async ({ page }) => {
@@ -118,7 +120,7 @@ test.describe("Espace parrain", () => {
     await loginCumul(page);
 
     const items = page.locator(".client-mobile-bottom-nav .client-mobile-nav-item");
-    await expect(items).toHaveText(["Accueil", "Véhicules", "Livraisons", "Commissions", "Dépenses"], { timeout: 20_000 });
+    await expect(items).toHaveText(["Accueil", "Véhicules", "Commandes", "Commissions", "Dépenses"], { timeout: 20_000 });
     await expect(page.locator(".client-mobile-dashboard").getByText("Mes parrainages")).toHaveCount(0);
 
     await page.goto("/espace-client/parrain");
@@ -127,7 +129,7 @@ test.describe("Espace parrain", () => {
 
     await page.locator(".client-mobile-bottom-nav").getByRole("link", { name: "Mon espace" }).click();
     await expect(page).toHaveURL(/\/espace-client$/);
-    await expect(items).toHaveText(["Accueil", "Véhicules", "Livraisons", "Commissions", "Dépenses"]);
+    await expect(items).toHaveText(["Accueil", "Véhicules", "Commandes", "Commissions", "Dépenses"]);
   });
 
   test("propriétaire et parrain : le menu latéral sépare les deux activités", async ({ page }) => {

@@ -2,8 +2,7 @@
 import type { ClientDashboardResponse, DashboardPeriod, DashboardQuery, DashboardVehiculeBalance } from "~/config/clientDashboard";
 import type { PeriodeComptable } from "~/config/clientPeriodeComptable";
 import { TOUTE_ANNEE, bornesDepuisLien, periodeComptableQuery, periodePrecedente } from "~/config/clientPeriodeComptable";
-import { activiteLabel, estActivite, ordonnerActivites, repartitionVisible, type ActiviteCompte } from "~/config/clientActivites";
-import { periodeDuDetail } from "~/config/clientCommissionsCompte";
+import { activiteLabel, ordonnerActivites, partDuTotal, repartitionVisible } from "~/config/clientActivites";
 
 // Refonte du 27/08/2026 (chantier relayé par une session Claude parallèle,
 // "elm-vitrine-nuxt-a4") : la page passe d'une liste de commissions
@@ -20,17 +19,17 @@ import { periodeDuDetail } from "~/config/clientCommissionsCompte";
 //
 // Gains multi-activités (ADR 0054 côté elm-monolithe) : le tableau de bord
 // compte propriétaire, livreur, parrain et consultant ; la répartition par
-// activité s'affiche à partir de deux activités, et le détail des commissions
-// (GET /v1/mobile/commissions) porte l'origine de chaque part. Le détail suit la
-// période résolue par le serveur pour le tableau de bord (periodeDuDetail()).
+// activité s'affiche à partir de deux activités. La liste « Détail des
+// commissions » a été retirée de cette page le 05/11/2026 : l'écran reste une vue
+// statistique, sans ligne par commission.
 definePageMeta({ layout: "client", middleware: "auth" });
 useHead({ title: "Commissions — Eau La Maman" });
 
 const { dashboard, isLoading, error, fetchDashboard } = useClientDashboard();
 const { periodeComptable } = useClientPeriodeComptable();
-const detail = useClientCommissionsCompte();
 const requestFetch = useRequestFetch();
 const route = useRoute();
+const filterPanelVisible = ref(false);
 
 // "tous" plutôt que "" — voir le même correctif déjà appliqué sur
 // depenses.vue/activite.vue/vehicules.vue (PrimeVue Select affiche son
@@ -55,9 +54,37 @@ const bornesLien = bornesDepuisLien(route.query);
 const periodFilter = ref<PeriodFilterValue>(bornesLien ? "custom" : "comptable");
 const customDateDebut = ref(bornesLien?.du ?? "");
 const customDateFin = ref(bornesLien?.au ?? "");
+const draftPeriodFilter = ref<PeriodFilterValue>(periodFilter.value);
+const draftCustomDateDebut = ref(customDateDebut.value);
+const draftCustomDateFin = ref(customDateFin.value);
 // Pré-rempli depuis ?vehicule_id=... (voir pages/espace-client/index.vue,
 // carte "Solde par véhicule").
 const vehiculeFilter = ref<string>(typeof route.query.vehicule_id === "string" ? route.query.vehicule_id : ALL);
+const draftVehiculeFilter = ref(vehiculeFilter.value);
+const activeFilterCount = computed(() => Number(periodFilter.value !== "comptable") + Number(vehiculeFilter.value !== ALL));
+
+function openFilterPanel() {
+  draftPeriodFilter.value = periodFilter.value;
+  draftCustomDateDebut.value = customDateDebut.value;
+  draftCustomDateFin.value = customDateFin.value;
+  draftVehiculeFilter.value = vehiculeFilter.value;
+  filterPanelVisible.value = true;
+}
+
+function applyFilters() {
+  periodFilter.value = draftPeriodFilter.value;
+  customDateDebut.value = draftCustomDateDebut.value;
+  customDateFin.value = draftCustomDateFin.value;
+  vehiculeFilter.value = draftVehiculeFilter.value;
+  filterPanelVisible.value = false;
+}
+
+function resetDraftFilters() {
+  draftPeriodFilter.value = "comptable";
+  draftCustomDateDebut.value = "";
+  draftCustomDateFin.value = "";
+  draftVehiculeFilter.value = ALL;
+}
 
 // Véhicules du dashboard : rattachés (propriétaire, livreur, parrain) puis ceux
 // qui portent une part du compte (équipe quittée, consultant). Le libellé dit la
@@ -71,35 +98,7 @@ const vehiculeOptions = computed(() => [
   }),
 ]);
 
-// Détail des commissions : filtre Activité et recherche propres au détail.
-const TOUTES = "toutes";
-const activiteFilter = ref<ActiviteCompte | typeof TOUTES>(estActivite(route.query.activite) ? route.query.activite : TOUTES);
-const recherche = ref("");
 const parActivite = computed(() => dashboard.value?.par_activite ?? []);
-const activitesDuCompte = computed(() => ordonnerActivites(parActivite.value.map((ligne) => ligne.activite)));
-
-function chargerDetail() {
-  const filters = dashboard.value?.filters;
-  if (!filters) return;
-  detail.fetchCommissions({
-    ...periodeDuDetail(filters),
-    vehicule_id: vehiculeFilter.value !== ALL ? vehiculeFilter.value : undefined,
-    activite: activiteFilter.value !== TOUTES ? activiteFilter.value : undefined,
-    recherche: recherche.value.trim() || undefined,
-    per_page: 20,
-  });
-}
-
-let rechercheTimer: ReturnType<typeof setTimeout> | undefined;
-watch(recherche, () => {
-  clearTimeout(rechercheTimer);
-  rechercheTimer = setTimeout(chargerDetail, 300);
-});
-watch(activiteFilter, chargerDetail);
-onBeforeUnmount(() => clearTimeout(rechercheTimer));
-
-const detailTotal = computed(() => detail.reponse.value?.resume.summary.total_earned ?? null);
-const detailNombre = computed(() => detail.reponse.value?.meta.total ?? null);
 
 function buildDashboardQuery(): DashboardQuery | null {
   const vehiculeId = vehiculeFilter.value !== ALL ? vehiculeFilter.value : undefined;
@@ -144,7 +143,6 @@ async function loadDashboard() {
   const previousQuery = buildPreviousQuery(query.vehicule_id);
   const isCurrent = await fetchDashboard(query);
   if (!isCurrent) return;
-  chargerDetail();
 
   if (previousQuery) {
     try {
@@ -191,8 +189,7 @@ const sortedParVehicule = computed(() => [...(dashboard.value?.par_vehicule ?? [
 // du 27/08/2026, section 15 : "calculer une part relative simple si le total
 // backend est fiable"), jamais une formule financière (net à payer, etc.).
 function vehiclePercent(vehicle: DashboardVehiculeBalance): number {
-  const total = summary.value?.total_earned ?? 0;
-  return total > 0 ? Math.round((vehicle.total_earned / total) * 100) : 0;
+  return partDuTotal(vehicle.total_earned, summary.value?.total_earned ?? 0);
 }
 
 const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
@@ -201,8 +198,13 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
 <template>
   <div>
   <section class="client-mobile-expenses" aria-labelledby="mobile-commissions-title">
-    <ClientMobilePageTopbar title="Commissions" title-id="mobile-commissions-title" />
-    <p class="client-mobile-page-intro">Suivez vos gains sur la période sélectionnée.</p>
+    <ClientMobilePageTopbar
+      title="Commissions"
+      title-id="mobile-commissions-title"
+      filter-label="Filtrer les commissions"
+      :filter-count="activeFilterCount"
+      @filter="openFilterPanel"
+    />
 
     <ClientPeriodeComptableFilter
       :model-value="periodeComptable"
@@ -213,43 +215,31 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
       @update:model-value="choisirPeriodeComptable"
     />
 
-    <div class="client-commissions-filters">
-      <Select v-model="periodFilter" :options="periodOptions" option-label="label" option-value="value" fluid />
-      <Select v-model="vehiculeFilter" :options="vehiculeOptions" option-label="label" option-value="value" fluid />
-    </div>
-    <div v-if="periodFilter === 'custom'" class="client-commissions-custom-dates">
-      <label>Du <input v-model="customDateDebut" type="date"></label>
-      <label>Au <input v-model="customDateFin" type="date"></label>
-    </div>
-
     <div v-if="error" class="p-4 text-red-500" role="alert">{{ error.message }}</div>
     <div v-else-if="isLoading && !dashboard" class="p-4 text-muted-color" role="status">Chargement des commissions…</div>
 
     <template v-else-if="summary">
-      <div class="client-mobile-expenses__summary">
-        <span>Gains générés</span>
-        <strong>{{ formatGnf(summary.total_earned) }}</strong>
-        <small v-if="earnedTrend">{{ formatKpiTrendPercent(earnedTrend.percent) }} {{ tendanceLabel }}</small>
-        <small v-else>{{ summary.operations_count }} opération{{ summary.operations_count > 1 ? "s" : "" }}</small>
-      </div>
-      <p v-if="hasNoCommissions" class="text-muted-color text-center">Aucune commission sur cette période.</p>
-
-      <div class="client-mobile-expenses__summary">
-        <span>Reste à payer</span>
-        <strong>{{ formatGnf(summary.balance) }}</strong>
-        <small>Déjà payé : {{ formatGnf(summary.total_paid) }}</small>
-      </div>
-
-      <ClientRepartitionActivites v-if="repartitionVisible(parActivite)" :par-activite="parActivite" />
-
-      <section class="client-mobile-expenses__chart" aria-labelledby="commissions-evolution-title">
-        <div class="client-mobile-expenses__chart-heading">
-          <h2 id="commissions-evolution-title">Évolution des gains</h2>
+      <div class="client-mobile-expenses__summary client-commissions-summary">
+        <div class="client-commissions-summary__earned">
+          <span>Gains générés</span>
+          <strong>{{ formatGnf(summary.total_earned) }}</strong>
+          <small v-if="earnedTrend">{{ formatKpiTrendPercent(earnedTrend.percent) }} {{ tendanceLabel }}</small>
+          <small v-else>{{ summary.operations_count }} opération{{ summary.operations_count > 1 ? "s" : "" }}</small>
         </div>
-        <p class="text-muted-color text-sm mb-0">
-          Bientôt disponible
-        </p>
-      </section>
+        <div class="client-commissions-summary__payments">
+          <div>
+            <span>Reste à payer</span>
+            <strong>{{ formatGnf(summary.balance) }}</strong>
+          </div>
+          <div>
+            <span>Déjà payé</span>
+            <strong>{{ formatGnf(summary.total_paid) }}</strong>
+          </div>
+        </div>
+      </div>
+      <p v-if="hasNoCommissions" class="client-commissions-empty" role="status">Aucune commission sur cette période.</p>
+
+      <ClientRepartitionActivites v-if="repartitionVisible(parActivite)" mobile :par-activite="parActivite" :total="summary.total_earned" />
 
       <section v-if="sortedParVehicule.length" class="client-mobile-expenses__chart" aria-labelledby="commissions-by-vehicle-title">
         <div class="client-mobile-expenses__chart-heading">
@@ -277,20 +267,61 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
       </section>
       <p v-else class="client-mobile-empty-state">Aucun véhicule associé pour le moment.</p>
 
-      <ClientCommissionsDetail
-        v-model:activite="activiteFilter"
-        v-model:recherche="recherche"
-        :lignes="detail.lignes.value"
-        :total="detailTotal"
-        :nombre="detailNombre"
-        :chargement="detail.isLoading.value"
-        :erreur="detail.error.value?.message ?? null"
-        :a-d-autres-pages="detail.aDAutresPages.value"
-        :activites="activitesDuCompte"
-        @voir-plus="detail.voirPlus"
-      />
+      <section class="client-mobile-expenses__chart" aria-labelledby="commissions-evolution-title">
+        <div class="client-mobile-expenses__chart-heading">
+          <h2 id="commissions-evolution-title">Évolution des gains</h2>
+        </div>
+        <p class="text-muted-color text-sm mb-0">
+          Bientôt disponible
+        </p>
+      </section>
     </template>
   </section>
+
+  <Drawer
+    v-model:visible="filterPanelVisible"
+    position="right"
+    modal
+    dismissable
+    close-on-escape
+    block-scroll
+    header="Filtrer les commissions"
+    class="client-delivery-filter-drawer"
+  >
+    <form id="client-commissions-filter-form" class="client-delivery-filter" @submit.prevent="applyFilters">
+      <div class="client-delivery-filter__grid">
+        <label class="client-delivery-filter__field">
+          <span>Période</span>
+          <Select v-model="draftPeriodFilter" :options="periodOptions" option-label="label" option-value="value" fluid />
+        </label>
+        <template v-if="draftPeriodFilter === 'custom'">
+          <label class="client-delivery-filter__field">
+            <span>Du</span>
+            <input v-model="draftCustomDateDebut" type="date" class="client-delivery-filter__date">
+          </label>
+          <label class="client-delivery-filter__field">
+            <span>Au</span>
+            <input v-model="draftCustomDateFin" type="date" class="client-delivery-filter__date">
+          </label>
+        </template>
+        <label class="client-delivery-filter__field">
+          <span>Véhicule</span>
+          <Select v-model="draftVehiculeFilter" :options="vehiculeOptions" option-label="label" option-value="value" fluid />
+        </label>
+      </div>
+    </form>
+    <template #footer>
+      <div class="client-delivery-filter__actions">
+        <Button type="button" label="Réinitialiser" severity="secondary" text @click="resetDraftFilters" />
+        <Button
+          type="submit"
+          form="client-commissions-filter-form"
+          label="Appliquer"
+          :disabled="draftPeriodFilter === 'custom' && (!draftCustomDateDebut || !draftCustomDateFin)"
+        />
+      </div>
+    </template>
+  </Drawer>
 
   <div class="client-desktop-expenses grid grid-cols-12 gap-8">
     <div class="col-span-12">
@@ -345,16 +376,6 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
       </div>
 
       <div class="col-span-12 xl:col-span-6">
-        <div class="card h-full">
-          <div class="font-semibold text-xl mb-4">Évolution des gains</div>
-          <div class="flex flex-col items-center justify-center text-center py-12" role="status">
-            <i class="pi pi-chart-line text-muted-color !text-3xl mb-3" aria-hidden="true" />
-            <strong class="text-lg">Bientôt disponible</strong>
-          </div>
-        </div>
-      </div>
-
-      <div class="col-span-12 xl:col-span-6">
         <div class="card">
           <div class="flex items-center justify-between mb-4">
             <div class="font-semibold text-xl">Gains par véhicule</div>
@@ -388,24 +409,17 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
         </div>
       </div>
 
-      <div v-if="repartitionVisible(parActivite)" class="col-span-12 xl:col-span-4">
-        <ClientRepartitionActivites class="card !mb-0" :par-activite="parActivite" />
+      <div v-if="repartitionVisible(parActivite)" class="col-span-12">
+        <ClientRepartitionActivites class="!mb-0" :par-activite="parActivite" :total="summary.total_earned" />
       </div>
-      <div class="col-span-12" :class="{ 'xl:col-span-8': repartitionVisible(parActivite) }">
-        <div class="card">
-          <ClientCommissionsDetail
-            v-model:activite="activiteFilter"
-            v-model:recherche="recherche"
-            class="!mt-0"
-            :lignes="detail.lignes.value"
-            :total="detailTotal"
-            :nombre="detailNombre"
-            :chargement="detail.isLoading.value"
-            :erreur="detail.error.value?.message ?? null"
-            :a-d-autres-pages="detail.aDAutresPages.value"
-            :activites="activitesDuCompte"
-            @voir-plus="detail.voirPlus"
-          />
+
+      <div class="col-span-12 xl:col-span-6">
+        <div class="card h-full">
+          <div class="font-semibold text-xl mb-4">Évolution des gains</div>
+          <div class="flex flex-col items-center justify-center text-center py-12" role="status">
+            <i class="pi pi-chart-line text-muted-color !text-3xl mb-3" aria-hidden="true" />
+            <strong class="text-lg">Bientôt disponible</strong>
+          </div>
         </div>
       </div>
     </template>
@@ -414,35 +428,60 @@ const hasNoCommissions = computed(() => summary.value?.operations_count === 0);
 </template>
 
 <style lang="scss" scoped>
-.client-commissions-filters {
-  display: flex;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-
-  > * {
-    flex: 1;
-  }
+.client-commissions-summary {
+  gap: 0;
+  padding: 1.1rem;
+  margin: 0 0 0.75rem;
 }
 
-.client-commissions-custom-dates {
+.client-commissions-summary__earned {
   display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding-bottom: 0.9rem;
+}
+
+.client-commissions-summary__earned strong {
+  font-size: 1.75rem;
+  line-height: 1.15;
+}
+
+.client-commissions-summary__payments {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
-  margin-bottom: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid color-mix(in srgb, var(--primary-contrast-color) 28%, transparent);
+}
 
-  label {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-    font-size: 0.85rem;
-    color: var(--p-text-muted-color);
-  }
+.client-commissions-summary__payments > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
 
-  input {
-    border: 1px solid var(--p-content-border-color);
-    border-radius: var(--p-content-border-radius);
-    padding: 0.5rem;
-  }
+.client-commissions-summary__payments > div + div {
+  padding-left: 0.75rem;
+  border-left: 1px solid color-mix(in srgb, var(--primary-contrast-color) 28%, transparent);
+}
+
+.client-commissions-summary__payments span {
+  opacity: 0.82;
+  font-size: 0.7rem;
+}
+
+.client-commissions-summary__payments strong {
+  overflow-wrap: anywhere;
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+.client-commissions-empty {
+  margin: -0.2rem 0 0.85rem;
+  color: var(--p-text-muted-color);
+  font-size: 0.8rem;
+  text-align: center;
 }
 
 .client-commissions-desktop-date {

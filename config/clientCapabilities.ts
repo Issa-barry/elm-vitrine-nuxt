@@ -27,9 +27,11 @@ export interface ClientCapabilities {
   expenses: boolean;
   /** Mes véhicules — uniquement pertinent pour un contexte proprietaire ou livreur (équipe). */
   vehicles: boolean;
-  /** Activité & livraisons (historique vente/logistique par véhicule) — même condition que `vehicles`. */
-  logisticsActivity: boolean;
-  /** Mes commandes — uniquement pertinent pour un contexte client (achats). */
+  /**
+   * Commandes — liste unique des opérations du compte (ADR 0058 côté elm-monolithe) : ses commandes,
+   * ses livraisons et les ventes de ses véhicules. Ouverte à tout compte, même sans activité : le
+   * serveur ne renvoie que ce qui le concerne, et le bouton « Passer une commande » s'y trouve.
+   */
   orders: boolean;
   /** Mes prestations — futur contexte prestataire, aucun backend aujourd'hui (voir pages/espace-client/prestations.vue, placeholder). */
   services: boolean;
@@ -47,7 +49,6 @@ const NO_CAPABILITIES: ClientCapabilities = {
   commissions: false,
   expenses: false,
   vehicles: false,
-  logisticsActivity: false,
   orders: false,
   services: false,
   parrain: false,
@@ -79,8 +80,8 @@ export function resolveClientCapabilities(context: AuthContext | null | undefine
   // change pas.
   const hasParrainContext = Boolean(context.parrain_id);
 
-  // Véhicules/activité logistique : uniquement proprietaire ou livreur (une
-  // équipe) — jamais un client pur, jamais (aujourd'hui) un prestataire pur.
+  // Véhicules : uniquement proprietaire ou livreur (une équipe) — jamais un
+  // client pur, jamais (aujourd'hui) un prestataire pur.
   const hasVehicleContext = Boolean(context.proprietaire_id || context.livreur_id);
 
   return {
@@ -88,8 +89,7 @@ export function resolveClientCapabilities(context: AuthContext | null | undefine
     commissions: hasAnyContext,
     expenses: hasAnyContext,
     vehicles: hasVehicleContext,
-    logisticsActivity: hasVehicleContext,
-    orders: Boolean(context.client_id),
+    orders: true,
     // prestataire_id n'existe pas encore côté backend : toujours false en
     // pratique tant qu'il n'est pas exposé — voir config/auth.ts::AuthContext.
     services: Boolean(context.prestataire_id),

@@ -80,7 +80,7 @@ const applyVehicleFilter = () => {
 
 // Détail véhicule en boîte de dialogue (bas d'écran), plus une navigation
 // vers /espace-client/vehicules/[id] (demande du 27/08/2026) — même patron
-// que le détail d'opération de pages/espace-client/activite.vue. Cette page
+// que le détail d'opération de pages/espace-client/commandes.vue. Cette page
 // [id] existait déjà mais n'était jamais branchée sur de vraies données
 // (chantier resté ouvert) ; elle n'est plus liée nulle part depuis cette
 // page désormais, laissée en place telle quelle (pas supprimée, non demandé).
@@ -259,7 +259,7 @@ const openVehicleDetail = (vehicle: ClientVehicleRattache, event: MouseEvent) =>
 
       <!-- QR = immatriculation réelle, déjà affichée juste en dessous —
         jamais un identifiant fabriqué. Même composant/pattern que
-        pages/espace-client/activite.vue (QR sur la référence de commande). -->
+        pages/espace-client/commandes.vue (QR sur la référence de commande). -->
       <div class="client-delivery-detail__qr">
         <QrcodeVue :value="selectedVehicle.immatriculation" :size="176" level="M" render-as="svg" foreground="#111827" background="#ffffff" />
         <span class="client-delivery-detail__qr-hint">Scannez pour identifier le véhicule</span>

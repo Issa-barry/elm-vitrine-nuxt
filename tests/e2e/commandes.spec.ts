@@ -1,22 +1,21 @@
 import { test, expect, type Page } from "@playwright/test";
 import { loginAsTestUser } from "./helpers";
 
-// Couvre pages/espace-client/activite.vue branché sur GET /v1/mobile/activite
-// (mock-backend.mjs::TEST_ACTIVITY, 4 opérations : 2 vente, 2 logistique,
-// réparties sur 2 véhicules) — jamais les anciens champs mockés sans
-// équivalent backend (driverPhone, agence, créateur, détail produit/quantité,
-// heure, montant total), voir le commentaire de suppression dans
-// pages/espace-client/activite.vue.
-test.describe("Espace client — activité", () => {
+// Couvre pages/espace-client/commandes.vue, la liste unique « Commandes »
+// (ADR 0058 côté elm-monolithe), branchée sur GET /v1/mobile/activite et sa
+// route de détail (mock-backend.mjs::TEST_ACTIVITY, 4 opérations : 2 ventes,
+// 2 transferts, réparties sur 2 véhicules). Le compte de test est client et
+// propriétaire : CMD-2839 est à la fois sa commande et une vente de son véhicule.
+test.describe("Espace client — commandes", () => {
   test.describe.configure({ timeout: 90_000 });
 
   test("affiche les vraies opérations (ventes et logistique mélangées)", async ({ page }) => {
     await loginAsTestUser(page);
-    await page.goto("/espace-client/activite", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.goto("/espace-client/commandes", { waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.waitForLoadState("load");
     await page.waitForTimeout(1000);
 
-    await expect(page).toHaveTitle(/Activité/);
+    await expect(page).toHaveTitle(/Commandes/);
 
     const table = page.locator(".client-desktop-deliveries");
     await expect(table.getByText("CMD-2847")).toBeVisible({ timeout: 10_000 });
@@ -31,7 +30,7 @@ test.describe("Espace client — activité", () => {
 
   test("filtre par type (vente/logistique)", async ({ page }) => {
     await loginAsTestUser(page);
-    await page.goto("/espace-client/activite", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.goto("/espace-client/commandes", { waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.waitForLoadState("load");
     await page.waitForTimeout(1000);
 
@@ -53,10 +52,10 @@ test.describe("Espace client — activité", () => {
     await expect(table.getByText("TR-00038-ABC")).toHaveCount(0);
   });
 
-  test("ouvre le détail d'une opération avec les vrais champs (pas de produits inventés)", async ({ page }) => {
+  test("ouvre le détail d'une opération avec les champs de son lien", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await loginAsTestUser(page);
-    await page.goto("/espace-client/activite", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.goto("/espace-client/commandes", { waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.waitForLoadState("load");
     await page.waitForTimeout(1000);
 
@@ -67,25 +66,81 @@ test.describe("Espace client — activité", () => {
     await expect(detail.getByText("Siège de Matoto")).toBeVisible();
     await expect(detail.getByText("Client X")).toBeVisible();
     await expect(detail.getByText("ABARRY · OU3859")).toBeVisible();
-    await expect(detail.getByText("12")).toBeVisible();
+    await expect(detail.getByText("12", { exact: true })).toBeVisible();
+    // Vente du véhicule, pas sa commande : quantités sans prix ni contact.
+    await expect(detail.getByTestId("operation-lignes")).toContainText("Pack eau 1,5 L × 12");
+    await expect(detail.getByText("Total")).toHaveCount(0);
+    await expect(detail.getByTestId("operation-contact")).toHaveCount(0);
   });
 
-  test("une vente livrée partiellement payée affiche aussi son paiement, comme le back-office", async ({ page }) => {
+  test("une vente partiellement payée affiche son avancement et son paiement séparément", async ({ page }) => {
     await page.setViewportSize({ width: 440, height: 956 });
     await loginAsTestUser(page);
-    await page.goto("/espace-client/activite", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.goto("/espace-client/commandes", { waitUntil: "domcontentloaded", timeout: 30_000 });
 
-    // TEST_ACTIVITY : CMD-2839 livrée + facture partielle, CMD-2847 facture encore « Créée ».
-    const carte = page.getByRole("button", { name: "CMD-2839, Livrée, Partiellement payée. Voir les détails." });
+    // TEST_ACTIVITY : CMD-2839 en cours de clôture + facture partielle, CMD-2847 facture encore « Créée ».
+    const carte = page.getByRole("button", { name: "CMD-2839, Ma commande, Vente sur véhicule, En cours de clôture, Partiellement payée. Voir les détails." });
     await expect(carte).toBeVisible({ timeout: 30_000 });
     await expect(carte.getByText("Partiellement payée")).toBeVisible();
-    await expect(page.getByRole("button", { name: "CMD-2847, Livraison en cours. Voir les détails." })).toBeVisible();
+    await expect(page.getByRole("button", { name: "CMD-2847, Vente sur véhicule, En cours de livraison. Voir les détails." })).toBeVisible();
     await expect(page.locator(".client-mobile-deliveries").getByText("Créée")).toHaveCount(0);
 
     await carte.click();
     const detail = page.locator(".client-delivery-detail");
     await expect(detail.getByText("Paiement")).toBeVisible();
     await expect(detail.getByText("Partiellement payée")).toBeVisible();
+    // Sa propre commande : prix, total et coordonnées.
+    await expect(detail.getByTestId("operation-lignes").getByText("Total")).toBeVisible();
+    await expect(detail.getByTestId("operation-lignes")).toContainText(/96\s?000/);
+    await expect(detail.getByTestId("operation-contact")).toContainText("Cité Enco-5, Conakry");
+  });
+
+  test("« Passer une commande » est visible en haut de la liste, désactivé", async ({ page }) => {
+    await page.setViewportSize({ width: 440, height: 956 });
+    await loginAsTestUser(page);
+    await page.goto("/espace-client/commandes", { waitUntil: "domcontentloaded", timeout: 30_000 });
+
+    const bloc = page.getByTestId("passer-commande");
+    await expect(bloc.getByRole("button", { name: "Passer une commande" })).toBeDisabled({ timeout: 30_000 });
+    await expect(bloc.getByText("Bientôt disponible")).toBeVisible();
+  });
+
+  test("filtre par lien pour un compte à deux liens, côté serveur", async ({ page }) => {
+    await page.setViewportSize({ width: 440, height: 956 });
+    await loginAsTestUser(page);
+    await page.goto("/espace-client/commandes", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    const liste = page.locator(".client-mobile-deliveries");
+    await expect(liste.getByText("4 opérations", { exact: true })).toBeVisible({ timeout: 30_000 });
+
+    await page.getByRole("button", { name: "Filtrer les commandes" }).click();
+    await page.getByTestId("filtre-lien").getByRole("combobox").click();
+    await page.getByRole("option", { name: "Ma commande" }).click();
+    const reponse = page.waitForResponse((r) => r.url().includes("/api/client/activity") && r.url().includes("lien=client"));
+    await page.getByRole("button", { name: "Appliquer" }).click();
+
+    expect((await (await reponse).json()).filters.lien).toBe("client");
+    await expect(liste.getByText("1 opération", { exact: true })).toBeVisible();
+    await expect(liste.getByRole("button", { name: /CMD-2839/ })).toBeVisible();
+    await expect(liste.getByText("Lien : Ma commande")).toBeVisible();
+  });
+
+  test("l'ancienne adresse Livraisons redirige vers Commandes et ouvre l'opération notifiée", async ({ page }) => {
+    await page.setViewportSize({ width: 440, height: 956 });
+    await loginAsTestUser(page);
+    await page.goto("/espace-client/activite?commande=act-3", { waitUntil: "domcontentloaded", timeout: 30_000 });
+
+    await expect(page).toHaveURL(/\/espace-client\/commandes\?commande=act-3$/);
+    const detail = page.locator(".client-delivery-detail");
+    await expect(detail.locator(".client-delivery-detail__top").getByText("CMD-2839")).toBeVisible({ timeout: 30_000 });
+    await expect(detail.getByTestId("operation-lignes")).toBeVisible();
+  });
+
+  test("une opération notifiée hors du compte affiche un message, jamais une erreur brute", async ({ page }) => {
+    await page.setViewportSize({ width: 440, height: 956 });
+    await loginAsTestUser(page);
+    await page.goto("/espace-client/commandes?commande=inconnue", { waitUntil: "domcontentloaded", timeout: 30_000 });
+
+    await expect(page.getByTestId("operation-introuvable")).toContainText("Opération introuvable", { timeout: 30_000 });
   });
 
   // Réponses interceptées au niveau du BFF : le filtrage réel est testé côté
@@ -100,8 +155,9 @@ test.describe("Espace client — activité", () => {
       id,
       type: "vente",
       reference: id,
-      statut: "livree",
-      statut_label: "Livrée",
+      nature: { code: "vente_standard", label: "Vente" },
+      liens: ["client"],
+      avancement: { code: "terminee", label: "Terminée" },
       statut_paiement: "payee",
       statut_paiement_label: "Payée",
       site_source: "Siège de Matoto",
@@ -110,11 +166,12 @@ test.describe("Espace client — activité", () => {
       date,
       nb_packs: 12,
     });
-    const reponse = (ids: string[], meta: { page?: number; last?: number; total?: number } = {}) => ({
+    const reponse = (ids: string[], meta: { page?: number; last?: number; total?: number; compte?: boolean } = {}) => ({
       data: ids.map((id) => operation(id)),
       links: { first: null, last: null, prev: null, next: null },
       meta: { current_page: meta.page ?? 1, last_page: meta.last ?? 1, per_page: 50, total: meta.total ?? ids.length },
       filters: {},
+      compte_a_des_operations: meta.compte ?? true,
     });
     const PERIODES = ["Aujourd’hui", "Hier", "Cette semaine", "Semaine dernière", "Ce mois", "Mois dernier", "Cette année"];
 
@@ -132,21 +189,21 @@ test.describe("Espace client — activité", () => {
       });
       await page.setViewportSize({ width: 440, height: 956 });
       await loginAsTestUser(page);
-      await page.goto("/espace-client/activite", { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await page.goto("/espace-client/commandes", { waitUntil: "domcontentloaded", timeout: 30_000 });
       await page.waitForLoadState("load");
       // Le compteur n'apparaît qu'après onMounted : la page est donc hydratée.
       await expect(page.locator(".client-mobile-deliveries__list-heading").getByText(/^\d+ opérations?$/)).toBeVisible({ timeout: 30_000 });
       return requetes;
     }
 
-    const ouvrirFiltre = (page: Page) => page.getByRole("button", { name: "Filtrer l’activité" }).click();
+    const ouvrirFiltre = (page: Page) => page.getByRole("button", { name: "Filtrer les commandes" }).click();
     const periodes = (page: Page) => page.getByRole("group", { name: "Période" });
     const liste = (page: Page) => page.locator(".client-mobile-deliveries");
 
     test("sans interception : la période traverse le BFF et filtre côté backend (mock)", async ({ page }) => {
       await page.setViewportSize({ width: 440, height: 956 });
       await loginAsTestUser(page);
-      await page.goto("/espace-client/activite", { waitUntil: "domcontentloaded", timeout: 30_000 });
+      await page.goto("/espace-client/commandes", { waitUntil: "domcontentloaded", timeout: 30_000 });
       await expect(liste(page).getByText("4 opérations", { exact: true })).toBeVisible({ timeout: 30_000 });
 
       await ouvrirFiltre(page);
@@ -279,6 +336,26 @@ test.describe("Espace client — activité", () => {
       expect(requetes.at(-1)?.get("page")).toBe("2");
     });
 
+    test("compte sans aucune opération : message dédié, bouton toujours là", async ({ page }) => {
+      await ouvrirActivite(page, () => reponse([], { compte: false }));
+
+      await expect(liste(page).getByText("Aucune commande pour le moment")).toBeVisible();
+      await expect(liste(page).getByText("Voir toutes les périodes")).toHaveCount(0);
+      await expect(page.getByTestId("passer-commande").getByRole("button", { name: "Passer une commande" })).toBeDisabled();
+    });
+
+    test("période vide : « Voir toutes les périodes » retire la période comptable", async ({ page }) => {
+      const requetes = await ouvrirActivite(page, (query) => (query.has("annee") ? reponse([]) : reponse(["VTE-ANCIENNE"])));
+      expect(requetes.at(-1)?.has("annee")).toBe(true);
+
+      await expect(liste(page).getByText("Aucune opération sur cette période")).toBeVisible();
+      await liste(page).getByRole("button", { name: "Voir toutes les périodes" }).click();
+
+      await expect(liste(page).getByRole("button", { name: /VTE-ANCIENNE/ })).toBeVisible();
+      expect(requetes.at(-1)?.has("annee")).toBe(false);
+      expect(requetes.at(-1)?.has("periode")).toBe(false);
+    });
+
     test("états chargement, vide et erreur avec nouvel essai", async ({ page }) => {
       let liberer: () => void = () => {};
       let mode: "normal" | "lent" | "vide" | "erreur" = "normal";
@@ -293,7 +370,7 @@ test.describe("Espace client — activité", () => {
       await ouvrirFiltre(page);
       await periodes(page).getByRole("button", { name: "Hier" }).click();
       await page.getByRole("button", { name: "Appliquer" }).click();
-      await expect(liste(page).getByText("Chargement de l’activité…")).toBeVisible();
+      await expect(liste(page).getByText("Chargement des commandes…")).toBeVisible();
       await expect(liste(page).getByRole("button", { name: /VTE-1/ })).toHaveCount(0);
       mode = "normal";
       liberer();

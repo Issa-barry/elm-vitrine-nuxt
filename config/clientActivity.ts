@@ -1,27 +1,28 @@
 import type { ApiActiviteQuery } from "~/types/api";
+import type { AuthContext } from "./auth";
 import type { PaginatedResponse } from "./pagination";
 import type { PeriodeComptableQuery, Quinzaine } from "./clientPeriodeComptable";
 
-// Type du contrat réel GET /v1/mobile/activite côté elm-monolithe (voir
-// docs/api-espace-client-contract.md §5, vérifié directement contre
-// App\Http\Controllers\Api\Client\ActiviteController le 26/08/2026).
-// Historique complet (tous statuts) mêlant deux modèles à vocabulaire de
-// statut distinct — jamais de correspondance inventée entre les deux (voir
-// activityTypeLabel ci-dessous, qui ne fait que traduire `type`, jamais
-// `statut`, dont le libellé vient déjà du backend via `statut_label`).
+// Liste unique « Commandes » : contrat GET /v1/mobile/activite et
+// GET /v1/mobile/activite/{type}/{id} côté elm-monolithe (ADR 0058,
+// docs/api-espace-client-contract.md §5). Une ligne porte trois informations
+// distinctes, toutes calculées par le serveur :
+// - `nature` : ce qu'est l'opération (vente, distribution client, précommande, transfert) ;
+// - `liens` : pourquoi ce compte la voit (client, livreur, propriétaire), plusieurs pour un compte qui cumule ;
+// - `avancement` : où elle en est, dans un vocabulaire commun.
+// Le paiement reste à part, et le serveur l'omet pour un compte seulement livreur.
 //
-// IMPERFECTION OpenAPI CONSTATÉE (chantier "types OpenAPI" du 27/08/2026,
-// voir types/generated/elm-api.ts) : `data` est généré en `string[]` pour
-// cet endpoint précis — ActiviteController fusionne deux modèles
-// (CommandeVente, TransfertLogistique) en tableaux PHP associatifs bruts
-// (jamais une Resource/DTO typée, contrairement à `par_vehicule` ->
-// `VehiculeEarningsRow`), Scramble ne peut donc rien inférer de fiable pour
-// la forme des items. `filters` échoue de la même façon en `unknown` (tous
-// les endpoints paginés de ce contrat, même cause). ClientActivityItem/
-// ActivityVehicle/ActivityFilters restent donc écrits à la main ; seuls les
-// PARAMÈTRES DE REQUÊTE (type/vehicule_id/dates/per_page), eux correctement
-// typés côté OpenAPI, viennent du contrat généré.
+// Types écrits à la main : OpenAPI génère `data` en `string[]` et `liens` en
+// `string`, faute de pouvoir inférer les lignes. Seuls les paramètres de
+// requête viennent du contrat généré.
 export type ActivityType = "vente" | "logistique";
+
+export type ActivityLien = "client" | "livreur" | "proprietaire";
+
+export interface ActivityCode {
+  code: string;
+  label: string;
+}
 
 export interface ActivityVehicle {
   id: string;
@@ -29,16 +30,16 @@ export interface ActivityVehicle {
   immatriculation: string;
 }
 
-export type ActivityPaymentStatus = "creee" | "impayee" | "partiel" | "payee" | "annulee";
+export type ActivityPaymentStatus = "creee" | "impayee" | "partiel" | "payee" | "annulee" | "acompte_recu";
 
 export interface ClientActivityItem {
   id: string;
   type: ActivityType;
   reference: string;
-  statut: string;
-  /** Libellé affiché au back-office pour une vente (ex. « Commissions à verser »), `statut` reste la valeur brute. */
-  statut_label: string;
-  /** Statut de la facture d'une vente (`StatutFactureVente`) — null pour un transfert ou une vente sans facture. */
+  nature: ActivityCode;
+  liens: ActivityLien[];
+  avancement: ActivityCode;
+  /** Statut de la facture d'une vente — null pour un transfert, une vente sans facture ou un compte seulement livreur. */
   statut_paiement: ActivityPaymentStatus | null;
   statut_paiement_label: string | null;
   site_source: string;
@@ -48,9 +49,27 @@ export interface ClientActivityItem {
   nb_packs: number;
 }
 
+export interface ClientOperationLine {
+  id: string;
+  libelle: string | null;
+  quantite: number;
+  /** Prix réservés au client de la commande. */
+  prix_unitaire: number | null;
+  total: number | null;
+}
+
+export interface ClientOperationDetail extends ClientActivityItem {
+  /** Remise physique, seulement quand le système la connaît : réception ou retrait validés. */
+  remise: { date: string | null; source: "reception" | "retrait" } | null;
+  lignes: ClientOperationLine[];
+  total: number | null;
+  /** Coordonnées du client : le client lui-même, ou le livreur pendant la livraison. */
+  contact: { telephone: string | null; adresse: string | null } | null;
+}
+
 // Périodes rapides : le navigateur ne transmet que la clé, le backend résout
-// seul les bornes (ActiviteMineRequest + SituationPeriode, fuseau de
-// l'application) — jamais de calcul de dates avec l'horloge du navigateur.
+// seul les bornes (ActiviteMineRequest + Periode, fuseau de l'application) —
+// jamais de calcul de dates avec l'horloge du navigateur.
 export const ACTIVITY_PERIODS = [
   { value: "aujourd_hui", label: "Aujourd’hui" },
   { value: "hier", label: "Hier" },
@@ -69,7 +88,7 @@ export function activityPeriodLabel(period: ActivityPeriod): string {
 
 export interface ActivityFilters {
   type: ActivityType | null;
-  statut: string | null;
+  lien: ActivityLien | null;
   vehicule_id: string | null;
   periode: ActivityPeriod | null;
   annee: number | null;
@@ -79,37 +98,77 @@ export interface ActivityFilters {
   date_fin: string | null;
 }
 
-export type ClientActivityResponse = PaginatedResponse<ClientActivityItem, ActivityFilters>;
+export type ClientActivityResponse = PaginatedResponse<ClientActivityItem, ActivityFilters> & {
+  /** Calculé sans aucun filtre : distingue un compte sans opération d'une période vide. */
+  compte_a_des_operations: boolean;
+};
 
 /**
  * Requête vers GET /api/client/activity (BFF) — dérivée des paramètres de
- * requête OpenAPI (ApiActiviteQuery, correctement typés). `page` et `periode`
- * sont redéclarés ici pour exclure `null` et typer `periode` par ACTIVITY_PERIODS.
- * `statut` volontairement omis de ce type malgré sa présence dans le contrat
- * OpenAPI : le backend l'exige accompagné de `type` (422 sinon, deux
- * vocabulaires de statut différents selon le type) — la page
- * /espace-client/activite n'expose pour l'instant qu'un filtre par
- * `type`/`vehicule_id`/période, pas par statut (qui demanderait une liste
- * d'options dépendante du type sélectionné, hors périmètre de cette passe,
- * voir demande du 26/08/2026, section 38 : pas de refonte complète de l'UI).
- * `periode` exclut `date_debut`/`date_fin` (422 sinon, voir ActiviteMineRequest),
- * et la période comptable exclut les deux.
+ * requête OpenAPI. `periode` exclut `date_debut`/`date_fin` (422 sinon, voir
+ * ActiviteMineRequest), et la période comptable exclut les deux. `lien` est
+ * filtré par le serveur, pour garder des totaux et une pagination justes.
  */
-export type ActivityQuery = Omit<ApiActiviteQuery, "statut"> & { page?: number; periode?: ActivityPeriod } & PeriodeComptableQuery;
+export type ActivityQuery = Omit<ApiActiviteQuery, "lien" | "periode" | "page"> & {
+  lien?: ActivityLien;
+  page?: number;
+  periode?: ActivityPeriod;
+} & PeriodeComptableQuery;
 
-/** Libellé du type, pour un badge — ne reformule jamais `statut_label` (déjà fourni par le backend). */
 export function activityTypeLabel(type: ActivityType): string {
-  return type === "vente" ? "Vente" : "Logistique";
+  return type === "vente" ? "Vente" : "Transfert logistique";
+}
+
+const LIEN_LABELS: Record<ActivityLien, string> = {
+  client: "Ma commande",
+  livreur: "Livraison",
+  proprietaire: "Vente sur véhicule",
+};
+
+export function lienLabel(lien: ActivityLien): string {
+  return LIEN_LABELS[lien];
+}
+
+/** Badges d'une ligne : un transfert reste un transfert, une vente porte un badge par lien du compte. */
+export function operationBadges(item: Pick<ClientActivityItem, "type" | "liens">): string[] {
+  if (item.type === "logistique") return [activityTypeLabel("logistique")];
+
+  return item.liens.map(lienLabel);
 }
 
 /**
- * Paiement affiché à côté du statut d'une vente, comme sur la fiche back-office
- * (« Livrée » + « Partiellement payée »). Rien pour une facture encore « Créée »
- * (aucun encaissement attendu) ni « Annulée » (le statut de la vente le dit déjà).
+ * Liens que ce compte peut avoir, d'après ses activités (GET /api/auth/me) : le
+ * filtre par lien ne s'affiche qu'à partir de deux, ce n'est pas une rubrique.
+ */
+export function liensDuCompte(context: AuthContext | null | undefined): ActivityLien[] {
+  if (!context) return [];
+
+  return ([
+    ["client", context.client_id],
+    ["livreur", context.livreur_id],
+    ["proprietaire", context.proprietaire_id],
+  ] as const).filter(([, id]) => Boolean(id)).map(([lien]) => lien);
+}
+
+/**
+ * Couleur de l'avancement : vert pour une opération aboutie, gris pour une
+ * annulation (ni erreur ni blocage), ambre pour un retour, bleu sinon.
+ */
+export function avancementSeverity(code: string): "success" | "info" | "warn" | "secondary" {
+  if (["livree", "terminee", "retiree", "termine"].includes(code)) return "success";
+  if (["annulee", "annule"].includes(code)) return "secondary";
+  if (["retournee", "retourne"].includes(code)) return "warn";
+  return "info";
+}
+
+/**
+ * Paiement affiché à côté de l'avancement d'une vente. Rien pour une facture
+ * encore « Créée » (aucun encaissement attendu) ni « Annulée » (l'avancement
+ * le dit déjà). Un acompte de précommande reste à compléter : attention.
  */
 export function activityPayment(item: Pick<ClientActivityItem, "statut_paiement" | "statut_paiement_label">): { label: string; severity: "success" | "warn" } | null {
   if (!item.statut_paiement || !item.statut_paiement_label) return null;
   if (item.statut_paiement === "payee") return { label: item.statut_paiement_label, severity: "success" };
-  if (item.statut_paiement === "partiel" || item.statut_paiement === "impayee") return { label: item.statut_paiement_label, severity: "warn" };
+  if (["partiel", "impayee", "acompte_recu"].includes(item.statut_paiement)) return { label: item.statut_paiement_label, severity: "warn" };
   return null;
 }

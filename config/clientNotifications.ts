@@ -44,15 +44,15 @@ export const notificationBadgeLabel = (unreadCount: number): string | null => {
 // fabriqué ici). `resource.type` est le type de RESSOURCE ("commande_vente"),
 // distinct de `notification.type` qui est le type d'ÉVÉNEMENT
 // ("delivery.assigned") — ne pas confondre les deux. Seule correspondance
-// connue aujourd'hui côté backend : une commande de vente s'ouvre via
-// Livraisons (pages/espace-client/activite.vue, lecture de `?commande=`).
+// connue aujourd'hui côté backend : une commande de vente s'ouvre dans
+// Commandes (pages/espace-client/commandes.vue, lecture de `?commande=`).
 // Aucun autre type de ressource ne porte encore de route équivalente : pas de
 // lien inventé, la notification reste alors simplement lisible/marquable lue.
 export function notificationResourceToRoute(resource: ClientNotification["resource"]): { path: string; query: Record<string, string> } | null {
   if (!resource) return null;
 
   if (resource.type === "commande_vente") {
-    return { path: "/espace-client/activite", query: { commande: resource.id } };
+    return { path: "/espace-client/commandes", query: { commande: resource.id } };
   }
 
   return null;
