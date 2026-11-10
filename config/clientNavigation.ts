@@ -1,3 +1,4 @@
+import { ACCUEIL_SANS_ACTIVITE } from "./clientAccueil";
 import type { ClientCapabilities } from "./clientCapabilities";
 import { isParrainSpacePath, PARRAIN_SPACE_HOME } from "./clientParrain";
 
@@ -8,12 +9,9 @@ import { isParrainSpacePath, PARRAIN_SPACE_HOME } from "./clientParrain";
 // requise (demande du 27/08/2026, section 13 : jamais de
 // roles.includes(...) dispersé dans les composants).
 //
-// "Mes commandes" (capability "orders") n'a volontairement PAS d'entrée ici
-// pour l'instant : aucune page /espace-client/commandes n'existe encore
-// (chantier distinct, non entamé — voir le point resté ouvert dans le fil de
-// discussion sur les nouvelles pages "commandes"/"propositions-véhicule").
-// Ajouter l'entrée sans la page casserait un lien pour tout compte avec un
-// contexte client réel dès aujourd'hui.
+// « Commandes » remplace « Livraisons » (ADR 0058 côté elm-monolithe) : une
+// seule liste pour les commandes, livraisons et ventes sur véhicule du compte,
+// sans rubrique par profil.
 export interface ClientNavItem {
   key: string;
   label: string;
@@ -36,7 +34,7 @@ export interface ClientNavItem {
 export const CLIENT_NAV_ITEMS: ClientNavItem[] = [
   { key: "dashboard", label: "Accueil", icon: "pi-home", to: "/espace-client", capability: "dashboard", exact: true, section: "accueil", mobileBottomNav: true },
   { key: "vehicles", label: "Véhicules", icon: "pi-car", to: "/espace-client/vehicules", capability: "vehicles", section: "gestion", mobileBottomNav: true },
-  { key: "logisticsActivity", label: "Livraisons", icon: "pi-map-marker", to: "/espace-client/activite", capability: "logisticsActivity", section: "gestion", mobileBottomNav: true },
+  { key: "orders", label: "Commandes", icon: "pi-shopping-bag", to: "/espace-client/commandes", capability: "orders", section: "gestion", mobileBottomNav: true },
   { key: "commissions", label: "Commissions", icon: "pi-percentage", to: "/espace-client/commissions", capability: "commissions", section: "gestion", mobileBottomNav: true },
   { key: "expenses", label: "Dépenses", icon: "pi-wallet", to: "/espace-client/depenses", capability: "expenses", section: "gestion", mobileBottomNav: true },
   // Prestations : placeholder UI uniquement (voir pages/espace-client/
@@ -65,13 +63,28 @@ const BACK_TO_MAIN_SPACE: ClientNavItem = {
   section: "accueil",
 };
 
+const WELCOME: ClientNavItem = {
+  key: "welcome",
+  label: "Accueil",
+  icon: "pi-home",
+  to: ACCUEIL_SANS_ACTIVITE,
+  capability: "orders",
+  exact: true,
+  section: "accueil",
+};
+
 // La barre mobile s'adapte à l'espace ouvert plutôt que de cumuler les entrées
 // (décision du 02/11/2026 : 5 entrées au plus). Un parrain seul reste toujours
-// dans la sienne, profil compris. Avec une autre activité, sa barre habituelle
-// ne change pas hors de l'espace parrain, et celle de l'espace parrain propose
-// le retour.
+// dans la sienne, profil compris : ses Commandes s'ouvrent depuis le Profil.
+// Avec une autre activité, sa barre habituelle ne change pas hors de l'espace
+// parrain, et celle de l'espace parrain propose le retour. Un compte sans
+// activité garde un accueil à côté de ses Commandes.
 export function bottomNavItems(capabilities: ClientCapabilities, path: string): ClientNavItem[] {
   const parrainOnly = capabilities.parrain && !capabilities.dashboard;
+
+  if (!capabilities.dashboard && !capabilities.parrain) {
+    return capabilities.orders ? [WELCOME, ...CLIENT_NAV_ITEMS.filter((item) => item.key === "orders")] : [];
+  }
 
   if (!capabilities.parrain || (!parrainOnly && !isParrainSpacePath(path))) {
     return CLIENT_NAV_ITEMS.filter((item) => item.mobileBottomNav && capabilities[item.capability]);

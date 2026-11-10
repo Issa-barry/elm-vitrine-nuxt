@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AuthContext } from "./auth";
 import { compteSansActivite } from "./clientAccueil";
+import { resolveClientCapabilities } from "./clientCapabilities";
 
 const ctx = (overrides: Partial<AuthContext> = {}): AuthContext => ({
   organization_id: "org",
@@ -24,6 +25,11 @@ describe("compteSansActivite", () => {
     expect(compteSansActivite(ctx({ livreur_id: "l1" }))).toBe(false);
     expect(compteSansActivite(ctx({ parrain_id: "pa1" }))).toBe(false);
     expect(compteSansActivite(ctx({ consultant_ids: ["co1"] }))).toBe(false);
+  });
+
+  it("la liste Commandes, ouverte à tout compte, ne compte pas comme une activité", () => {
+    expect(resolveClientCapabilities(ctx()).orders).toBe(true);
+    expect(compteSansActivite(ctx())).toBe(true);
   });
 
   it("ne conclut rien tant que le contexte est inconnu", () => {

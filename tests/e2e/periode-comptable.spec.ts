@@ -1,7 +1,7 @@
 import { test, expect, type Locator, type Page } from "@playwright/test";
 import { loginAsTestUser } from "./helpers";
 
-// Filtre période comptable commun aux écrans Commissions, Ventes (Activité) et
+// Filtre période comptable commun aux écrans Commissions, Commandes et
 // Dépenses. Réponses interceptées : ces tests vérifient l'interface et les
 // paramètres envoyés, le filtrage réel est couvert par
 // tests/Feature/Api/Client/PeriodeComptableFiltreTest.php côté elm-monolithe.
@@ -72,7 +72,7 @@ async function choisir(page: Page, conteneur: Locator, champ: string, option: st
 
 const ECRANS = [
   { nom: "Commissions", url: "/espace-client/commissions", conteneur: ".client-mobile-expenses", cle: "dashboard" },
-  { nom: "Ventes", url: "/espace-client/activite", conteneur: ".client-mobile-deliveries", cle: "activity" },
+  { nom: "Commandes", url: "/espace-client/commandes", conteneur: ".client-mobile-deliveries", cle: "activity" },
   { nom: "Dépenses", url: "/espace-client/depenses", conteneur: ".client-mobile-expenses", cle: "expenses" },
 ] as const;
 
@@ -138,8 +138,8 @@ test.describe("Espace client — filtre période comptable", () => {
     await expect(quinzaine(depenses, "P1 : 01–15")).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
     await expect.poll(() => requetes.expenses.at(-1)?.get("quinzaine")).toBe("P1");
 
-    await navigation.getByRole("link", { name: "Livraisons" }).click();
-    await expect(page).toHaveURL(/\/espace-client\/activite$/);
+    await navigation.getByRole("link", { name: "Commandes" }).click();
+    await expect(page).toHaveURL(/\/espace-client\/commandes$/);
     const ventes = page.locator(".client-mobile-deliveries");
     await expect(quinzaine(ventes, "P1 : 01–15")).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
     await expect.poll(() => requetes.activity.at(-1)?.get("quinzaine")).toBe("P1");
@@ -210,11 +210,11 @@ test.describe("Espace client — filtre période comptable", () => {
     expect(requetes.expenses.at(-1)?.get("annee")).toBeNull();
   });
 
-  test("activité : un lien vers une opération charge toutes les périodes", async ({ page }) => {
+  test("commandes : un lien vers une opération charge toutes les périodes", async ({ page }) => {
     const requetes = await intercepter(page);
     await page.setViewportSize({ width: 440, height: 956 });
     await loginAsTestUser(page);
-    await page.goto("/espace-client/activite?commande=act-1", { waitUntil: "domcontentloaded", timeout: 30_000 });
+    await page.goto("/espace-client/commandes?commande=act-1", { waitUntil: "domcontentloaded", timeout: 30_000 });
     await page.waitForLoadState("load");
 
     await expect.poll(() => requetes.activity.length, { timeout: 30_000 }).toBeGreaterThan(0);

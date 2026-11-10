@@ -869,12 +869,28 @@ router.get(
   }),
 );
 
+// Contrat de la liste « Commandes » (ADR 0058 côté elm-monolithe) : `nature`,
+// `liens` et `avancement` calculés par le serveur, paiement à part. Le compte de
+// test (client + propriétaire) a deux liens, donc le filtre par lien.
+const VENTE = { code: "vente_standard", label: "Vente" };
+const TRANSFERT = { code: "transfert", label: "Transfert logistique" };
 const TEST_ACTIVITY = [
-  { id: "act-1", type: "vente", reference: "CMD-2847", statut: "livraison_en_cours", statut_label: "Livraison en cours", statut_paiement: "creee", statut_paiement_label: "Créée", site_source: "Siège de Matoto", site_destination: "Client X", vehicule: { id: "veh-1", nom_vehicule: "ABARRY", immatriculation: "OU3859" }, date: "2026-08-20", nb_packs: 12 },
-  { id: "act-2", type: "logistique", reference: "TR-00042-XYZ", statut: "cloture", statut_label: "Clôturé", statut_paiement: null, statut_paiement_label: null, site_source: "Siège de Matoto", site_destination: "Dépôt Kindia", vehicule: { id: "veh-1", nom_vehicule: "ABARRY", immatriculation: "OU3859" }, date: "2026-08-18", nb_packs: 40 },
-  { id: "act-3", type: "vente", reference: "CMD-2839", statut: "livree", statut_label: "Livrée", statut_paiement: "partiel", statut_paiement_label: "Partiellement payée", site_source: "Siège de Matoto", site_destination: "Client Y", vehicule: { id: "veh-2", nom_vehicule: "ABARRY 2", immatriculation: "OU4217" }, date: "2026-08-17", nb_packs: 8 },
-  { id: "act-4", type: "logistique", reference: "TR-00038-ABC", statut: "en_transit", statut_label: "En transit", statut_paiement: null, statut_paiement_label: null, site_source: "Dépôt Kindia", site_destination: "Siège de Matoto", vehicule: { id: "veh-2", nom_vehicule: "ABARRY 2", immatriculation: "OU4217" }, date: "2026-08-15", nb_packs: 25 },
+  { id: "act-1", type: "vente", reference: "CMD-2847", nature: VENTE, liens: ["proprietaire"], avancement: { code: "en_cours_de_livraison", label: "En cours de livraison" }, statut_paiement: "creee", statut_paiement_label: "Créée", site_source: "Siège de Matoto", site_destination: "Client X", vehicule: { id: "veh-1", nom_vehicule: "ABARRY", immatriculation: "OU3859" }, date: "2026-08-20", nb_packs: 12 },
+  { id: "act-2", type: "logistique", reference: "TR-00042-XYZ", nature: TRANSFERT, liens: ["proprietaire"], avancement: { code: "termine", label: "Terminé" }, statut_paiement: null, statut_paiement_label: null, site_source: "Siège de Matoto", site_destination: "Dépôt Kindia", vehicule: { id: "veh-1", nom_vehicule: "ABARRY", immatriculation: "OU3859" }, date: "2026-08-18", nb_packs: 40 },
+  { id: "act-3", type: "vente", reference: "CMD-2839", nature: VENTE, liens: ["client", "proprietaire"], avancement: { code: "en_cours_de_cloture", label: "En cours de clôture" }, statut_paiement: "partiel", statut_paiement_label: "Partiellement payée", site_source: "Siège de Matoto", site_destination: "Client Y", vehicule: { id: "veh-2", nom_vehicule: "ABARRY 2", immatriculation: "OU4217" }, date: "2026-08-17", nb_packs: 8 },
+  { id: "act-4", type: "logistique", reference: "TR-00038-ABC", nature: TRANSFERT, liens: ["proprietaire"], avancement: { code: "en_cours_de_livraison", label: "En cours de livraison" }, statut_paiement: null, statut_paiement_label: null, site_source: "Dépôt Kindia", site_destination: "Siège de Matoto", vehicule: { id: "veh-2", nom_vehicule: "ABARRY 2", immatriculation: "OU4217" }, date: "2026-08-15", nb_packs: 25 },
 ];
+
+// Détail (GET /v1/mobile/activite/{type}/{id}) : prix et total réservés au
+// client, comme le serveur réel. act-3 est la commande du compte de test.
+const TEST_ACTIVITY_DETAILS = {
+  "act-3": {
+    remise: null,
+    lignes: [{ id: "lig-1", libelle: "Pack eau 1,5 L", quantite: 8, prix_unitaire: 12_000, total: 96_000 }],
+    total: 96_000,
+    contact: { telephone: "+224621000001", adresse: "Cité Enco-5, Conakry" },
+  },
+};
 
 // Mêmes bornes que SituationPeriode côté backend réel (semaine du lundi au
 // dimanche, période en cours arrêtée à aujourd'hui), au jour près : les dates
@@ -904,19 +920,6 @@ router.get(
     requireTestToken(event);
     const query = getQuery(event);
 
-    // Même règle que ActiviteMineRequest côté backend réel : `statut` exige
-    // `type` (vocabulaires de statut distincts vente/logistique).
-    if (query.statut && !query.type) {
-      throw createError({
-        statusCode: 422,
-        statusMessage: 'Le filtre "statut" nécessite de préciser "type" (vente ou logistique).',
-        data: {
-          message: 'Le filtre "statut" nécessite de préciser "type" (vente ou logistique).',
-          errors: { statut: ['Le filtre "statut" nécessite de préciser "type" (vente ou logistique) : les deux modèles ont des statuts différents.'] },
-        },
-      });
-    }
-
     // Même règle que ActiviteMineRequest : période connue, et jamais avec des dates.
     const bornes = query.periode ? activityPeriodBounds(query.periode) : null;
     if (query.periode && (!bornes || query.date_debut || query.date_fin)) {
@@ -928,21 +931,41 @@ router.get(
 
     const filtered = TEST_ACTIVITY.filter((item) => {
       if (query.type && item.type !== query.type) return false;
-      if (query.statut && item.statut !== query.statut) return false;
+      if (query.lien && !item.liens.includes(query.lien)) return false;
       if (query.vehicule_id && item.vehicule?.id !== query.vehicule_id) return false;
       if (dateDebut && item.date < dateDebut) return false;
       if (dateFin && item.date > dateFin) return false;
       return true;
     }).sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
-    return paginate(filtered, query, {
-      type: query.type || null,
-      statut: query.statut || null,
-      vehicule_id: query.vehicule_id || null,
-      periode: query.periode || null,
-      date_debut: dateDebut || null,
-      date_fin: dateFin || null,
-    }, "/api/v1/mobile/activite");
+    return {
+      ...paginate(filtered, query, {
+        type: query.type || null,
+        lien: query.lien || null,
+        vehicule_id: query.vehicule_id || null,
+        periode: query.periode || null,
+        date_debut: dateDebut || null,
+        date_fin: dateFin || null,
+      }, "/api/v1/mobile/activite"),
+      compte_a_des_operations: TEST_ACTIVITY.length > 0,
+    };
+  }),
+);
+
+router.get(
+  "/api/v1/mobile/activite/:type/:id",
+  defineEventHandler((event) => {
+    requireTestToken(event);
+    const item = TEST_ACTIVITY.find((row) => row.type === getRouterParam(event, "type") && row.id === getRouterParam(event, "id"));
+
+    // Hors du périmètre du compte : 404, jamais 403 (même règle que le serveur réel).
+    if (!item) {
+      throw createError({ statusCode: 404, statusMessage: "Opération introuvable.", data: { message: "Opération introuvable." } });
+    }
+
+    const lignes = [{ id: `${item.id}-l1`, libelle: "Pack eau 1,5 L", quantite: item.nb_packs, prix_unitaire: null, total: null }];
+
+    return { data: { ...item, remise: null, lignes, total: null, contact: null, ...TEST_ACTIVITY_DETAILS[item.id] } };
   }),
 );
 
@@ -959,7 +982,7 @@ router.get(
 // CommandeValideeNotification::commande_id === CommandeVente::id, exposé
 // aujourd'hui comme resource.id, voir config/clientNotifications.ts::
 // notificationResourceToRoute), pour pouvoir tester la redirection
-// contextuelle "notification -> Livraisons -> détail ouvert" de bout en bout.
+// contextuelle "notification -> Commandes -> détail ouvert" de bout en bout.
 const TEST_NOTIFICATIONS = [
   { id: "notif-1", type: "delivery.assigned", titre: "Livraison CMD-2841 terminée", message: "12 packs livrés aujourd'hui", montant: null, resource: null, lu: false, read_at: null, created_at: "2026-08-26T10:00:00.000000Z" },
   { id: "notif-2", type: "delivery.assigned", titre: "Nouvelle commande attribuée", message: "Commande CMD-2847", montant: null, resource: { type: "commande_vente", id: "act-1" }, lu: false, read_at: null, created_at: "2026-08-25T15:30:00.000000Z" },

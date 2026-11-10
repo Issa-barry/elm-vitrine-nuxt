@@ -11,8 +11,25 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Mélange deux modèles à vocabulaire de statut distinct (`StatutCommandeVente` pour `type=vente`, `StatutTransfert` pour `type=logistique`) — aucune correspondance n'est inventée entre les deux. `statut` **exige `type`** (422 explicite sinon, message "Le filtre statut nécessite de préciser type"). `type` omis = les deux mélangés, triés par date décroissante, mais alors sans filtre `statut` possible. `periode` (période rapide résolue par le serveur) exclut `date_debut`/`date_fin` (422 sinon). Période comptable : `annee` + `mois` + `quinzaine` (`P1` du 1er au 15, `P2` du 16 à la fin du mois, `TOUT` ou omise = le mois), bornes calculées par le serveur, exclut `periode` et `date_debut`/`date_fin`. */
+        /** @description Liste unique des opérations du compte : une vente concernant le compte à plusieurs titres n'apparaît qu'une fois. Chaque ligne porte `nature` (ce qu'est l'opération), `liens` (`client`, `livreur`, `proprietaire` : pourquoi ce compte la voit) et `avancement` (vocabulaire commun, calculé par le serveur). Le paiement reste indépendant de l'avancement et vaut null pour un compte seulement livreur. `lien` (`client`, `livreur`, `proprietaire`) ne garde que les opérations vues à ce titre, chaque ligne gardant tous ses liens. `statut` et `statut_label` répètent `avancement`, retirés après le déploiement du front. `compte_a_des_operations` ignore les filtres et distingue un compte sans aucune opération d'une période vide. `periode` (période rapide résolue par le serveur) exclut `date_debut`/`date_fin` (422 sinon). Période comptable : `annee` + `mois` + `quinzaine` (`P1` du 1er au 15, `P2` du 16 à la fin du mois, `TOUT` ou omise = le mois), bornes calculées par le serveur, exclut `periode` et `date_debut`/`date_fin`. */
         get: operations["client.activite.mine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mobile/activite/{type}/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Réponse wrappée `{"data": {...}}`. Le contenu dépend des `liens` du compte : prix, total et paiement pour le client, quantités et paiement pour le propriétaire, quantités pour le livreur, avec `contact` pendant la livraison seulement. `remise` n'est renseignée que si le système connaît la remise physique (réception ou retrait validés). `404` (jamais `403`) hors du périmètre du compte : ne confirme jamais l'existence de l'opération. */
+        get: operations["client.activite.show"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1113,6 +1130,183 @@ export interface components {
             read_at: string | null;
             created_at: string | null;
         };
+        /** OperationTransfertResource */
+        OperationTransfertResource: {
+            id: string;
+            /** @constant */
+            type: "logistique";
+            reference: string;
+            nature: {
+                /** @constant */
+                code: "transfert";
+                /** @constant */
+                label: "Transfert logistique";
+            };
+            liens: string;
+            avancement: {
+                /** @constant */
+                code: "en_preparation";
+                /** @constant */
+                label: "En préparation";
+            } | {
+                /** @constant */
+                code: "en_cours_de_livraison";
+                /** @constant */
+                label: "En cours de livraison";
+            } | {
+                /** @constant */
+                code: "receptionne";
+                /** @constant */
+                label: "Réceptionné";
+            } | {
+                /** @constant */
+                code: "termine";
+                /** @constant */
+                label: "Terminé";
+            } | {
+                /** @constant */
+                code: "annule";
+                /** @constant */
+                label: "Annulé";
+            } | {
+                /** @constant */
+                code: "retourne";
+                /** @constant */
+                label: "Retourné";
+            };
+            statut_paiement: null;
+            statut_paiement_label: null;
+            remise: null;
+            site_source: string;
+            site_destination: string;
+            vehicule: {
+                id: string;
+                nom_vehicule: string;
+                immatriculation: string;
+            } | null;
+            date: string | null;
+            nb_packs: number;
+            lignes: {
+                id: string;
+                libelle: string;
+                quantite: number;
+                prix_unitaire: null;
+                total: null;
+            }[];
+            total: null;
+            contact: null;
+        };
+        /** OperationVenteResource */
+        OperationVenteResource: {
+            id: string;
+            /** @constant */
+            type: "vente";
+            reference: string;
+            nature: {
+                code: string;
+                /** @enum {string} */
+                label: "Vente" | "Distribution client";
+            } | {
+                /** @constant */
+                code: "precommande";
+                /** @constant */
+                label: "Précommande";
+            };
+            liens: string;
+            avancement: {
+                /** @constant */
+                code: "brouillon";
+                /** @constant */
+                label: "Brouillon";
+            } | {
+                /** @constant */
+                code: "creee";
+                /** @constant */
+                label: "Créée";
+            } | {
+                /** @constant */
+                code: "preparation_en_cours";
+                /** @constant */
+                label: "Préparation en cours";
+            } | {
+                /** @constant */
+                code: "prete_au_retrait";
+                /** @constant */
+                label: "Prête au retrait";
+            } | {
+                /** @constant */
+                code: "en_preparation";
+                /** @constant */
+                label: "En préparation";
+            } | {
+                /** @constant */
+                code: "en_cours_de_livraison";
+                /** @constant */
+                label: "En cours de livraison";
+            } | {
+                /** @constant */
+                code: "livree";
+                /** @constant */
+                label: "Livrée";
+            } | {
+                /** @constant */
+                code: "en_cours_de_cloture";
+                /** @constant */
+                label: "En cours de clôture";
+            } | {
+                /** @constant */
+                code: "retiree";
+                /** @constant */
+                label: "Retirée";
+            } | {
+                /** @constant */
+                code: "terminee";
+                /** @constant */
+                label: "Terminée";
+            } | {
+                /** @constant */
+                code: "annulee";
+                /** @constant */
+                label: "Annulée";
+            } | {
+                /** @constant */
+                code: "retournee";
+                /** @constant */
+                label: "Retournée";
+            };
+            statut_paiement: string;
+            statut_paiement_label: string;
+            remise: null | {
+                date: string;
+                /** @constant */
+                source: "retrait";
+            } | {
+                date: string;
+                /** @constant */
+                source: "reception";
+            };
+            site_source: string;
+            site_destination: string;
+            vehicule: {
+                id: string;
+                nom_vehicule: string;
+                immatriculation: string;
+            } | null;
+            date: string | null;
+            nb_packs: number;
+            lignes: {
+                id: string;
+                libelle: string | null;
+                quantite: string;
+                prix_unitaire: number | null;
+                total: number | null;
+            }[];
+            total: number | null;
+            contact: {
+                telephone: string | null;
+                adresse: string | null;
+            } | null;
+        };
         /** PaiementParrainResource */
         PaiementParrainResource: {
             id: string;
@@ -1206,8 +1400,8 @@ export interface components {
             id: string;
             variante_id: string;
             produit_nom: string | null;
-            variante_libelle: string;
-            sku: string;
+            variante_libelle: string | null;
+            sku: string | null;
             produit_image_url: string | null;
             quantite_demandee: number | null;
             quantite_chargee: number | null;
@@ -1424,7 +1618,7 @@ export interface operations {
         parameters: {
             query?: {
                 type?: "vente" | "logistique" | null;
-                statut?: string | null;
+                lien?: "client" | "livreur" | "proprietaire" | null;
                 vehicule_id?: string | null;
                 periode?: "aujourd_hui" | "hier" | "cette_semaine" | "semaine_precedente" | "ce_mois" | "mois_precedent" | "cette_annee" | null;
                 annee?: number | null;
@@ -1462,7 +1656,7 @@ export interface operations {
                         };
                         filters: {
                             type: unknown;
-                            statut: unknown;
+                            lien: unknown;
                             vehicule_id: unknown;
                             periode: unknown;
                             annee: number | null;
@@ -1471,6 +1665,7 @@ export interface operations {
                             date_debut: string | null;
                             date_fin: string | null;
                         };
+                        compte_a_des_operations: boolean;
                     } | {
                         data: string[];
                         links: {
@@ -1489,7 +1684,7 @@ export interface operations {
                         };
                         filters: {
                             type: unknown;
-                            statut: unknown;
+                            lien: unknown;
                             vehicule_id: unknown;
                             periode: unknown;
                             annee: number | null;
@@ -1498,11 +1693,55 @@ export interface operations {
                             date_debut: string | null;
                             date_fin: string | null;
                         };
+                        compte_a_des_operations: boolean;
                     };
                 };
             };
             401: components["responses"]["AuthenticationException"];
             422: components["responses"]["ValidationException"];
+        };
+    };
+    "client.activite.show": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                type: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /**
+             * @description `OperationTransfertResource`
+             *
+             *     `OperationVenteResource`
+             */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["OperationTransfertResource"];
+                    } | {
+                        data: components["schemas"]["OperationVenteResource"];
+                    };
+                };
+            };
+            401: components["responses"]["AuthenticationException"];
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        message: "Opération introuvable.";
+                    };
+                };
+            };
         };
     };
     "auth.login": {
@@ -2814,8 +3053,8 @@ export interface operations {
                         type: "transfert";
                         reference: string;
                         statut: string | components["schemas"]["StatutTransfert"];
-                        /** @constant */
-                        statut_label: "Livraison en cours";
+                        /** @enum {string} */
+                        statut_label: "Brouillon" | "En chargement" | "Livraison en cours" | "Réceptionné" | "Clôturé" | "Annulé" | "Retourné" | "—";
                         site_source: string;
                         site_destination: string;
                         vehicule: {
@@ -2844,7 +3083,7 @@ export interface operations {
                         equipe_nom: string;
                         date_commande: string | null;
                         nb_packs: number;
-                        total: number;
+                        total: number | null;
                     };
                 };
             };
@@ -2856,13 +3095,7 @@ export interface operations {
                 content: {
                     "application/json": {
                         /** @constant */
-                        message: "Référence non reconnue.";
-                    } | {
-                        /** @constant */
-                        message: "Transfert introuvable.";
-                    } | {
-                        /** @constant */
-                        message: "Commande introuvable.";
+                        message: "Référence introuvable.";
                     };
                 };
             };

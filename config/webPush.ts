@@ -166,7 +166,7 @@ const FALLBACK_TARGET: WebPushNavigationTarget = { path: "/espace-client/notific
 // Toute modification ici doit être répercutée là-bas (et inversement).
 export function webPushNotificationRoute(payload: WebPushNotificationPayload): WebPushNavigationTarget {
   if (payload.type === "commande_vente_validee" && typeof payload.commande_id === "string" && payload.commande_id) {
-    return { path: "/espace-client/activite", query: { commande: payload.commande_id } };
+    return { path: "/espace-client/commandes", query: { commande: payload.commande_id } };
   }
   return FALLBACK_TARGET;
 }

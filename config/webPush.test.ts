@@ -149,9 +149,9 @@ describe("parseWebPushPayload", () => {
 });
 
 describe("webPushNotificationRoute", () => {
-  it("commande_vente_validee avec commande_id -> Livraisons, même contrat que la cloche database", () => {
+  it("commande_vente_validee avec commande_id -> Commandes, même contrat que la cloche database", () => {
     expect(webPushNotificationRoute({ title: "t", body: "b", type: "commande_vente_validee", commande_id: "cmd-42" })).toEqual({
-      path: "/espace-client/activite",
+      path: "/espace-client/commandes",
       query: { commande: "cmd-42" },
     });
   });
